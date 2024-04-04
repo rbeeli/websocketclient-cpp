@@ -1,0 +1,15 @@
+{
+    "name": "websocketclient-cpp",
+    "version": "0.1",
+    "dependencies": [
+      "zlib",
+      "zlib-ng",
+      "simdutf",
+      "openssl",
+      "wolfssl",
+      "asio",
+      "benchmark",
+      "gtest"
+    ]
+  }
+  

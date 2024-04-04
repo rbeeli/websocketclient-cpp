@@ -1,0 +1,391 @@
+#pragma once
+
+#include <span>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/x509v3.h>
+
+#include "ws_client/errors.hpp"
+#include "ws_client/log.hpp"
+#include "ws_client/transport/ISocket.hpp"
+
+// TODO: Not using BIO read/write functions, but SSL_read/write instead.
+
+namespace ws_client
+{
+using std::string;
+using std::byte;
+
+/**
+ * OpenSSL wrapped TCP socket.
+ *
+ * This class extends the ISocket class and provides functionality for SSL/TLS communication.
+ * It encapsulates the SSL_CTX and SSL structures, and handles SSL connection establishment,
+ * reading, and writing.
+ */
+class OpenSslSocket final : public ISocket
+{
+private:
+    string hostname;
+    int port;
+    bool verify;
+    SSL_CTX* ctx = NULL;
+    SSL* ssl = NULL;
+    BIO* web = NULL;
+
+public:
+    /**
+     * Create a TCP socket from a hostname and a port.
+     * The socket will be closed when the object is destroyed.
+     * @param hostname      The hostname to connect to.
+     * @param port          The port to connect to.
+     */
+    explicit OpenSslSocket(string hostname, int port, bool verify = true)
+        : ISocket(-1), hostname(std::move(hostname)), port(port), verify(verify)
+    {
+    }
+
+    ~OpenSslSocket() override
+    {
+        this->close(false);
+    }
+
+    [[nodiscard]] expected<void, WSError> init()
+    {
+        const SSL_METHOD* method = TLS_client_method();
+        if (method == NULL)
+            return make_error("Failed to create TLS_client_method");
+
+        this->ctx = SSL_CTX_new(method);
+        if (this->ctx == NULL)
+            return make_error("Failed to create SSL context");
+
+        // register verify callback
+        SSL_CTX_set_verify(this->ctx, SSL_VERIFY_PEER, OpenSslSocket::verify_callback);
+
+        // disable SSLv2 and SSLv3
+        WS_TRYV(this->set_options(SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION));
+
+        this->web = BIO_new_ssl_connect(this->ctx);
+        if (this->web == NULL)
+            return make_error("BIO_new_ssl_connect failed");
+
+        const string hostname = this->hostname + ":" + std::to_string(this->port);
+        if (BIO_set_conn_hostname(this->web, hostname.c_str()) != 1)
+            return make_error("BIO_set_conn_hostname with " + hostname + " failed");
+
+        BIO_get_ssl(this->web, &this->ssl);
+        if (this->ssl == NULL)
+            return make_error("BIO_get_ssl failed");
+
+        // set default cipher list to use
+        WS_TRYV(this->set_cipher_list("HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4"));
+
+        // set SNI hostname
+        WS_TRYV(this->set_tlsext_hostname(this->hostname));
+
+        // configure peer certificate verification
+        WS_TRYV(this->set_verify_peer(this->verify));
+
+        WS_LOG(LogLevel::D, "OpenSslSocket created");
+
+        return {};
+    }
+
+    inline SSL* get_ssl() const
+    {
+        return this->ssl;
+    }
+
+    inline SSL_CTX* get_ctx() const
+    {
+        return this->ctx;
+    }
+
+    [[nodiscard]] expected<void, WSError> connect() noexcept
+    {
+        if (BIO_do_connect(this->web) != 1)
+            return make_error("Unable to establish SSL connection");
+
+        if (BIO_do_handshake(this->web) != 1)
+            return make_error("Unable to perform SSL handshake");
+
+        // Step 1: verify a server certificate was presented during the negotiation
+        X509* cert = SSL_get_peer_certificate(this->ssl);
+        if (cert)
+        {
+            if (X509_check_host(cert, this->hostname.c_str(), this->hostname.size(), 0, nullptr) !=
+                1)
+            {
+                X509_free(cert);
+                return make_error("Certificate verification error: Hostname mismatch, expected: " +
+                                  hostname);
+            }
+            X509_free(cert);
+        }
+        else
+            return make_error("Certificate verification error: No certificate presented");
+
+        // Step 2: verify the result of chain verification.
+        // Verification performed according to RFC 4158.
+        if (SSL_get_verify_result(this->ssl) != X509_V_OK)
+            return make_error("Certificate chain verification failed");
+
+        return {};
+    }
+
+    // [[nodiscard]] expected<void, WSError> set_mode_auto_retry(const bool value)
+    // {
+    //     // TODO error handling?
+    //     if (value)
+    //         SSL_CTX_set_mode(this->ctx, SSL_MODE_AUTO_RETRY);
+    //     else
+    //         SSL_CTX_clear_mode(this->ctx, SSL_MODE_AUTO_RETRY);
+    //     WS_LOG(LogLevel::D, "SSL_MODE_AUTO_RETRY=", value);
+    //     return {};
+    // }
+
+    [[nodiscard]] expected<void, WSError> set_default_verify_paths()
+    {
+        if (SSL_CTX_set_default_verify_paths(this->ctx) != 1)
+            return make_error("Unable to load default CA certificates");
+        WS_LOG(LogLevel::D, "Loaded default certificates");
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> load_verify_file(const string& path)
+    {
+        if (SSL_CTX_load_verify_file(this->ctx, path.c_str()) != 1)
+            return make_error("Unable to load CA file from: " + path);
+        WS_LOG(LogLevel::D, "Loaded certificate file from: ", path);
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> set_tlsext_hostname(const string& hostname)
+    {
+        if (!SSL_set_tlsext_host_name(this->ssl, hostname.c_str()))
+            return make_error("Unable to set tlsext hostname");
+        WS_LOG(LogLevel::D, "Server Name Indication (SNI) hostname=", hostname);
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> set_session_cache_mode(int mode)
+    {
+        SSL_CTX_set_session_cache_mode(this->ctx, mode);
+        WS_LOG(LogLevel::D, "session_cache_mode=", mode);
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> set_session_cache_mode_client()
+    {
+        return this->set_session_cache_mode(SSL_SESS_CACHE_CLIENT);
+    }
+
+    [[nodiscard]] expected<void, WSError> set_options(uint64_t options)
+    {
+        SSL_CTX_set_options(this->ctx, options);
+        WS_LOG(LogLevel::D, "set_options=", options);
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> set_verify_peer(const bool value)
+    {
+        SSL_set_verify(this->ssl, value ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
+        WS_LOG(LogLevel::D, "verify_peer=", value);
+        return {};
+    }
+
+    [[nodiscard]] expected<void, WSError> set_cipher_list(string cipher_list)
+    {
+        if (!SSL_CTX_set_cipher_list(this->ctx, cipher_list.c_str()))
+            return make_error("Unable to set cipher list to: " + cipher_list);
+        WS_LOG(LogLevel::D, "cipher_list=", cipher_list);
+        return {};
+    }
+
+    /**
+     * Read up to length bytes from underlying socket and store them in buffer.
+     */
+    [[nodiscard]] inline expected<size_t, WSError> read(span<byte> buffer, size_t length) override
+    {
+        if (length > buffer.size())
+            return WS_ERROR(BUFFER_ERROR, "SSL read buffer too small");
+
+        size_t bytes_read = 0;
+        while (bytes_read == 0)
+        {
+            int ret = SSL_read(this->ssl, buffer.data(), static_cast<int>(length));
+            if (ret > 0) [[likely]]
+            {
+                bytes_read = static_cast<size_t>(ret);
+                break;
+            }
+            else if (ret == 0)
+            {
+                return WS_ERROR(TRANSPORT_ERROR, "SSL connection closed on transport layer");
+            }
+            else
+            {
+                int err = SSL_get_error(this->ssl, ret);
+                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                {
+                    continue; // Retry for non-blocking SSL
+                }
+                else if (err == SSL_ERROR_SYSCALL && errno == EINTR)
+                {
+                    continue; // Retry on EINTR
+                }
+                else
+                    return make_error("SSL_read failed");
+            }
+        }
+
+        return bytes_read;
+    }
+
+    /**
+     * Write length bytes from buffer to underlying socket.
+     */
+    [[nodiscard]] inline expected<size_t, WSError> write(const span<byte> buffer) override
+    {
+        size_t bytes_written = 0;
+        while (bytes_written == 0)
+        {
+            int ret = SSL_write(this->ssl, buffer.data(), static_cast<int>(buffer.size()));
+            if (ret > 0) [[likely]]
+            {
+                bytes_written = static_cast<size_t>(ret);
+                break;
+            }
+            else if (ret == 0)
+            {
+                return WS_ERROR(TRANSPORT_ERROR, "SSL connection closed on transport layer");
+            }
+            else
+            {
+                int err = SSL_get_error(this->ssl, ret);
+                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                {
+                    // retry for non-blocking SSL
+                    continue;
+                }
+                else if (err == SSL_ERROR_SYSCALL && errno == EINTR)
+                {
+                    // retry on EINTR
+                    continue;
+                }
+                else
+                    return make_error("SSL_write failed");
+            }
+        }
+
+        return bytes_written;
+    }
+
+    /**
+     * Close the socket connection and all associated resources.
+     * Performs a clean SSL shutdown.
+     * Safe to call multiple times.
+     */
+    void close() override
+    {
+        this->close(true);
+    }
+
+    void close(bool close_notify)
+    {
+        if (this->ssl != NULL)
+        {
+            if (close_notify)
+                SSL_shutdown(this->ssl);
+            SSL_free(this->ssl);
+            this->ssl = NULL;
+        }
+
+        if (this->ctx != NULL)
+        {
+            SSL_CTX_free(this->ctx);
+            this->ctx = NULL;
+        }
+
+        if (this->web != NULL)
+        {
+            BIO_free_all(this->web); // TODO throws sometimes, e.g. websocketclient init error
+            this->web = NULL;
+        }
+
+        WS_LOG(LogLevel::D, "SSL socket closed");
+    }
+
+private:
+    static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
+    {
+        // For error codes, see http://www.openssl.org/docs/apps/verify.html
+        // https://stackoverflow.com/questions/42272164/make-openssl-accept-expired-certificates
+
+        int err = X509_STORE_CTX_get_error(x509_ctx);
+
+        if (preverify == 0)
+        {
+            if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY)
+            {
+                WS_LOG(LogLevel::E,
+                         "X509 verify error: X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY");
+            }
+            else if (err == X509_V_ERR_CERT_UNTRUSTED)
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: X509_V_ERR_CERT_UNTRUSTED");
+            }
+            else if (err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN)
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN");
+            }
+            else if (err == X509_V_ERR_CERT_NOT_YET_VALID)
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: X509_V_ERR_CERT_NOT_YET_VALID");
+            }
+            else if (err == X509_V_ERR_CERT_HAS_EXPIRED)
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: X509_V_ERR_CERT_HAS_EXPIRED");
+            }
+            else if (err == X509_V_OK)
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: X509_V_OK");
+            }
+            else
+            {
+                WS_LOG(LogLevel::E, "X509 verify error: ", err);
+            }
+        }
+
+        if (err == X509_V_OK)
+            return 1;
+
+        return preverify;
+    }
+
+    [[nodiscard]] static std::string get_errors_as_string()
+    {
+        BIO* bio = BIO_new(BIO_s_mem());
+        ERR_print_errors(bio);
+        char* buf;
+        long len = BIO_get_mem_data(bio, &buf);
+        if (len <= 0)
+        {
+            BIO_free(bio);
+            return "";
+        }
+        std::string ret(buf, static_cast<size_t>(len));
+        BIO_free(bio);
+        return ret;
+    }
+
+    [[nodiscard]] static unexpected<WSError> make_error(const string& msg)
+    {
+        auto errors = get_errors_as_string();
+        return unexpected(WSError(WSErrorCode::UNCATEGORIZED, msg + ": " + errors));
+    }
+};
+
+} // namespace ws_client
