@@ -157,7 +157,7 @@ Pull requests or issues are welcome, see [CONTRIBUTE.md](CONTRIBUTE.md).
 
 ## Autobahn Testsuite report
 
-The library passes all tests of the Autobahn Testsuite, see [Autobahn Testsuite report](rbeeli.github.io/websocketclient-cpp/tests/autobahn/reports_summary/index.html).
+The library passes all tests of the Autobahn Testsuite, see [Autobahn Testsuite report](https://rbeeli.github.io/websocketclient-cpp/tests/autobahn/reports_summary/index.html).
 
 ## License
 
