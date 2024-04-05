@@ -54,6 +54,7 @@ struct msg_stats
 
 expected<void, WSError> run()
 {
+    // parse URL
     WS_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
     URL& url = *url_res;
 

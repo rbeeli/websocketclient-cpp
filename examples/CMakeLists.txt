@@ -33,17 +33,34 @@ target_compile_definitions(ex_hello PRIVATE
 )
 
 # --------------------------------------
-add_executable(ex_echo ex_echo.cpp)
-target_link_libraries(ex_echo PRIVATE
+add_executable(ex_echo_sync ex_echo_sync.cpp)
+target_link_libraries(ex_echo_sync PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     simdutf::simdutf
     PkgConfig::ZLIBNG
     websocketclient
 )
-target_compile_definitions(ex_echo PRIVATE
+target_compile_definitions(ex_echo_sync PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
     WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
+)
+
+# --------------------------------------
+add_executable(ex_echo_asio ex_echo_asio.cpp)
+target_link_libraries(ex_echo_asio PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    simdutf::simdutf
+    PkgConfig::ZLIBNG
+    asio::asio
+    websocketclient
+)
+target_compile_definitions(ex_echo_asio PRIVATE
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
+    ASIO_STANDALONE=1
+    ASIO_NO_TYPEID=1
 )
 
 # --------------------------------------

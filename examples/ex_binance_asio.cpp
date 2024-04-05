@@ -59,6 +59,7 @@ struct msg_stats
 
 asio::awaitable<expected<void, WSError>> run()
 {
+    // parse URL
     WS_CO_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
     // WS_CO_TRY(url_res, URL::parse("wss://stream.bybit.com/v5/public/linear"));
     URL& url = *url_res;
@@ -197,15 +198,12 @@ asio::awaitable<expected<void, WSError>> run()
 
 int main()
 {
-    // https://think-async.com/Asio/asio-1.22.0/doc/asio/overview/core/concurrency_hint.html
-    auto ctx = asio::io_context{ASIO_CONCURRENCY_HINT_UNSAFE_IO};
+    asio::io_context ctx;
 
     auto exception_handler = [&](auto e_ptr)
     {
         if (e_ptr)
-        {
             std::rethrow_exception(e_ptr);
-        }
     };
 
     auto client = []() -> asio::awaitable<void>

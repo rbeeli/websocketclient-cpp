@@ -57,6 +57,7 @@ struct msg_stats
 
 TValueTask<expected<void, WSError>> client(Loop* loop)
 {
+    // parse URL
     WS_CO_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
     URL& url = *url_res;
 

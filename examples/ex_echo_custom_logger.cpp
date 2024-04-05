@@ -17,11 +17,8 @@
 
 using namespace ws_client;
 
-class CustomLogger
+struct CustomLogger
 {
-public:
-    CustomLogger() noexcept = default;
-
     /**
      * Check if the logger is enabled for the given log level.
      */
