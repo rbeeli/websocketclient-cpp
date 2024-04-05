@@ -41,8 +41,8 @@ A transport-agnostic, high-performance C++23 WebSocket client library with minim
 |-------------------------------------------------|---------------------------------------------------------------------------|----------|-----------------------------|
 | [simdutf](https://github.com/simdutf/simdutf)   | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional | `WS_CLIENT_USE_SIMD_UTF8` |
 | [openssl 3+](https://github.com/openssl/openssl)| WebSocket Secure (WSS) support.                                           | Optional |                             |
-| [zlib](https://github.com/madler/zlib)          | Message compression support through permessage-deflate extension.         | Optional |                             |
-| [zlib-ng](https://github.com/zlib-ng/zlib-ng)   | Faster alternative to `zlib` library with optimizations for modern CPUs.  | Optional | `WS_CLIENT_USE_ZLIB_NG`     |
+| [zlib](https://github.com/madler/zlib)          | Message compression support through permessage-deflate extension.         | Optional | `WS_CLIENT_USE_ZLIB_NG=0`   |
+| [zlib-ng](https://github.com/zlib-ng/zlib-ng)   | Faster alternative to `zlib` library with optimizations for modern CPUs.  | Optional | `WS_CLIENT_USE_ZLIB_NG=1`   |
 
 ## Examples
 
