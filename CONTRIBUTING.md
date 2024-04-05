@@ -4,14 +4,10 @@ Pull requests and issues are welcome.
 
 ## TODOs
 
-- TODOs
-
 - Git builds
-
 - callbacks for ping, pong, control frames
 - auto fragmentation write
 - log levels per topic
-
 - switches for TLS implementations: mbedtls, wolfssl, openssl
 
 - SSL_shutdown sig pipe

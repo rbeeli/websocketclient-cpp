@@ -155,6 +155,10 @@ Received `Message` objects must be processed immediately after receiving them, o
 
 Pull requests or issues are welcome, see [CONTRIBUTE.md](CONTRIBUTE.md).
 
+## Autobahn Testsuite report
+
+The library passes all tests of the Autobahn Testsuite, see [Autobahn Testsuite report](rbeeli.github.io/websocketclient-cpp/tests/autobahn/reports_summary/index.html).
+
 ## License
 
 Distributed under the MIT license, see [LICENSE](LICENSE).
