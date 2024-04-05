@@ -123,5 +123,6 @@
   "editor.defaultFormatter": "xaver.clang-format",
   "[cmake]": {
     "editor.defaultFormatter": "josetr.cmake-language-support-vscode"
-  }
+  },
+  "restructuredtext.pythonRecommendation.disabled": true
 }

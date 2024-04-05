@@ -36,7 +36,7 @@ public:
      */
     template <LogLevel level>
     constexpr void log(
-        string_view message, const std::source_location loc = std::source_location::current()
+        std::string_view message, const std::source_location loc = std::source_location::current()
     ) noexcept
     {
         std::cout << "CustomLogger: " << loc.file_name() << ":" << loc.line() << " " << message

@@ -1,3 +1,4 @@
+===============================================
 C++ WebSocket client (``websocketclient-cpp``)
 ===============================================
 
@@ -27,20 +28,18 @@ A high-performance C++23 WebSocket client library with minimal dependencies.
 - Pluggable logging
 - **GCC** compiler support, C++23 required (TODO Clang)
 - Tested on 64-bit **x86** and **ARM64** (**Ubuntu x86**, **MacOS M2 ARM64**) platforms (32-bit NOT supported)
-- Unit tests using `Google Test <https://google.github.io/googletest/>`_
-- Benchmarks using `Google Benchmark <https://google.github.io/googletest/>`_
 
 .. pull-quote::
    [!WARNING]
 
-   This library is not yet production ready. It is still under development and the API may change.
+    Despite being used in production, this library is still under development and the API may change.
 
 ----
 
 .. contents:: Table of Contents
 
 Dependencies
-------------
+============
 
 +---------------------------------------------------+-------------------------------------------------------------------------------------+----------+-----------------------------+
 | Dependency                                        | Description                                                                         | Required | Switch                      |
@@ -55,76 +54,29 @@ Dependencies
 +---------------------------------------------------+-------------------------------------------------------------------------------------+----------+-----------------------------+
 
 Transport layer
----------------
+===============
 
 The library is designed to be transport layer agnostic. It is up to the user to provide a transport layer implementation, which is responsible for reading and writing data to the network. The library supports both synchronous and asynchronous transport layers. Built-in blocking I/O transport layers are provided. Bindings for Standalone ASIO are also available.
 
 Examples
---------
+========
 
-.. code-block:: cpp
-
-   TODO
-
-Custom handshake headers
-------------------------
-
-.. code-block:: cpp
-
-   TODO
-
-Implementation details
-----------------------
-
-Template type parameters are supplemented by C++23 concepts, which are used to validate template parameters at compile-time. Concepts have the advantage to formalize requirements for a template parameter, similar to interface definitions, and provide more meaningful error messages.
-
-Multi-threading
-~~~~~~~~~~~~~~~
-
-The client implementation is not aware of threads and does not use any locks. If used in a multi-threaded environment, synchronization needs to be ensured by the user of this library.
-
-Buffers and maximum message size
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The implementation does not allocate separate memory for each messages and/or frames.
-``WebSocketClient`` maintains a configurable read buffer, which are reused for all messages and frames.
-On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
-
-Additionally, if enabled, the ``PermessageDeflate`` compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
-
-This implies that the maximum message size is limited by the size of the read/write/compression buffers.
-If exceeded, a ``BUFFER_ERROR`` error will be returned.
-
-Message payload lifetime
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Received ``Message`` objects must be processed immediately after receiving them, otherwise the next message will overwrite the payload.
-
-``Message`` objects must not be stored for later processing. If delayed processing is required, the payload must be copied away to a user-defined buffer.
+Working examples can be found in the `examples <examples>`_ directory.
 
 Logging
--------
+=======
 
-TODO
+By default, the library logs directly to ``std::clog``, hence there is no dependency to any logging library.
 
-By default, the library logs directly to ``std::clog``, hence there is no dependency to any logging library. You can implement a custom logger like the following:
-
-.. code-block:: cpp
-
-    #include <iostream>
-
-    TODO
-
-
-All that is required is to override the macro ``WS_LOG_IMPL`` with your own implementation.
-
-To disable logging completely, set ``WS_CLIENT_LOG_LEVEL`` to ``0``. In doing so, the compiler will optimize out all logging code for maximum performance.
+The default implementation allows to set the log level at compile-time, which can be used to filter log messages.
 
 .. code-block:: cpp
 
-    #define WS_CLIENT_LOG_LEVEL 0
+    ConsoleLogger<LogLevel::I> logger;
+    auto client = WebSocketClient(&logger, [...]);
 
-Alternatively, the log level can be set to a specific level. The available log levels are:
+In this example, only log messages with log level ``I`` (info) and higher will be printed.
+The available log levels are:
 
 .. code-block:: cpp
 
@@ -137,26 +89,91 @@ Alternatively, the log level can be set to a specific level. The available log l
         D = 4  // Debug
     };
 
-Sometimes, changing the log-level will either show too many messages, or hide the ones of interest.
 
+You can implement a custom logger like the following:
+
+.. code-block:: cpp
+
+    class CustomLogger
+    {
+    public:
+        CustomLogger() noexcept = default;
+
+        /**
+         * Check if the logger is enabled for the given log level.
+         */
+        template <LogLevel level>
+        constexpr bool is_enabled() const noexcept
+        {
+            return true;
+        }
+
+        /**
+         * Log a message with the given log level.
+         */
+        template <LogLevel level>
+        constexpr void log(
+            std::string_view message, const std::source_location loc = std::source_location::current()
+        ) noexcept
+        {
+            std::cout << "CustomLogger: " << loc.file_name() << ":" << loc.line() << " " << message
+                    << std::endl;
+        }
+    };
+
+Sometimes, changing the log-level will either show too many messages, or hide the ones of interest.
 In order to filter for specific implementation details, the following macro-switches are available (``0`` = disabled, ``1`` = enabled):
 
 .. code-block:: cpp
 
-    #define WS_CLIENT_LOG_HANDSHAKE 1
-    #define WS_CLIENT_LOG_MSG_PAYLOADS 1
-    #define WS_CLIENT_LOG_MSG_SIZES 1
-    #define WS_CLIENT_LOG_FRAMES 1
-    #define WS_CLIENT_LOG_PING_PONG 1
+    #define WS_CLIENT_LOG_HANDSHAKE 0
+    #define WS_CLIENT_LOG_MSG_PAYLOADS 0
+    #define WS_CLIENT_LOG_MSG_SIZES 0
+    #define WS_CLIENT_LOG_FRAMES 0
+    #define WS_CLIENT_LOG_PING_PONG 0
+    #define WS_CLIENT_LOG_COMPRESSION 0
+
+By setting a variable to ``0`` = disabled (``1`` = enabled), the compiler will optimize out all logging code for maximum performance.
 
 For example, the handshake log messages are useful to inspect the HTTP headers sent and received during the WebSocket handshake, e.g. negotiated parameters for the permessage-deflate compression extension.
 
+Implementation details
+======================
+
+Template type parameters are supplemented by C++23 concepts, which are used to validate template parameters at compile-time.
+Concepts have the advantage to formalize requirements for a template parameter, similar to interface definitions, and provide more meaningful error messages.
+
+Multi-threading
+---------------
+
+This client implementation is not thread-aware and does not do any synchronization.
+If used in a multi-threaded environment, synchronization needs to be ensured by the user.
+
+Buffers and maximum message size
+--------------------------------
+
+The implementation does not allocate separate memory for each messages and/or frames.
+``WebSocketClient`` maintains a configurable read buffer, which are reused for all messages and frames.
+On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
+
+Additionally, if enabled, the ``PermessageDeflate`` compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
+
+This implies that the maximum message size is limited by the size of the read/write/compression buffers.
+If exceeded, a ``BUFFER_ERROR`` error will be returned.
+
+Message payload lifetime
+------------------------
+
+Received ``Message`` objects must be processed immediately after receiving them, otherwise the next message will overwrite the payload.
+
+``Message`` objects must not be stored for later processing. If delayed processing is required, the payload must be copied away to a user-defined buffer.
+
 Contribute
-----------
+==========
 
 Pull requests or issues are welcome, see `CONTRIBUTE.md <CONTRIBUTE.md>`_.
 
 License
--------
+=======
 
 Distributed under the MIT license, see `LICENSE <LICENSE>`_.
