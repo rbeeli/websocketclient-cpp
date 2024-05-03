@@ -133,9 +133,7 @@ int main()
     auto exception_handler = [&](auto e_ptr)
     {
         if (e_ptr)
-        {
             std::rethrow_exception(e_ptr);
-        }
     };
 
     auto client = []() -> awaitable<void>
@@ -145,7 +143,9 @@ int main()
         {
             try
             {
-                co_await run();
+                auto res = co_await run();
+                if (!res.has_value())
+                    std::cerr << "Error: " << res.error().message << std::endl;
             }
             catch (const std::exception& e)
             {
