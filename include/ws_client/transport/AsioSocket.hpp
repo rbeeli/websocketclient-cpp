@@ -89,7 +89,7 @@ public:
      */
     [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown() noexcept
     {
-        logger->template log<LogLevel::D>("cancel pending socket operations");
+        logger->template log<LogLevel::D>("Cancelling pending socket operations");
 
         // cancel all outstanding asynchronous operations
         this->socket.lowest_layer().cancel();
