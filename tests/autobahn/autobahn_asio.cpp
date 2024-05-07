@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <variant>
 #include <signal.h>
 #include <netinet/tcp.h>
 
@@ -14,7 +15,6 @@
 #define WS_CLIENT_LOG_MSG_PAYLOADS 0
 #define WS_CLIENT_LOG_MSG_SIZES 0
 #define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_PING_PONG 0
 
 #include "ws_client/ws_client_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
@@ -23,6 +23,7 @@
 using namespace ws_client;
 using namespace asio;
 using std::string;
+using std::variant;
 using std::span;
 using std::byte;
 using asio::awaitable;
@@ -36,7 +37,8 @@ using asio::ip::tcp;
         return WS_ERROR(
             UNCATEGORIZED,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
-                std::to_string(errno_) + ")"
+                std::to_string(errno_) + ")",
+            NOT_SET
         );
     }
     return {};
@@ -51,13 +53,17 @@ using asio::ip::tcp;
 
     auto executor = co_await asio::this_coro::executor;
     tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url.host(), std::to_string(url.port()), asio::use_awaitable);
+    auto endpoints = co_await resolver.async_resolve(
+        url.host(), std::to_string(url.port()), asio::use_awaitable
+    );
     tcp::socket socket1(executor);
     co_await asio::async_connect(socket1, endpoints, asio::use_awaitable);
 
     ConsoleLogger<LogLevel::E> logger;
     auto socket = AsioSocket(&logger, std::move(socket1));
-    auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(&logger, std::move(socket));
+    auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(
+        &logger, std::move(socket)
+    );
     auto handshake = Handshake(&logger, url);
     WS_CO_TRYV(co_await client.init(handshake));
 
@@ -65,12 +71,34 @@ using asio::ip::tcp;
     if (read_response)
     {
         Buffer buffer;
-        WS_CO_TRY(res_msg, co_await client.read_message(buffer));
-        const Message& msg = *res_msg;
-        response = msg.to_string();
+
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            co_await client.read_message(buffer);
+
+        if (auto msg = std::get_if<Message>(&var))
+        {
+            response = msg->to_string();
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            std::cerr << "Error: " << err->message << std::endl;
+        }
+        else
+            throw std::runtime_error("Unexpected message type");
     }
 
-    WS_CO_TRYV(co_await client.close());
+    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
 
     co_return response;
 }
@@ -82,14 +110,18 @@ using asio::ip::tcp;
 
     auto executor = co_await asio::this_coro::executor;
     tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url.host(), std::to_string(url.port()), asio::use_awaitable);
+    auto endpoints = co_await resolver.async_resolve(
+        url.host(), std::to_string(url.port()), asio::use_awaitable
+    );
     tcp::socket socket1(executor);
     co_await asio::async_connect(socket1, endpoints, asio::use_awaitable);
     socket1.lowest_layer().set_option(tcp::no_delay(true));
 
     ConsoleLogger<LogLevel::E> logger;
     auto socket = AsioSocket(&logger, std::move(socket1));
-    auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(&logger, std::move(socket));
+    auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(
+        &logger, std::move(socket)
+    );
 
     // handshake handler
     auto handshake = Handshake(&logger, url);
@@ -112,19 +144,37 @@ using asio::ip::tcp;
     buffer.set_max_size(100 * 1024 * 1024); // 100 MB
     while (true)
     {
-        // automatically clear buffer on every iteration
-        BufferClearGuard guard(buffer);
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            co_await client.read_message(buffer);
 
-        // read from server
-        WS_CO_TRY(res, co_await client.read_message(buffer));
-        const Message& msg = *res;
-
-        // write message back to server
-        WS_CO_TRYV(co_await client.send_message(msg));
+        if (auto msg = std::get_if<Message>(&var))
+        {
+            // write message back to server
+            WS_CO_TRYV(co_await client.send_message(*msg));
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (std::holds_alternative<CloseFrame>(var))
+        {
+            break;
+        }
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            std::cerr << "Error: " << err->message << std::endl;
+            WS_CO_TRYV(co_await client.close(err->close_with_code));
+            break;
+        }
+        else
+            throw std::runtime_error("Unexpected message type");
     }
 
-    // close client connection
-    WS_CO_TRYV(co_await client.close());
+    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
 
     co_return expected<void, WSError>{};
 }
@@ -174,6 +224,8 @@ awaitable<void> client()
             std::cerr << "Case " << i << ": " << res_case.error() << std::endl;
     }
 
+    std::cout << "Cases processed, updating reports..." << std::endl;
+
     // updateReports
     {
         auto res = co_await send_request("ws://" + host + "/updateReports?agent=" + agent, false);
@@ -184,7 +236,7 @@ awaitable<void> client()
         }
     }
 
-    std::cout << "All cases processed" << std::endl;
+    std::cout << "Autobahn tests finished" << std::endl;
 
     co_return;
 }
@@ -202,12 +254,8 @@ int main()
         }
     };
 
-    std::cout << "Running autobahn tests..." << std::endl;
-
     asio::co_spawn(ctx, client, std::move(exception_handler));
     ctx.run();
-
-    std::cout << "Autobahn tests finished" << std::endl;
 
     return 0;
 };

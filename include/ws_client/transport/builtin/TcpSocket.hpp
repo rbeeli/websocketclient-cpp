@@ -97,7 +97,8 @@ public:
             return WS_ERROR(
                 TRANSPORT_ERROR,
                 "Error creating TCP socket: " + std::string(std::strerror(error_code)) + " (" +
-                    std::to_string(error_code) + ")"
+                    std::to_string(error_code) + ")",
+                NOT_SET
             );
         }
 
@@ -118,7 +119,7 @@ public:
             return {};
 
         if (this->fd == -1)
-            return WS_ERROR(TRANSPORT_ERROR, "Socket not created. Call init() first.");
+            return WS_ERROR(TRANSPORT_ERROR, "Socket not created. Call init() first.", NOT_SET);
 
         auto now = std::chrono::system_clock::now();
 
@@ -215,7 +216,7 @@ public:
         } while (ret == -1 && errno == EINTR);
 
         if (ret == 0)
-            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer");
+            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
 
         WS_TRYV(this->check_errno(ret, "read"));
 
@@ -234,11 +235,12 @@ public:
         ssize_t ret = 0;
         do
         {
-            ret = ::send(this->fd, buffer.data(), buffer.size(), 0);
+            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
+            ret = ::send(this->fd, buffer.data(), buffer.size(), flags);
         } while (ret == -1 && errno == EINTR);
 
         if (ret == 0)
-            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer");
+            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
 
         WS_TRYV(this->check_errno(ret, "write"));
 
@@ -305,7 +307,8 @@ private:
         return WS_ERROR(
             TRANSPORT_ERROR,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
-                std::to_string(errno_) + ")"
+                std::to_string(errno_) + ")",
+            NOT_SET
         );
     }
 };

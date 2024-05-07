@@ -55,14 +55,14 @@ public:
         {
             int n = co_await this->socket.ReadSome(buffer.data(), buffer.size());
             if (n == 0)
-                co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer");
+                co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer", NOT_SET);
             else if (n == -1)
-                co_return WS_ERROR(TRANSPORT_ERROR, "Read error");
+                co_return WS_ERROR(TRANSPORT_ERROR, "Read error", NOT_SET);
             co_return static_cast<size_t>(n);
         }
         catch (const std::exception& e)
         {
-            co_return WS_ERROR(TRANSPORT_ERROR, e.what());
+            co_return WS_ERROR(TRANSPORT_ERROR, e.what(), NOT_SET);
         }
     }
 
@@ -79,14 +79,14 @@ public:
         {
             int n = co_await this->socket.WriteSome(buffer.data(), buffer.size());
             if (n == 0)
-                co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer");
+                co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer", NOT_SET);
             else if (n == -1)
-                co_return WS_ERROR(TRANSPORT_ERROR, "Read error");
+                co_return WS_ERROR(TRANSPORT_ERROR, "Read error", NOT_SET);
             co_return static_cast<size_t>(n);
         }
         catch (const std::exception& e)
         {
-            co_return WS_ERROR(TRANSPORT_ERROR, e.what());
+            co_return WS_ERROR(TRANSPORT_ERROR, e.what(), NOT_SET);
         }
     }
 
@@ -115,7 +115,7 @@ public:
         }
         catch (const std::exception& e)
         {
-            co_return WS_ERROR(TRANSPORT_ERROR, e.what());
+            co_return WS_ERROR(TRANSPORT_ERROR, e.what(), NOT_SET);
         }
         co_return expected<void, WSError>{};
     }

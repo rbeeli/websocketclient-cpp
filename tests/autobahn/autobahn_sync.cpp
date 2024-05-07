@@ -1,11 +1,11 @@
 #include <iostream>
 #include <string>
+#include <variant>
 
 #define WS_CLIENT_LOG_HANDSHAKE 0
 #define WS_CLIENT_LOG_MSG_PAYLOADS 0
 #define WS_CLIENT_LOG_MSG_SIZES 0
 #define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_PING_PONG 0
 
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
@@ -13,7 +13,10 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
-
+using std::string;
+using std::variant;
+using std::span;
+using std::byte;
 
 [[nodiscard]] static expected<string, WSError> send_request(string url_str, bool read_response)
 {
@@ -32,7 +35,7 @@ using namespace ws_client;
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
     WS_TRYV(tcp.connect());
-    
+
     auto client = WebSocketClient(&logger, std::move(tcp));
     auto handshake = Handshake(&logger, url);
 
@@ -42,12 +45,34 @@ using namespace ws_client;
     if (read_response)
     {
         Buffer buffer;
-        WS_TRY(res_msg, client.read_message(buffer));
-        const Message& msg = *res_msg;
-        response = msg.to_string();
+
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(buffer);
+
+        if (auto msg = std::get_if<Message>(&var))
+        {
+            response = msg->to_string();
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            WS_TRYV(client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            std::cerr << "Error: " << err->message << std::endl;
+        }
+        else
+            throw std::runtime_error("Unexpected message type");
     }
 
-    WS_TRYV(client.close());
+    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
 
     return response;
 }
@@ -97,18 +122,37 @@ using namespace ws_client;
     buffer.set_max_size(100 * 1024 * 1024); // 100 MB
     while (true)
     {
-        // automatically clear buffer on every iteration
-        BufferClearGuard guard(buffer);
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(buffer);
 
-        // read from server
-        WS_TRY(res, client.read_message(buffer));
-        const Message& msg = *res;
-
-        // write message back to server
-        WS_TRYV(client.send_message(msg));
+        if (auto msg = std::get_if<Message>(&var))
+        {
+            // write message back to server
+            WS_TRYV(client.send_message(*msg));
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            WS_TRYV(client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::holds_alternative<PongFrame>(var))
+        {
+        }
+        else if (std::holds_alternative<CloseFrame>(var))
+        {
+            break;
+        }
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            std::cerr << "Error: " << err->message << std::endl;
+            WS_TRYV(client.close(err->close_with_code));
+            break;
+        }
+        else
+            throw std::runtime_error("Unexpected message type");
     }
 
-    WS_TRYV(client.close());
+    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
 
     return {};
 }
@@ -141,8 +185,9 @@ int main()
     {
         // getCaseInfo
         {
-            auto res =
-                send_request("ws://" + host + "/getCaseInfo?case=" + std::to_string(i), true);
+            auto res = send_request(
+                "ws://" + host + "/getCaseInfo?case=" + std::to_string(i), true
+            );
             if (!res.has_value())
             {
                 std::cerr << "Failed to fetch case info: " << res.error() << std::endl;
@@ -157,6 +202,8 @@ int main()
             std::cerr << "Case " << i << ": " << res_case.error() << std::endl;
     }
 
+    std::cout << "Cases processed, updating reports..." << std::endl;
+
     // updateReports
     {
         auto res = send_request("ws://" + host + "/updateReports?agent=" + agent, false);
@@ -167,7 +214,7 @@ int main()
         }
     }
 
-    std::cout << "All cases processed" << std::endl;
+    std::cout << "Autobahn test cases finished." << std::endl;
 
     return 0;
 };

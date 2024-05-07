@@ -59,7 +59,7 @@ public:
             buf, asio::redirect_error(asio::use_awaitable, ec)
         );
         if (ec)
-            co_return WS_ERROR(TRANSPORT_ERROR, ec.message());
+            co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
         co_return n;
     }
 
@@ -76,7 +76,7 @@ public:
             this->socket, buf, asio::redirect_error(asio::use_awaitable, ec)
         );
         if (ec)
-            co_return WS_ERROR(TRANSPORT_ERROR, ec.message());
+            co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
         co_return n;
     }
 
@@ -102,14 +102,14 @@ public:
             asio::error_code ec;
             co_await this->socket.async_shutdown(asio::redirect_error(asio::use_awaitable, ec));
             if (ec && ec != asio::error::eof)
-                co_return WS_ERROR(TRANSPORT_ERROR, ec.message());
+                co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
         }
 
         // asynchronously shut down the (underlying) TCP connection
         asio::error_code ec;
         this->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
         if (ec && ec != asio::error::eof)
-            co_return WS_ERROR(TRANSPORT_ERROR, ec.message());
+            co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
 
         co_return expected<void, WSError>{};
     }
@@ -127,7 +127,7 @@ public:
         // close the underlying socket
         this->socket.lowest_layer().close(ec);
         if (ec)
-            co_return WS_ERROR(TRANSPORT_ERROR, ec.message());
+            co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
 
         co_return expected<void, WSError>{};
     }

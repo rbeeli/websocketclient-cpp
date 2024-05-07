@@ -34,6 +34,19 @@ static constexpr string to_string(MessageType v)
     }
 }
 
+struct MessageReadState
+{
+    bool is_compressed = false;
+    bool is_first = true;
+    opcode op_code = opcode::NOT_SET;
+
+    void reset() noexcept
+    {
+        is_compressed = false;
+        is_first = true;
+        op_code = opcode::NOT_SET;
+    }
+};
 
 /**
  * Data container for Web Socket messages.

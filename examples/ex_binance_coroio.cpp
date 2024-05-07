@@ -9,7 +9,6 @@
 #define WS_CLIENT_LOG_MSG_PAYLOADS 0
 #define WS_CLIENT_LOG_MSG_SIZES 0
 #define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_PING_PONG 1
 #define WS_CLIENT_LOG_COMPRESSION 0
 
 #include "ws_client/ws_client_async.hpp"
@@ -166,9 +165,6 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     Buffer buffer;
     while (true)
     {
-        // automatically clear buffer on every iteration
-        BufferClearGuard guard(buffer);
-
         ++stats.counter;
 
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -176,26 +172,59 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
         )
                       .count();
 
-        WS_CO_TRY(res, co_await client.read_message(buffer));
-        Message& msg = *res;
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            co_await client.read_message(buffer);
 
-        stats.total_bytes += msg.data.size();
-
-        auto E = std::atoll(extract_json_property_value(msg.to_string_view(), "E").data());
-        auto latency = ms - E;
-        stats.avg_latency += static_cast<double>(latency);
-
-        auto t = std::chrono::system_clock::now();
-        if (t - last_msg > std::chrono::seconds(1))
+        if (auto msg = std::get_if<Message>(&var))
         {
-            stats.avg_latency /= static_cast<double>(stats.counter);
+            stats.total_bytes += msg->data.size();
 
-            std::cout << std::setw(6) << stats.counter << " msg/s  ";
-            std::cout << "avg latency " << std::setw(8) << stats.avg_latency << " ms  ";
-            std::cout << "bytes recv " << stats.total_bytes << std::endl;
+            auto E = std::atoll(extract_json_property_value(msg->to_string_view(), "E").data());
+            auto latency = ms - E;
+            stats.avg_latency += static_cast<double>(latency);
 
-            stats.reset();
-            last_msg = t;
+            auto t = std::chrono::system_clock::now();
+            if (t - last_msg > std::chrono::seconds(1))
+            {
+                stats.avg_latency /= static_cast<double>(stats.counter);
+
+                std::cout << std::setw(6) << stats.counter << " msg/s  ";
+                std::cout << "avg latency " << std::setw(8) << stats.avg_latency << " ms  ";
+                std::cout << "bytes recv " << stats.total_bytes << std::endl;
+
+                stats.reset();
+                last_msg = t;
+            }
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            logger.log<LogLevel::D>("Ping frame received");
+            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::get_if<PongFrame>(&var))
+        {
+            logger.log<LogLevel::D>("Pong frame received");
+        }
+        else if (auto close_frame = std::get_if<CloseFrame>(&var))
+        {
+            // server initiated close
+            if (close_frame->has_reason())
+            {
+                logger.log<LogLevel::I>(
+                    "Close frame received: " + string(close_frame->get_reason())
+                );
+            }
+            else
+                logger.log<LogLevel::I>("Close frame received");
+            break;
+        }
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            // error occurred - must close connection
+            logger.log<LogLevel::E>("Error: " + err->message);
+            WS_CO_TRYV(co_await client.close(err->close_with_code));
+            co_return expected<void, WSError>{};
         }
     }
 

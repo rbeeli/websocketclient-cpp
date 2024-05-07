@@ -110,20 +110,20 @@ target_compile_definitions(ex_binance_asio PRIVATE
     ASIO_NO_TYPEID=1
 )
 
-# --------------------------------------
-file(GLOB_RECURSE SOURCES "../include/*.cpp")
-add_executable(ex_binance_coroio ex_binance_coroio.cpp ${SOURCES})
-target_link_libraries(ex_binance_coroio PRIVATE
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    PkgConfig::ZLIBNG
-    websocketclient
-)
-target_compile_definitions(ex_binance_coroio PRIVATE
-    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
-    WS_CLIENT_USE_SIMD_UTF8=0 # Use simdutf for utf-8 validation
-    WS_CLIENT_VALIDATE_UTF8=0 # Disable utf-8 validation
-)
+# # --------------------------------------
+# file(GLOB_RECURSE SOURCES "../include/*.cpp")
+# add_executable(ex_binance_coroio ex_binance_coroio.cpp ${SOURCES})
+# target_link_libraries(ex_binance_coroio PRIVATE
+#     OpenSSL::SSL
+#     OpenSSL::Crypto
+#     PkgConfig::ZLIBNG
+#     websocketclient
+# )
+# target_compile_definitions(ex_binance_coroio PRIVATE
+#     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+#     WS_CLIENT_USE_SIMD_UTF8=0 # Use simdutf for utf-8 validation
+#     WS_CLIENT_VALIDATE_UTF8=0 # Disable utf-8 validation
+# )
 
 # # --------------------------------------
 add_executable(ex_reconnect_asio ex_reconnect_asio.cpp)

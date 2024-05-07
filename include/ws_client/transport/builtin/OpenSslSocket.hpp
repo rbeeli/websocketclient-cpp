@@ -243,7 +243,9 @@ public:
             }
             else if (ret == 0)
             {
-                return WS_ERROR(TRANSPORT_ERROR, "SSL connection closed on transport layer");
+                return WS_ERROR(
+                    TRANSPORT_ERROR, "SSL connection closed on transport layer", NOT_SET
+                );
             }
             else
             {
@@ -280,7 +282,9 @@ public:
             }
             else if (ret == 0)
             {
-                return WS_ERROR(TRANSPORT_ERROR, "SSL connection closed on transport layer");
+                return WS_ERROR(
+                    TRANSPORT_ERROR, "SSL connection closed on transport layer", NOT_SET
+                );
             }
             else
             {

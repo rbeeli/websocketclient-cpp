@@ -39,13 +39,6 @@
 #define WS_CLIENT_LOG_FRAMES 0
 #endif
 
-#ifndef WS_CLIENT_LOG_PING_PONG
-/**
- * Enable logging of ping/pong frames.
- */
-#define WS_CLIENT_LOG_PING_PONG 1
-#endif
-
 #ifndef WS_CLIENT_LOG_COMPRESSION
 /**
  * Enable logging of permessage-deflate compression related messages.

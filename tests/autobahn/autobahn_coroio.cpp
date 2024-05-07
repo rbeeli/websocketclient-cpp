@@ -9,7 +9,6 @@
 #define WS_CLIENT_LOG_MSG_PAYLOADS 0
 #define WS_CLIENT_LOG_MSG_SIZES 0
 #define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_PING_PONG 0
 
 #include "ws_client/ws_client_async.hpp"
 #include "ws_client/transport/CoroioSocket.hpp"
@@ -105,9 +104,6 @@ template <typename TPoller>
     buffer.set_max_size(100 * 1024 * 1024); // 100 MB
     while (true)
     {
-        // automatically clear buffer on every iteration
-        BufferClearGuard guard(buffer);
-
         // read from server
         WS_CO_TRY(res, co_await client.read_message(buffer));
         const Message& msg = *res;
@@ -168,6 +164,8 @@ TValueTask<void> client(TPoller& poller)
             std::cerr << "Case " << i << ": " << res_case.error() << std::endl;
     }
 
+    std::cout << "Cases processed, updating reports..." << std::endl;
+
     // updateReports
     {
         auto res = co_await send_request(
@@ -180,7 +178,7 @@ TValueTask<void> client(TPoller& poller)
         }
     }
 
-    std::cout << "All cases processed" << std::endl;
+    std::cout << "Autobahn test cases finished." << std::endl;
 
     co_return;
 }
@@ -192,16 +190,12 @@ int main()
     Loop loop;
     auto task = client(loop.Poller());
 
-    std::cout << "Running autobahn tests..." << std::endl;
-
     do
     {
         loop.Step();
     } while (!task.done());
 
     task.destroy();
-
-    std::cout << "Autobahn tests finished" << std::endl;
 
     return 0;
 };

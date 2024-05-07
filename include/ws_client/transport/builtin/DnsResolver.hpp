@@ -91,18 +91,18 @@ public:
             // Use gai_strerror to get a human-readable error message
             string error_message = "Failed to resolve hostname: ";
             error_message += gai_strerror(ret);
-            return WS_ERROR(URL_ERROR, error_message);
+            return WS_ERROR(URL_ERROR, error_message, NOT_SET);
         }
 
         if (logger->template is_enabled<LogLevel::I>())
         {
             std::stringstream ss;
             ss << "Resolved hostname " << hostname << " in "
-            << std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::system_clock::now() - now
-                )
-                    .count()
-            << " µs";
+               << std::chrono::duration_cast<std::chrono::microseconds>(
+                      std::chrono::system_clock::now() - now
+                  )
+                      .count()
+               << " µs";
             logger->template log<LogLevel::I>(ss.str());
         }
 
@@ -136,7 +136,8 @@ public:
                         TRANSPORT_ERROR,
                         "Failed to convert IPv4 address to string: " +
                             std::string(std::strerror(error_code)) + " (" +
-                            std::to_string(error_code) + ")"
+                            std::to_string(error_code) + ")",
+                        NOT_SET
                     );
                 }
             }
@@ -167,7 +168,8 @@ public:
                         TRANSPORT_ERROR,
                         "Failed to convert IPv6 address to string: " +
                             std::string(std::strerror(error_code)) + " (" +
-                            std::to_string(error_code) + ")"
+                            std::to_string(error_code) + ")",
+                        NOT_SET
                     );
                 }
             }
@@ -185,7 +187,7 @@ public:
         ::freeaddrinfo(getaddrinfo_res);
 
         if (result.empty())
-            return WS_ERROR(URL_ERROR, "No address found for hostname");
+            return WS_ERROR(URL_ERROR, "No address found for hostname", NOT_SET);
 
         return result;
     }

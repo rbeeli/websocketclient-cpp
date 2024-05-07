@@ -105,7 +105,7 @@ public:
             {
                 auto elapsed = std::chrono::system_clock::now() - start;
                 if (elapsed > timeout.value())
-                    return WS_ERROR(TIMEOUT, "read_until timed out.");
+                    return WS_ERROR(TIMEOUT, "read_until timed out.", NOT_SET);
             }
 
             // read some data into circular buffer

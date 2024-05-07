@@ -31,7 +31,6 @@ namespace ws_client
 {
 using std::array;
 using std::string;
-using std::variant;
 using std::optional;
 using std::byte;
 using std::span;
@@ -104,7 +103,7 @@ public:
     explicit WebSocketClientAsync(
         TLogger* logger, TSocket&& socket, TMaskKeyGen&& mask_key_generator
     ) noexcept
-        : socket(BufferedSocket(std::move(socket))),
+        : socket(BufferedSocketAsync<TSocket, TTask>(std::move(socket))),
           logger(logger),
           mask_key_generator(mask_key_generator)
     {
@@ -117,7 +116,7 @@ public:
     {
     }
 
-    // disable copying
+    // disable copy
     WebSocketClientAsync(const WebSocketClientAsync&) = delete;
     WebSocketClientAsync& operator=(WebSocketClientAsync const&) = delete;
 
@@ -173,7 +172,7 @@ public:
      * 
      * Does not check whether connection is physically open and alive.
      * Reverts to `false` after `close()` has been called.
-     */
+    */
     inline bool is_open() const noexcept
     {
         return !this->closed;
@@ -226,93 +225,118 @@ public:
         co_return expected<void, WSError>{};
     }
 
-    template <HasBufferOperations TBuffer>
-    [[nodiscard]] TTask<variant<Message, PingFrame, PongFrame, CloseFrame, WSError>> read_message(
-        TBuffer& buffer
-    ) noexcept
+
+    /**
+     * Closes the WebSocket connection.
+     * 
+     * This method sends a close frame to the server and waits for the server,
+     * shuts down the socket communication and closes the underlying socket connection.
+     */
+    [[nodiscard]] inline TTask<expected<void, WSError>> close()
     {
         if (this->closed)
-            co_return WS_ERROR_RAW(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
+            co_return expected<void, WSError>{};
+
+        // send close frame
+        auto res = co_await this->send_close_frame(close_code::NORMAL_CLOSURE);
+
+        // only log warning if sending close frame failed
+        if (!res.has_value())
+        {
+            logger->template log<LogLevel::W>("Failed to send close frame: " + res.error().message);
+        }
+
+        // mark as closed, prevents further reading/writing
+        this->closed = true;
+
+        // shutdown socket communication (ignore errors)
+        co_await this->socket.underlying().shutdown();
+
+        // close underlying socket connection
+        WS_CO_TRYV(co_await this->socket.underlying().close());
+
+        co_return expected<void, WSError>{};
+    }
+
+    template <HasBufferOperations TBuffer>
+    [[nodiscard]] TTask<expected<Message, WSError>> read_message(TBuffer& buffer) noexcept
+    {
+        if (this->closed)
+            co_return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.");
+
+        // remember the current location of the buffer,
+        // might not be empty, we just append to it, up to the user
+        // to clear the buffer if needed
+        size_t buffer_pos = buffer.size();
 
         while (true)
         {
+            bool is_compressed = false;
+            bool is_first = true;
+            opcode opcode_ = opcode::NOT_SET;
             while (true)
             {
                 // read next frame w/o payload
-                WS_CO_TRY_RAW(frame_res, co_await this->read_frame());
+                WS_CO_TRY(frame_res, co_await this->read_frame());
                 Frame& frame = *frame_res;
 
                 // check reserved opcodes
                 if (is_reserved(frame.header.op_code()))
                 {
-                    co_return WS_ERROR_RAW(
+                    WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                    co_return WS_ERROR(
                         PROTOCOL_ERROR,
-                        "Reserved opcode received: " + to_string(frame.header.op_code()),
-                        PROTOCOL_ERROR
+                        "Reserved opcode received: " + to_string(frame.header.op_code())
                     );
                 }
 
                 // handle control frames
                 if (frame.header.is_control())
                 {
-                    auto res = co_await this->handle_control_frame(frame);
-
-                    // convert to outer variant
-                    co_return std::visit(
-                        [](auto&& arg) //
-                        -> variant<Message, PingFrame, PongFrame, CloseFrame, WSError>
-                        { return arg; },
-                        res
-                    );
-                }
-
-                if (read_state.is_first)
-                {
-                    // clear buffer if this is the first frame
-                    buffer.clear();
+                    WS_CO_TRYV(co_await this->handle_control_frame(frame));
+                    continue;
                 }
 
                 // check if payload fits into buffer
                 if (buffer.max_size() - buffer.size() < frame.payload_size)
                 {
+                    WS_CO_TRYV(co_await this->send_close_frame(close_code::MESSAGE_TOO_BIG));
                     string msg = "Received message payload of " +
                                  std::to_string(frame.payload_size) + " bytes is too large, only " +
                                  std::to_string(buffer.max_size() - buffer.size()) +
                                  " bytes available.";
-                    co_return WS_ERROR_RAW(BUFFER_ERROR, msg, MESSAGE_TOO_BIG);
+                    co_return WS_ERROR(BUFFER_ERROR, msg);
                 }
 
                 // check if this is the first frame
-                if (read_state.is_first)
+                if (is_first)
                 {
-                    read_state.is_first = false;
-                    read_state.op_code = frame.header.op_code();
+                    is_first = false;
+                    opcode_ = frame.header.op_code();
 
                     // RSV1 indicates DEFLATE compressed message, only if negotiated.
                     if (frame.header.rsv1_bit())
                     {
-                        read_state.is_compressed = true;
-
                         if (this->permessage_deflate_context != std::nullopt)
                         {
+                            is_compressed = true;
                             this->decompress_buffer.clear();
                         }
                         else
                         {
-                            co_return WS_ERROR_RAW(
+                            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                            co_return WS_ERROR(
                                 PROTOCOL_ERROR,
-                                "Received compressed frame, but compression not enabled.",
-                                PROTOCOL_ERROR
+                                "Received compressed frame, but compression not enabled."
                             );
                         }
                     }
 
                     if (frame.header.rsv2_bit() || frame.header.rsv3_bit())
                     {
-                        co_return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "RSV2 or RSV3 bit set, but not supported.",
-                            PROTOCOL_ERROR
+                        WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                        co_return WS_ERROR(
+                            PROTOCOL_ERROR, "RSV2 or RSV3 bit set, but not supported."
                         );
                     }
                 }
@@ -320,54 +344,51 @@ public:
                 {
                     if (frame.header.op_code() != opcode::CONTINUATION)
                     {
-                        co_return WS_ERROR_RAW(
+                        WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                        co_return WS_ERROR(
                             PROTOCOL_ERROR,
                             "Expected continuation frame, but received " +
-                                to_string(frame.header.op_code()),
-                            PROTOCOL_ERROR
+                                to_string(frame.header.op_code())
                         );
                     }
 
                     if (frame.header.has_rsv_bits())
                     {
-                        co_return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "RSV bits must not be set on non-first frames.",
-                            PROTOCOL_ERROR
+                        WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                        co_return WS_ERROR(
+                            PROTOCOL_ERROR, "RSV bits must not be set on non-first frames."
                         );
                     }
                 }
 
                 // check opcode
-                if (read_state.op_code != opcode::CONTINUATION &&
-                    read_state.op_code != opcode::TEXT && read_state.op_code != opcode::BINARY)
+                if (opcode_ != opcode::CONTINUATION && opcode_ != opcode::TEXT &&
+                    opcode_ != opcode::BINARY)
                 {
-                    co_return WS_ERROR_RAW(
+                    WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                    co_return WS_ERROR(
                         PROTOCOL_ERROR,
-                        "Unexpected opcode in websocket frame received: " +
-                            to_string(read_state.op_code),
-                        PROTOCOL_ERROR
+                        "Unexpected opcode in websocket frame received: " + to_string(opcode_)
                     );
                 }
 
                 // read payload
                 if (frame.payload_size > 0) [[likely]]
                 {
-                    if (read_state.is_compressed)
+                    if (is_compressed)
                     {
                         // read payload into decompression buffer
-                        WS_CO_TRY_RAW(
+                        WS_CO_TRY(
                             frame_data_compressed_res,
                             this->decompress_buffer.append(frame.payload_size)
                         );
-                        WS_CO_TRYV_RAW(co_await this->socket.read_exact(*frame_data_compressed_res)
-                        );
+                        WS_CO_TRYV(co_await this->socket.read_exact(*frame_data_compressed_res));
                     }
                     else
                     {
                         // read payload into message buffer
-                        WS_CO_TRY_RAW(frame_data_res, buffer.append(frame.payload_size));
-                        WS_CO_TRYV_RAW(co_await this->socket.read_exact(*frame_data_res));
+                        WS_CO_TRY(frame_data_res, buffer.append(frame.payload_size));
+                        WS_CO_TRYV(co_await this->socket.read_exact(*frame_data_res));
                     }
                 }
 
@@ -378,18 +399,18 @@ public:
             span<byte> payload_buffer;
 
             // handle permessage-deflate compression
-            if (read_state.is_compressed)
+            if (is_compressed)
             {
                 span<byte> input = this->decompress_buffer.data();
-                WS_CO_TRYV_RAW(this->permessage_deflate_context.value().decompress(input, buffer));
-                payload_buffer = buffer.data();
+                WS_CO_TRYV(this->permessage_deflate_context.value().decompress(input, buffer));
+                payload_buffer = buffer.data().subspan(buffer_pos, buffer.size() - buffer_pos);
             }
             else
             {
-                payload_buffer = buffer.data();
+                payload_buffer = buffer.data().subspan(buffer_pos, buffer.size() - buffer_pos);
             }
 
-            switch (read_state.op_code)
+            switch (opcode_)
             {
                 case opcode::TEXT:
                 {
@@ -398,10 +419,11 @@ public:
                             const_cast<char*>((char*)payload_buffer.data()), payload_buffer.size()
                         ))
                     {
-                        co_return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "Invalid UTF-8 in websocket TEXT message.",
-                            INVALID_FRAME_PAYLOAD_DATA
+                        WS_CO_TRYV(
+                            co_await this->send_close_frame(close_code::INVALID_FRAME_PAYLOAD_DATA)
+                        );
+                        co_return WS_ERROR(
+                            PROTOCOL_ERROR, "Invalid UTF-8 in websocket TEXT message.",
                         );
                     }
 #endif
@@ -425,18 +447,12 @@ public:
 #endif
                     }
 
-                    auto msg = Message(
-                        static_cast<MessageType>(read_state.op_code), payload_buffer
-                    );
-
-                    // reset reading state - message complete
-                    read_state.reset();
-
-                    co_return msg;
+                    co_return Message(static_cast<MessageType>(opcode_), payload_buffer);
                 }
 
                 case opcode::BINARY:
                 {
+
                     if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
                     {
 #if WS_CLIENT_LOG_MSG_PAYLOADS
@@ -457,23 +473,14 @@ public:
                         );
 #endif
                     }
-
-                    auto msg = Message(
-                        static_cast<MessageType>(read_state.op_code), payload_buffer
-                    );
-
-                    // reset reading state - message complete
-                    read_state.reset();
-
-                    co_return msg;
+                    co_return Message(static_cast<MessageType>(opcode_), payload_buffer);
                 }
 
                 default:
                 {
-                    co_return WS_ERROR_RAW(
-                        PROTOCOL_ERROR,
-                        "Unexpected opcode frame received: " + to_string(read_state.op_code),
-                        PROTOCOL_ERROR
+                    WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                    co_return WS_ERROR(
+                        PROTOCOL_ERROR, "Unexpected opcode frame received: " + to_string(opcode_)
                     );
                 }
             }
@@ -485,7 +492,7 @@ public:
     ) noexcept
     {
         if (this->closed)
-            co_return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
+            co_return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.");
 
         if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
         {
@@ -509,7 +516,7 @@ public:
 
         Frame frame;
         frame.set_opcode(static_cast<opcode>(msg.type));
-        frame.set_is_final(true); // TODO: support fragmented messages
+        frame.set_is_final(true);
         frame.set_is_masked(true);
         frame.mask_key = this->mask_key_generator();
 
@@ -525,7 +532,9 @@ public:
             payload = *res;
         }
         else
+        {
             payload = msg.data;
+        }
 
         frame.set_payload_size(payload.size());
 
@@ -534,67 +543,6 @@ public:
         co_return expected<void, WSError>{};
     }
 
-    [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(span<byte> payload) noexcept
-    {
-        Frame frame;
-        frame.set_opcode(opcode::PONG);
-        frame.set_is_final(true);
-        frame.set_is_masked(true); // write_frame does the actual masking
-        frame.set_payload_size(payload.size());
-        frame.mask_key = this->mask_key_generator();
-
-        WS_CO_TRYV(co_await this->write_frame(frame, payload));
-
-        co_return expected<void, WSError>{};
-    }
-
-    /**
-     * Closes the WebSocket connection.
-     * 
-     * This method sends a close frame to the server and waits for the server,
-     * shuts down the socket communication and closes the underlying socket connection.
-     */
-    [[nodiscard]] inline TTask<expected<void, WSError>> close(const close_code code)
-    {
-        if (this->closed)
-            co_return expected<void, WSError>{};
-
-        // send close frame
-        {
-            auto res = co_await this->send_close_frame(code);
-            if (!res.has_value())
-            {
-                logger->template log<LogLevel::W>(
-                    "Failed to send close frame: " + res.error().message
-                );
-            }
-        }
-
-        // mark as closed, prevents further reading/writing
-        // TODO
-        this->closed = true;
-
-        // shutdown socket communication
-        {
-            auto res = co_await this->socket.underlying().shutdown();
-            if (!res.has_value())
-            {
-                logger->template log<LogLevel::W>("Socket shutdown failed: " + res.error().message);
-            }
-        }
-
-        // close underlying socket connection
-        {
-            auto res = co_await this->socket.underlying().close();
-            if (!res.has_value())
-            {
-                logger->template log<LogLevel::W>("Socket close failed: " + res.error().message);
-                co_return WS_UNEXPECTED(res.error());
-            }
-        }
-
-        co_return expected<void, WSError>{};
-    }
 
 private:
     [[nodiscard]] TTask<expected<Frame, WSError>> read_frame()
@@ -609,7 +557,11 @@ private:
         frame.header.b1 = tmp1[1];
 
         if (!frame.header.is_final() && frame.header.op_code() == opcode::CLOSE) [[unlikely]]
-            co_return WS_ERROR(PROTOCOL_ERROR, "Received fragmented close frame.", PROTOCOL_ERROR);
+        {
+            // close frame cannot be fragmented
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(PROTOCOL_ERROR, "Received fragmented close frame.");
+        }
 
         // read payload size (1 byte, 2 bytes, or 8 bytes)
         auto payload_size = frame.header.get_basic_size();
@@ -640,7 +592,10 @@ private:
 
         // verify not masked
         if (frame.header.is_masked()) [[unlikely]]
-            co_return WS_ERROR(PROTOCOL_ERROR, "Received masked frame from server.", PROTOCOL_ERROR);
+        {
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(PROTOCOL_ERROR, "Received masked frame from server.");
+        }
 
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
@@ -717,8 +672,10 @@ private:
             offset += sizeof(uint64_t);
         }
 
+#ifndef NDEBUG
         if (!frame.header.is_masked())
-            co_return WS_ERROR(PROTOCOL_ERROR, "Frame sent by client MUST be masked.", PROTOCOL_ERROR);
+            co_return WS_ERROR(PROTOCOL_ERROR, "Frame sent by client MUST be masked.");
+#endif
 
         // write 4 byte masking key
         std::memcpy(&write_buffer[offset], &frame.mask_key.key, sizeof(uint32_t));
@@ -736,6 +693,20 @@ private:
             WS_CO_TRYV(co_await this->socket.write(payload));
             offset += frame.payload_size;
         }
+
+        co_return expected<void, WSError>{};
+    }
+
+    [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(span<byte> payload) noexcept
+    {
+        Frame frame;
+        frame.set_opcode(opcode::PONG);
+        frame.set_is_final(true);
+        frame.set_is_masked(true); // write_frame does the actual masking
+        frame.set_payload_size(payload.size());
+        frame.mask_key = this->mask_key_generator();
+
+        WS_CO_TRYV(co_await this->write_frame(frame, payload));
 
         co_return expected<void, WSError>{};
     }
@@ -781,32 +752,43 @@ private:
         co_return expected<void, WSError>{};
     }
 
-    [[nodiscard]] TTask<variant<PingFrame, PongFrame, CloseFrame, WSError>> handle_control_frame(
-        Frame& frame
-    ) noexcept
+    [[nodiscard]] TTask<expected<void, WSError>> handle_control_frame(Frame& frame) noexcept
     {
         if (!frame.header.is_final())
         {
-            co_return WS_ERROR_RAW(
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(
                 PROTOCOL_ERROR, "Received fragmented control frame.", PROTOCOL_ERROR
             );
         }
 
         if (frame.header.has_rsv_bits())
         {
-            co_return WS_ERROR_RAW(
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(
                 PROTOCOL_ERROR, "Invalid RSV bits found in control frame.", PROTOCOL_ERROR
             );
         }
 
         if (frame.payload_size > 125)
         {
-            co_return WS_ERROR_RAW(
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(
                 PROTOCOL_ERROR,
                 "Control frame payload size larger than 125 bytes, got " +
                     std::to_string(frame.payload_size),
                 PROTOCOL_ERROR
             );
+        }
+
+        // read control frame payload (max. 125 bytes)
+        span<byte> payload;
+        if (frame.payload_size > 0)
+        {
+            WS_CO_TRYV(
+                co_await this->socket.read_exact(this->read_buffer.subspan(0, frame.payload_size))
+            );
+            payload = this->read_buffer.subspan(0, frame.payload_size);
         }
 
         switch (frame.header.op_code())
@@ -818,87 +800,106 @@ private:
                     // close frame sent by server
                     logger->template log<LogLevel::W>("Unsolicited close frame received");
                 }
-
-                CloseFrame close_frame(frame.payload_size);
-
-                // read control frame payload (max. 125 bytes)
-                if (frame.payload_size > 0)
-                {
-                    if (frame.payload_size == 1)
-                    {
-                        co_return WS_ERROR_RAW(
-                            PROTOCOL_ERROR, "Invalid close frame payload size of 1.", PROTOCOL_ERROR
-                        );
-                    }
-
-                    WS_CO_TRYV_RAW(co_await this->socket.read_exact(close_frame.payload_bytes()));
-
-                    // check close code if provided
-                    if (close_frame.has_close_code())
-                    {
-                        auto code = close_frame.get_close_code();
-                        if (!is_valid_close_code(code))
-                        {
-                            co_return WS_ERROR_RAW(
-                                PROTOCOL_ERROR,
-                                "Invalid close code " + std::to_string(static_cast<uint16_t>(code)),
-                                PROTOCOL_ERROR
-                            );
-                        }
-                    }
-
-#if WS_CLIENT_VALIDATE_UTF8
-                    // check close reason string is valid UTF-8 string
-                    if (!close_frame.is_reason_valid_utf8())
-                    {
-                        co_return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "Invalid UTF-8 in websocket close reason string.",
-                            INVALID_FRAME_PAYLOAD_DATA
-                        );
-                    }
-#endif
-                }
-
-                co_return close_frame;
+                WS_CO_TRY(res, co_await this->process_close_frame(frame, payload));
+                string close_reason = *res;
+                this->closed = true;
+                co_return WS_ERROR(CONNECTION_CLOSED_BY_PEER, close_reason);
             }
 
             case opcode::PING:
             {
-                PingFrame ping_frame(frame.payload_size);
-
-                // read control frame payload (max. 125 bytes)
-                if (frame.payload_size > 0)
-                {
-                    WS_CO_TRYV_RAW(co_await this->socket.read_exact(ping_frame.payload_bytes()));
-                }
-
-                co_return ping_frame;
+                WS_CO_TRYV(co_await this->send_pong_frame(payload));
             }
+            break;
 
             case opcode::PONG:
             {
-                PongFrame pong_frame(frame.payload_size);
-
-                // read control frame payload (max. 125 bytes)
-                if (frame.payload_size > 0)
-                {
-                    WS_CO_TRYV_RAW(co_await this->socket.read_exact(pong_frame.payload_bytes()));
-                }
-
-                co_return pong_frame;
+                // pong frame received - nothing to do
             }
+            break;
 
             default:
             {
-                co_return WS_ERROR_RAW(
+                logger->template log<LogLevel::E>(
+                    "Unexpected opcode for websocket control frame received: " +
+                    to_string(frame.header.op_code())
+                );
+
+                WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+
+                co_return WS_ERROR(
                     PROTOCOL_ERROR,
                     "Unexpected opcode for websocket control frame received: " +
-                        to_string(frame.header.op_code()),
-                    PROTOCOL_ERROR
+                        to_string(frame.header.op_code())
                 );
             }
         }
+
+        co_return expected<void, WSError>{};
+    }
+
+    [[nodiscard]] TTask<expected<string, WSError>> process_close_frame(
+        Frame& frame, span<byte> payload
+    ) noexcept
+    {
+        logger->template log<LogLevel::D>("Close frame received, sending close response frame");
+
+        if (frame.payload_size == 1)
+        {
+            logger->template log<LogLevel::D>("Invalid close frame payload size 1.");
+            WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+            co_return WS_ERROR(PROTOCOL_ERROR, "Invalid close frame payload size 1.");
+        }
+
+        // extract close code and reason text (if provided)
+        string reason = "";
+        if (frame.payload_size >= 2)
+        {
+            // check close code
+            uint16_t ncode;
+            std::memcpy(&ncode, payload.data(), sizeof(uint16_t));
+            uint16_t code = network_to_host(ncode);
+            if (!is_valid_close_code(static_cast<close_code>(code)))
+            {
+                logger->template log<LogLevel::D>("Invalid close code " + std::to_string(code));
+                WS_CO_TRYV(co_await this->send_close_frame(close_code::PROTOCOL_ERROR));
+                co_return WS_ERROR(PROTOCOL_ERROR, "Invalid close code " + std::to_string(code));
+            }
+
+            if (frame.payload_size > 2)
+            {
+                const char* reason_buffer = const_cast<char*>(
+                    reinterpret_cast<char*>(payload.data() + 2)
+                );
+                size_t reason_size = payload.size() - 2;
+
+#if WS_CLIENT_VALIDATE_UTF8
+                // check close reason is valid UTF-8 string
+                if (!is_valid_utf8(reason_buffer, reason_size))
+                {
+                    logger->template log<LogLevel::E>(
+                        "Invalid UTF-8 in websocket close reason string."
+                    );
+                    WS_CO_TRYV(
+                        co_await this->send_close_frame(close_code::INVALID_FRAME_PAYLOAD_DATA)
+                    );
+                    co_return WS_ERROR(
+                        PROTOCOL_ERROR, "Invalid UTF-8 in websocket close reason string."
+                    );
+                }
+#endif
+
+                reason.append(" ");
+                reason.append(string(reason_buffer, reason_size));
+            }
+        }
+
+        WS_CO_TRYV(co_await this->send_close_frame(close_code::NORMAL_CLOSURE));
+
+        // mark as closed, prevents further reading/writing
+        this->closed = true;
+
+        co_return "Closed by server." + reason;
     }
 };
 } // namespace ws_client

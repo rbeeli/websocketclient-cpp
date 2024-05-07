@@ -15,7 +15,6 @@
 #define WS_CLIENT_LOG_MSG_PAYLOADS 0
 #define WS_CLIENT_LOG_MSG_SIZES 0
 #define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_PING_PONG 1
 #define WS_CLIENT_LOG_COMPRESSION 0
 
 #include "ws_client/ws_client.hpp"
@@ -94,9 +93,6 @@ awaitable<expected<void, WSError>> run()
     Buffer buffer;
     while (client.is_open())
     {
-        // automatically clear buffer on every iteration
-        BufferClearGuard guard(buffer);
-
         // timeout after 5 seconds
         // https://cppalliance.org/asio/2023/01/02/Asio201Timeouts.html
         asio::steady_timer to{executor, 5s};
@@ -107,19 +103,46 @@ awaitable<expected<void, WSError>> run()
             break;
         }
 
-        // read_message result
-        auto& res_msg = std::get<1>(res);
-        if (!res_msg.has_value())
+        // read message from server into buffer
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            std::get<1>(res);
+
+        if (auto msg = std::get_if<Message>(&var))
         {
-            std::cout << "Error: " << res_msg.error().message << std::endl;
+            std::cout << msg->to_string() << std::endl;
+        }
+        else if (auto ping_frame = std::get_if<PingFrame>(&var))
+        {
+            logger.log<LogLevel::D>("Ping frame received");
+            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+        }
+        else if (std::get_if<PongFrame>(&var))
+        {
+            logger.log<LogLevel::D>("Pong frame received");
+        }
+        else if (auto close_frame = std::get_if<CloseFrame>(&var))
+        {
+            // server initiated close
+            if (close_frame->has_reason())
+            {
+                logger.log<LogLevel::I>(
+                    "Close frame received: " + string(close_frame->get_reason())
+                );
+            }
+            else
+                logger.log<LogLevel::I>("Close frame received");
             break;
         }
-
-        Message& msg = *res_msg;
-        std::cout << msg.to_string() << std::endl;
+        else if (auto err = std::get_if<WSError>(&var))
+        {
+            // error occurred - must close connection
+            logger.log<LogLevel::E>("Error: " + err->message);
+            WS_CO_TRYV(co_await client.close(err->close_with_code));
+            co_return expected<void, WSError>{};
+        }
     }
 
-    co_await client.close();
+    co_await client.close(close_code::NORMAL_CLOSURE);
 
     co_return expected<void, WSError>{};
 };

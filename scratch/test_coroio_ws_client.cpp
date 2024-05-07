@@ -11,7 +11,6 @@
 #define WS_CLIENT_LOG_MSG_PAYLOADS 1
 #define WS_CLIENT_LOG_MSG_SIZES 1
 #define WS_CLIENT_LOG_FRAMES 1
-#define WS_CLIENT_LOG_PING_PONG 1
 
 #include "ws_client/errors.hpp"
 #include "ws_client/log.hpp"

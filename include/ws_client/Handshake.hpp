@@ -202,7 +202,8 @@ public:
             return WS_ERROR(
                 PROTOCOL_ERROR,
                 "HTTP error during WebSocket handshake response processing: " +
-                    std::to_string(status_line.status_code) + " " + status_line.reason
+                    std::to_string(status_line.status_code) + " " + status_line.reason,
+                NOT_SET
             );
         }
 
@@ -236,12 +237,20 @@ protected:
     {
         auto h_con = this->response_header.fields.get_first("Connection");
         if (!h_con.has_value())
-            return WS_ERROR(PROTOCOL_ERROR, "HTTP response is missing 'Connection' header");
+        {
+            return WS_ERROR(
+                PROTOCOL_ERROR, "HTTP response is missing 'Connection' header", NOT_SET
+            );
+        }
 
         if (!equals_ci(*h_con, "Upgrade"))
+        {
             return WS_ERROR(
-                PROTOCOL_ERROR, "Invalid 'Connection' header, expected: 'Upgrade', got: " + *h_con
+                PROTOCOL_ERROR,
+                "Invalid 'Connection' header, expected: 'Upgrade', got: " + *h_con,
+                NOT_SET
             );
+        }
 
         return {};
     }
@@ -256,7 +265,8 @@ protected:
         {
             return WS_ERROR(
                 PROTOCOL_ERROR,
-                "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: " + *h_ext
+                "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: " + *h_ext,
+                NOT_SET
             );
         }
 
@@ -269,7 +279,7 @@ protected:
         if (!h_ext.has_value())
         {
             return WS_ERROR(
-                PROTOCOL_ERROR, "HTTP response is missing 'Sec-WebSocket-Accept' header"
+                PROTOCOL_ERROR, "HTTP response is missing 'Sec-WebSocket-Accept' header", NOT_SET
             );
         }
 
@@ -284,7 +294,8 @@ protected:
             return WS_ERROR(
                 PROTOCOL_ERROR,
                 "Invalid 'Sec-WebSocket-Accept' header, expected: " + expected_accept +
-                    ", got: " + *h_ext
+                    ", got: " + *h_ext,
+                NOT_SET
             );
         }
 

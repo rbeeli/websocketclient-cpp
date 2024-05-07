@@ -105,7 +105,7 @@ public:
             {
                 auto elapsed = std::chrono::system_clock::now() - start;
                 if (elapsed > timeout.value())
-                    co_return WS_ERROR(TIMEOUT, "read_until timed out.");
+                    co_return WS_ERROR(TIMEOUT, "read_until timed out.", NOT_SET);
             }
 
             // read some data into circular buffer
@@ -169,7 +169,7 @@ public:
             auto ret = *ret_res;
 
             if (ret == 0) [[unlikely]]
-                co_return WS_ERROR(TRANSPORT_ERROR, "Socket closed by peer");
+                co_return WS_ERROR(TRANSPORT_ERROR, "Socket closed by peer", NOT_SET);
 
             if (ret < 0) [[unlikely]]
                 continue; // retry on interrupt signal or socket not ready for write
