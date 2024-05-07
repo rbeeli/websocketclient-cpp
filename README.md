@@ -127,25 +127,33 @@ In order to filter for specific implementation details, the following macro-swit
 
 By setting a variable to `0` = disabled (`1` = enabled), the compiler will optimize out all logging code for maximum performance.
 
-For example, the handshake log messages are useful to inspect the HTTP headers sent and received during the WebSocket handshake, for example negotiated parameters for the permessage-deflate compression extension.
+For example, the handshake log messages are useful to inspect the HTTP headers sent and received during the WebSocket handshake.
+Among others, the negotiated parameters for the permessage-deflate compression extension can be inspected this way.
 
 ## Implementation details
 
-Template type parameters are supplemented by C++23 concepts, which are used to validate template parameters at compile-time. Concepts have the advantage to formalize requirements for a template parameter, similar to interface definitions, and provide more meaningful error messages.
+Template type parameters are supplemented by C++23 concepts, which are used to validate template parameters at compile-time.
+Concepts have the advantage to formalize requirements for a template parameter, similar to interface definitions, and provide more meaningful error messages.
 
 ### Multi-threading
 
-TODO: Review - need synchronization for writes
+This client implementation is not thread-aware, hence does not employ any synchronization primitives.
+If used in a multi-threaded environment, synchronization needs to be conducted by the user.
 
-This client implementation is not thread-aware and does not do any synchronization. If used in a multi-threaded environment, synchronization needs to be ensured by the user.
+The control frames *ping*, *pong* and *close* are returned to the client in the same order as they are received.
+The user is responsible for sending the corresponding pong or close frame in response.
+By returning those frames to the user, the library enables the user to decide when and what to write as response, and does not hide any networking control flow, which would require synchronization.
 
 ### Buffers and maximum message size
 
-The implementation does not allocate separate memory for each message and/or frames. `WebSocketClient` maintains a configurable read buffer, which are reused for all messages and frames. On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
+The implementation does not allocate separate memory for each message and/or frames.
+`WebSocketClient` maintains a configurable read buffer, which are reused for all messages and frames.
+On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
 
 Additionally, if enabled, the `PermessageDeflate` compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
 
-This implies that the maximum message size is limited by the size of the read/write/compression buffers. If exceeded, a `BUFFER_ERROR` error will be returned.
+This implies that the maximum message size is limited by the size of the read/write/compression buffers.
+If exceeded, a `BUFFER_ERROR` error will be returned.
 
 ### Message payload lifetime
 
