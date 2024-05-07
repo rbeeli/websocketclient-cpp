@@ -570,18 +570,13 @@ public:
             }
         }
 
-        // mark as closed, prevents further reading/writing
-        // TODO
+        // mark as closed
         this->closed = true;
 
-        // shutdown socket communication
-        {
-            auto res = co_await this->socket.underlying().shutdown();
-            if (!res.has_value())
-            {
-                logger->template log<LogLevel::W>("Socket shutdown failed: " + res.error().message);
-            }
-        }
+        // shutdown socket communication (ignore errors, close socket anyway).
+        // often times, the server will close the connection after receiving the close frame,
+        // which will result in an error when trying to shutdown the socket.
+        co_await this->socket.underlying().shutdown();
 
         // close underlying socket connection
         {
