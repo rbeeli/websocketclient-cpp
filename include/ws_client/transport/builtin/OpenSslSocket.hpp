@@ -85,7 +85,7 @@ public:
         other.ctx = nullptr;
         other.logger = nullptr;
 
-        // update pointer to this in SSL application data
+        // update pointer to "this" in SSL application data
         set_ssl_ex_data();
     }
 
@@ -105,7 +105,7 @@ public:
             other.ctx = nullptr;
             other.logger = nullptr;
 
-            // update pointer to this in SSL application data
+            // update pointer to "this" in SSL application data
             set_ssl_ex_data();
         }
         return *this;
