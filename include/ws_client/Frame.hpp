@@ -263,8 +263,8 @@ struct Frame
 
 struct ControlFrame
 {
-    const opcode op_code;
-    const size_t payload_size{0};
+    opcode op_code;
+    size_t payload_size{0};
     std::array<byte, 125> payload; // static allocation of payload bytes (max. 125 bytes)
 
     ControlFrame(opcode op, size_t payload_size) noexcept //
