@@ -211,7 +211,7 @@ public:
         ssize_t ret = 0;
         do
         {
-            constexpr int flags = 0;
+            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
             ret = ::recv(this->fd, buffer.data(), buffer.size(), flags);
         } while (ret == -1 && errno == EINTR);
 
