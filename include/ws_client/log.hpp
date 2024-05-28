@@ -87,14 +87,13 @@ private:
     {
         if constexpr (level == LogLevel::E)
             return "\033[1;91m";
-        else if constexpr (level == LogLevel::W)
+        if constexpr (level == LogLevel::W)
             return "\033[0;93m";
-        else if constexpr (level == LogLevel::I)
+        if constexpr (level == LogLevel::I)
             return "\033[0;37m";
-        else if constexpr (level == LogLevel::D)
+        if constexpr (level == LogLevel::D)
             return "\033[0;30m";
-        else
-            return "";
+        return "";
     }
 
 public:
@@ -162,7 +161,9 @@ public:
         msg << message << "\x1b[0m" << '\n';
 
         std::clog << msg.str();
-        std::flush(std::clog);
+
+        if (level == LogLevel::E || level == LogLevel::W)
+            std::flush(std::clog);
 
         msg.str(""); // clear stream for reuse
     }
