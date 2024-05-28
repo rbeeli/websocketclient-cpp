@@ -16,6 +16,7 @@ Pull requests and issues are welcome.
 
     NOTE: When using SSL, it seems impossible to avoid SIGPIPE in all cases, since on some operating systems, SIGPIPE can only be suppressed on a per-message basis, but there is no way to make the OpenSSL library do so for its internal communications. If your program needs to avoid being terminated on SIGPIPE, the only fully general way might be to set up a signal handler for SIGPIPE to handle or ignore it yourself.
 
+    OpenSslSocket.hpp: Use custom BIO to allow setting MSG_NOSIGNAL
 
 ## Useful resources
 
