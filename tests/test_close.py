@@ -1,5 +1,4 @@
-# This scripts simulates unclean shutdown of the server connection
-# in different ways.
+# This scripts simulates unclean shutdowns of a websocket server.
 
 import os
 import asyncio
@@ -46,10 +45,17 @@ async def wss_server(websocket, path):
 
 
 if __name__ == "__main__":
-    close_mode = "sys_exit" # causes async_shutdown to block indefinitely
+    # close_mode = "sys_exit" # causes async_shutdown to block indefinitely
     # close_mode = "socket_shutdown" # causes broken pipe
     # close_mode = "server_close"  # proper shutdown of the server
     # close_mode = "transport_close"  # close the transport directly
+    close_mode = sys.argv[1]
+
+    if not close_mode:
+        print("Please provide a close mode.")
+        sys.exit(1)
+    
+    print("Close mode: ", close_mode)
 
     # set up SSL context
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

@@ -4,6 +4,9 @@ Pull requests and issues are welcome.
 
 ## TODOs
 
+- Timeouts for read/write calls, handshake
+  * https://cppalliance.org/asio/2023/01/02/Asio201Timeouts.html
+
 - Git builds
 - auto fragmentation write
 - log levels per topic

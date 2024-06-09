@@ -33,6 +33,7 @@ asio::awaitable<expected<void, WSError>> run()
     asio::ip::tcp::resolver resolver(executor);
     auto endpoints = co_await resolver.async_resolve(url.host(), "9443", asio::use_awaitable);
 
+    auto write_strand = asio::make_strand(executor);
 
     asio::ssl::context ctx(asio::ssl::context::tlsv12_client);
     ctx.load_verify_file("cert.pem");
@@ -80,12 +81,41 @@ asio::awaitable<expected<void, WSError>> run()
             // write message back to server
             string text = "This is the " + std::to_string(i) + "th message";
             Message msg2(MessageType::TEXT, text);
-            WS_CO_TRYV(co_await client.send_message(msg2));
+
+            // // wait for server to close connection
+            // asio::steady_timer timer(executor, std::chrono::seconds(1));
+            // co_await timer.async_wait(asio::use_awaitable);
+
+            co_await asio::co_spawn(
+                write_strand,
+                client.send_message(msg2),
+                asio::use_awaitable
+            );
+
+            // auto res = co_await client.send_message(msg2);
+            // if (!res.has_value())
+            //     break;
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
             logger.log<LogLevel::D>("Ping frame received");
-            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+
+            // send pong in parallel
+            asio::co_spawn(
+                write_strand,
+                // don't capture ping_frame by value (or worse reference) -> creates lifetime issue,
+                // see https://devblogs.microsoft.com/oldnewthing/20211103-00/?p=105870
+                // https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rcoro-capture
+                [&client](PingFrame ping_frame) -> awaitable<void>
+                { //
+                    co_await client.send_pong_frame(ping_frame.payload_bytes());
+                }(*ping_frame),
+                asio::detached
+            );
+
+            // auto res = co_await client.send_pong_frame(ping_frame->payload_bytes());
+            // if (!res.has_value())
+            //     break;
         }
         else if (std::get_if<PongFrame>(&var))
         {
@@ -106,14 +136,52 @@ asio::awaitable<expected<void, WSError>> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
+
+            asio::co_spawn(
+                write_strand,
+                [&]() -> awaitable<void>
+                {
+                    logger.log<LogLevel::D>("Sending ping ...");
+                    string ping_msg = R"({"op":"ping"})";
+                    Message msg = Message(MessageType::TEXT, ping_msg);
+                    auto res = co_await client.send_message(msg, {.compress = false});
+                    if (!res.has_value())
+                        logger.log<LogLevel::E>("WSError: " + err->message);
+                },
+                asio::detached
+            );
+
             // error occurred - must close connection
-            logger.log<LogLevel::E>("Error: " + err->message);
-            WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return expected<void, WSError>{};
+            logger.log<LogLevel::E>("WSError: " + err->message);
+
+            // co_await client.close(err->close_with_code);
+            co_await asio::co_spawn(
+                write_strand,
+                client.close(err->close_with_code),
+                asio::use_awaitable
+            );
+            
+            co_return unexpected{*err};
+            // break;
         }
     }
 
-    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
+    // // wait for server to close connection
+    // asio::steady_timer timer(executor, std::chrono::seconds(1));
+    // co_await timer.async_wait(asio::use_awaitable);
+
+    // co_await client.close(close_code::NORMAL_CLOSURE);
+
+    co_await asio::co_spawn(
+        write_strand,
+        [&]() -> awaitable<void>
+        {
+            auto res = co_await client.close(close_code::NORMAL_CLOSURE);
+            if (!res.has_value())
+                logger.log<LogLevel::E>("Error closing websocket client: " + res.error().message);
+        },
+        asio::use_awaitable
+    );
 
     co_return expected<void, WSError>{};
 };
@@ -121,7 +189,9 @@ asio::awaitable<expected<void, WSError>> run()
 
 int main()
 {
-    asio::io_context ctx;
+    // single-threaded io_context
+    // https://think-async.com/Asio/asio-1.22.0/doc/asio/overview/core/concurrency_hint.html
+    asio::io_context ctx{1};
 
     auto exception_handler = [&](auto e_ptr)
     {
@@ -135,11 +205,11 @@ int main()
         {
             auto res = co_await run();
             if (!res.has_value())
-                std::cerr << "Error: " << res.error().message << std::endl;
+                std::cerr << "run() returned error: " << res.error().message << std::endl;
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Exception: " << e.what() << std::endl;
+            std::cerr << "run() returned exception: " << e.what() << std::endl;
         }
     };
 
