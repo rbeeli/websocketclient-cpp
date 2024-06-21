@@ -21,7 +21,7 @@ using std::byte;
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
 template <typename T>
-concept HasSocketOperations = requires(T t, span<byte> buffer) {
+concept HasSocketOperations = requires(T t, span<byte> buffer, std::chrono::milliseconds timeout) {
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
@@ -34,7 +34,7 @@ concept HasSocketOperations = requires(T t, span<byte> buffer) {
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    { t.write_some(buffer) } -> std::same_as<expected<size_t, WSError>>;
+    { t.write_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
 
     /**
      * Shuts down socket communication.
@@ -43,7 +43,7 @@ concept HasSocketOperations = requires(T t, span<byte> buffer) {
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    { t.shutdown() } -> std::same_as<expected<void, WSError>>;
+    { t.shutdown(timeout) } -> std::same_as<expected<void, WSError>>;
 
     /**
      * Close the socket connection and all associated resources.

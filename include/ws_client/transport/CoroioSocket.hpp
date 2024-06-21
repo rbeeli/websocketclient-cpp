@@ -72,9 +72,11 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline TValueTask<expected<size_t, WSError>> write_some( //
-        span<byte> buffer
+        const span<byte> buffer,
+        std::chrono::milliseconds timeout
     ) noexcept
     {
+        // TODO: Implement timeout
         try
         {
             int n = co_await this->socket.WriteSome(buffer.data(), buffer.size());
@@ -97,7 +99,7 @@ public:
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown() noexcept
+    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept
     {
         // TODO: Not implemented in coroio
         co_return expected<void, WSError>{};

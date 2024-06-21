@@ -94,7 +94,7 @@ public:
      */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] expected<void, WSError> read_until(
-        TBuffer& buffer, const span<byte> delimiter, optional<std::chrono::seconds> timeout
+        TBuffer& buffer, const span<byte> delimiter, optional<std::chrono::milliseconds> timeout
     ) noexcept
     {
         auto start = std::chrono::system_clock::now();
@@ -149,22 +149,26 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] inline expected<size_t, WSError> write_some(const span<byte> buffer) noexcept
+    [[nodiscard]] inline expected<size_t, WSError> write_some(
+        const span<byte> buffer, std::chrono::milliseconds timeout
+    ) noexcept
     {
-        return this->socket.write_some(buffer);
+        return this->socket.write_some(buffer, timeout);
     }
 
     /**
      * Writes all data in `buffer` to underlying socket, or returns an error.
      * Does not perform partial writes unless an error occurs.
      */
-    [[nodiscard]] inline expected<void, WSError> write(const span<byte> buffer) noexcept
+    [[nodiscard]] inline expected<void, WSError> write(
+        const span<byte> buffer, std::chrono::milliseconds timeout
+    ) noexcept
     {
         size_t total_written = 0;
         size_t remaining = buffer.size();
         while (remaining > 0)
         {
-            WS_TRY(write_bytes_res, this->write_some(buffer.subspan(total_written)));
+            WS_TRY(write_bytes_res, this->write_some(buffer.subspan(total_written), timeout));
             size_t written = *write_bytes_res;
             total_written += written;
             remaining -= written;

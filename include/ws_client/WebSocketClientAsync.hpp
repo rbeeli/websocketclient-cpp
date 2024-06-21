@@ -191,7 +191,7 @@ public:
         // send HTTP request for websocket upgrade
         auto req_str = handshake.get_request_message();
         span<byte> req_data = span(reinterpret_cast<byte*>(req_str.data()), req_str.size());
-        WS_CO_TRYV(co_await this->socket.write(req_data));
+        WS_CO_TRYV(co_await this->socket.write(req_data, handshake.get_timeout()));
 
         // read HTTP response
         Buffer headers_buffer;
@@ -529,12 +529,14 @@ public:
 
         frame.set_payload_size(payload.size());
 
-        WS_CO_TRYV(co_await this->write_frame(frame, payload));
+        WS_CO_TRYV(co_await this->write_frame(frame, payload, options.timeout));
 
         co_return expected<void, WSError>{};
     }
 
-    [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(span<byte> payload) noexcept
+    [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(
+        span<byte> payload, std::chrono::milliseconds timeout = std::chrono::seconds{10}
+    ) noexcept
     {
         Frame frame;
         frame.set_opcode(opcode::PONG);
@@ -543,7 +545,7 @@ public:
         frame.set_payload_size(payload.size());
         frame.mask_key = this->mask_key_generator();
 
-        WS_CO_TRYV(co_await this->write_frame(frame, payload));
+        WS_CO_TRYV(co_await this->write_frame(frame, payload, timeout));
 
         co_return expected<void, WSError>{};
     }
@@ -554,14 +556,16 @@ public:
      * This method sends a close frame to the server and waits for the server,
      * shuts down the socket communication and closes the underlying socket connection.
      */
-    [[nodiscard]] inline TTask<expected<void, WSError>> close(const close_code code)
+    [[nodiscard]] inline TTask<expected<void, WSError>> close(
+        const close_code code, std::chrono::milliseconds timeout = std::chrono::seconds(10)
+    )
     {
         if (this->closed)
             co_return expected<void, WSError>{};
 
         // send close frame
         {
-            auto res = co_await this->send_close_frame(code);
+            auto res = co_await this->send_close_frame(code, timeout);
             if (!res.has_value())
             {
                 logger->template log<LogLevel::W>(
@@ -576,7 +580,7 @@ public:
         // shutdown socket communication (ignore errors, close socket anyway).
         // often times, the server will close the connection after receiving the close frame,
         // which will result in an error when trying to shutdown the socket.
-        co_await this->socket.underlying().shutdown();
+        co_await this->socket.underlying().shutdown(timeout);
 
         // close underlying socket connection
         {
@@ -635,7 +639,9 @@ private:
 
         // verify not masked
         if (frame.header.is_masked()) [[unlikely]]
-            co_return WS_ERROR(PROTOCOL_ERROR, "Received masked frame from server.", PROTOCOL_ERROR);
+            co_return WS_ERROR(
+                PROTOCOL_ERROR, "Received masked frame from server.", PROTOCOL_ERROR
+            );
 
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
@@ -665,7 +671,7 @@ private:
     }
 
     [[nodiscard]] TTask<expected<void, WSError>> write_frame(
-        Frame& frame, span<byte> payload
+        Frame& frame, span<byte> payload, std::chrono::milliseconds timeout
     ) noexcept
     {
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
@@ -713,7 +719,9 @@ private:
         }
 
         if (!frame.header.is_masked())
-            co_return WS_ERROR(PROTOCOL_ERROR, "Frame sent by client MUST be masked.", PROTOCOL_ERROR);
+            co_return WS_ERROR(
+                PROTOCOL_ERROR, "Frame sent by client MUST be masked.", PROTOCOL_ERROR
+            );
 
         // write 4 byte masking key
         std::memcpy(&write_buffer[offset], &frame.mask_key.key, sizeof(uint32_t));
@@ -723,19 +731,23 @@ private:
         frame.mask_key.mask(payload);
 
         // write frame header
-        WS_CO_TRYV(co_await this->socket.write(write_buffer.subspan(0, offset)));
+        logger->template log<LogLevel::D>("Writing frame header");
+        WS_CO_TRYV(co_await this->socket.write(write_buffer.subspan(0, offset), timeout));
 
         // write frame payload
         if (frame.payload_size > 0)
         {
-            WS_CO_TRYV(co_await this->socket.write(payload));
+            logger->template log<LogLevel::D>("Writing frame payload");
+            WS_CO_TRYV(co_await this->socket.write(payload, timeout));
             offset += frame.payload_size;
         }
 
         co_return expected<void, WSError>{};
     }
 
-    [[nodiscard]] TTask<expected<void, WSError>> send_close_frame(close_code code) noexcept
+    [[nodiscard]] TTask<expected<void, WSError>> send_close_frame(
+        close_code code, std::chrono::milliseconds timeout
+    ) noexcept
     {
         Frame frame;
         frame.set_opcode(opcode::CLOSE);
@@ -769,7 +781,7 @@ private:
 
         frame.set_payload_size(payload.size());
 
-        WS_CO_TRY(ret, co_await this->write_frame(frame, payload));
+        WS_CO_TRY(ret, co_await this->write_frame(frame, payload, timeout));
 
         logger->template log<LogLevel::D>("Close frame sent");
 

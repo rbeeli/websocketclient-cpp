@@ -91,7 +91,9 @@ asio::awaitable<expected<void, WSError>> run()
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
             logger.log<LogLevel::D>("Ping frame received");
-            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+            WS_CO_TRYV(co_await client.send_pong_frame(
+                ping_frame->payload_bytes(), std::chrono::seconds{10}
+            ));
         }
         else if (std::get_if<PongFrame>(&var))
         {

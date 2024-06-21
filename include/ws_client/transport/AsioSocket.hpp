@@ -70,26 +70,42 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] inline awaitable<expected<size_t, WSError>> write_some(span<byte> buffer) noexcept
+    [[nodiscard]] inline awaitable<expected<size_t, WSError>> write_some(
+        const span<byte> buffer, std::chrono::milliseconds timeout
+    ) noexcept
     {
+        asio::steady_timer timer(this->socket.get_executor());
+        timer.expires_after(timeout);
+
         asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
-        size_t n = co_await asio::async_write(
-            this->socket, buf, asio::redirect_error(asio::use_awaitable, ec)
+
+        auto result = co_await (
+            asio::async_write(this->socket, buf, asio::redirect_error(asio::use_awaitable, ec)) ||
+            timer.async_wait(asio::use_awaitable)
         );
+
+        // check which operation completed
+        if (result.index() == 1)
+        {
+            // timer completed, indicating a timeout
+            co_return WS_ERROR(TRANSPORT_ERROR, "Write timed out", NOT_SET);
+        }
+
         if (ec)
             co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
-        co_return n;
+
+        // return the number of bytes written
+        co_return std::get<0>(result);
     }
 
     /**
      * Shuts down socket communication.
-     * This function should be called before closing the socket
-     * for a clean shutdown.
+     * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown() noexcept
+    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept
     {
         logger->template log<LogLevel::D>("Cancelling socket operations");
 
@@ -102,12 +118,13 @@ public:
 
             // asynchronously shut down the SSL connection, but don't wait
             asio::error_code ec;
-            asio::steady_timer timeout{this->socket.get_executor()};
-            timeout.expires_after(std::chrono::milliseconds(100)); // TODO: make timeout configurable
+            asio::steady_timer timer{this->socket.get_executor()};
+            timer.expires_after(timeout);
             auto res = co_await (
-                this->socket.async_shutdown(asio::redirect_error(asio::use_awaitable, ec)) || timeout.async_wait(asio::use_awaitable)
+                this->socket.async_shutdown(asio::redirect_error(asio::use_awaitable, ec)) ||
+                timer.async_wait(asio::use_awaitable)
             );
-            timeout.cancel();
+            timer.cancel();
 
             if (res.index() == 1)
             {
@@ -119,7 +136,7 @@ public:
         }
 
         logger->template log<LogLevel::D>("TCP before shutdown");
-        
+
         // asynchronously shut down the (underlying) TCP connection
         asio::error_code ec;
         this->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);

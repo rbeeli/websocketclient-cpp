@@ -3,6 +3,7 @@
 #include <expected>
 #include <cstddef>
 #include <span>
+#include <chrono>
 
 #include "ws_client/errors_async.hpp"
 
@@ -35,14 +36,17 @@ public:
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] virtual TTask<expected<size_t, WSError>> read_some(span<byte> buffer) noexcept = 0;
+    [[nodiscard]] virtual TTask<expected<size_t, WSError>> read_some(span<byte> buffer
+    ) noexcept = 0;
 
     /**
      * Writes `buffer` to underlying socket.
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] virtual TTask<expected<size_t, WSError>> write_some(const span<byte> data) noexcept = 0;
+    [[nodiscard]] virtual TTask<expected<size_t, WSError>> write_some(
+        const span<byte> data, std::chrono::milliseconds timeout
+    ) noexcept = 0;
 
     /**
      * Shuts down the SSL layer.
@@ -50,8 +54,8 @@ public:
      * for a clean shutdown of the SSL layer.
      * The return value in case of error may be ignored by the caller.
      */
-    virtual TTask<expected<void, WSError>> shutdown() noexcept = 0;
-    
+    virtual TTask<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept = 0;
+
     /**
      * Close underlying socket.
      */

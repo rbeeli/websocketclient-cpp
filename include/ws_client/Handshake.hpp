@@ -34,7 +34,7 @@ protected:
     std::optional<PermessageDeflate<TLogger>> permessage_deflate{std::nullopt};
     bool permessage_deflate_negotiated{false};
     bool success{false};
-    std::chrono::seconds timeout{30};
+    std::chrono::milliseconds timeout{30'000};
 
 public:
     explicit Handshake(TLogger* logger, URL url) noexcept //
@@ -114,12 +114,12 @@ public:
         this->permessage_deflate = extension;
     }
 
-    inline std::chrono::seconds get_timeout() const noexcept
+    inline std::chrono::milliseconds get_timeout() const noexcept
     {
         return this->timeout;
     }
 
-    inline void set_timeout(std::chrono::seconds timeout) noexcept
+    inline void set_timeout(std::chrono::milliseconds timeout) noexcept
     {
         this->timeout = timeout;
     }

@@ -94,7 +94,7 @@ public:
      */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] TTask<expected<void, WSError>> read_until(
-        TBuffer& buffer, const span<byte> delimiter, optional<std::chrono::seconds> timeout
+        TBuffer& buffer, const span<byte> delimiter, optional<std::chrono::milliseconds> timeout
     ) noexcept
     {
         auto start = std::chrono::system_clock::now();
@@ -149,23 +149,26 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] inline TTask<expected<size_t, WSError>> write_some(const span<byte> buffer
+    [[nodiscard]] inline TTask<expected<size_t, WSError>> write_some(
+        const span<byte> buffer, std::chrono::milliseconds timeout
     ) noexcept
     {
-        co_return co_await this->socket.write_some(buffer.data(), buffer.size());
+        co_return co_await this->socket.write_some(buffer.data(), buffer.size(), timeout);
     }
 
     /**
      * Writes all data in `buffer` to underlying socket, or returns an error.
      * Does not perform partial writes unless an error occurs.
      */
-    [[nodiscard]] inline TTask<expected<void, WSError>> write(const span<byte> buffer) noexcept
+    [[nodiscard]] inline TTask<expected<void, WSError>> write(
+        const span<byte> buffer, std::chrono::milliseconds timeout
+    ) noexcept
     {
         size_t size = buffer.size();
         byte* p = buffer.data();
         while (size != 0)
         {
-            WS_CO_TRY(ret_res, co_await this->socket.write_some(span<byte>(p, size)));
+            WS_CO_TRY(ret_res, co_await this->socket.write_some(span<byte>(p, size), timeout));
             auto ret = *ret_res;
 
             if (ret == 0) [[unlikely]]

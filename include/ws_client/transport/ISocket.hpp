@@ -3,6 +3,7 @@
 #include <expected>
 #include <cstddef>
 #include <span>
+#include <chrono>
 
 #include "ws_client/errors.hpp"
 
@@ -41,7 +42,9 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] virtual expected<size_t, WSError> write_some(const span<byte> data) noexcept = 0;
+    [[nodiscard]] virtual expected<size_t, WSError> write_some(
+        const span<byte> data, std::chrono::milliseconds timeout
+    ) noexcept = 0;
 
     /**
      * Shuts down the SSL layer.
@@ -49,8 +52,8 @@ public:
      * for a clean shutdown of the SSL layer.
      * The return value in case of error may be ignored by the caller.
      */
-    virtual expected<void, WSError> shutdown() noexcept = 0;
-    
+    virtual expected<void, WSError> shutdown(std::chrono::milliseconds timeout) noexcept = 0;
+
     /**
      * Close underlying socket.
      */

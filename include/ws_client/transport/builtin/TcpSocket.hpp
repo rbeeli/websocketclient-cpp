@@ -229,9 +229,10 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline expected<size_t, WSError> write_some( //
-        const span<byte> buffer
+        const span<byte> buffer, std::chrono::milliseconds timeout
     ) noexcept override
     {
+        // TODO: Implement timeout
         ssize_t ret = 0;
         do
         {
@@ -254,8 +255,10 @@ public:
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    virtual expected<void, WSError> shutdown() noexcept override
+    virtual expected<void, WSError> shutdown(std::chrono::milliseconds timeout) noexcept override
     {
+        // TODO: Implement timeout
+        
         if (this->fd != -1)
         {
             logger->template log<LogLevel::D>(

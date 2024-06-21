@@ -47,7 +47,10 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 )";
     AsioSocket asio_socket(std::move(socket));
 
-    auto res = co_await asio_socket.write_some(span<byte>(reinterpret_cast<byte*>(request.data()), request.size()));
+    auto timeout = std::chrono::milliseconds(5000);
+    auto res = co_await asio_socket.write_some(
+        span<byte>(reinterpret_cast<byte*>(request.data()), request.size()), timeout
+    );
     if (!res.has_value())
     {
         std::cout << "Error write_some: " << res.error().message << "\n";
@@ -58,7 +61,9 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 
     // read response
     char data[1024];
-    auto read_res = co_await asio_socket.read_some(span<byte>(reinterpret_cast<byte*>(data), sizeof(data)));
+    auto read_res = co_await asio_socket.read_some(
+        span<byte>(reinterpret_cast<byte*>(data), sizeof(data))
+    );
     if (!read_res.has_value())
     {
         std::cout << "Error read_some: " << read_res.error().message << "\n";

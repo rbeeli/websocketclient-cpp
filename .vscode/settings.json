@@ -120,7 +120,8 @@
     "cassert": "cpp",
     "shared_mutex": "cpp",
     "__functional_03": "cpp",
-    "forward_list": "cpp"
+    "forward_list": "cpp",
+    "print": "cpp"
   },
   "vcpkg.target.defaultTriplet": "x64-linux",
   "editor.defaultFormatter": "xaver.clang-format",

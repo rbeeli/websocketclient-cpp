@@ -125,6 +125,15 @@ struct SendOptions
      * Default: `true`
      */
     bool compress{true};
+
+    /**
+     * Timeout for sending the message, in milliseconds.
+     * If the message cannot be sent within this time,
+     * the send operation will fail with a timeout error.
+     * 
+     * Default: 30 seconds.
+     */
+    std::chrono::milliseconds timeout{std::chrono::seconds(30)};
 };
 
 // iostream operator for SendOptions
