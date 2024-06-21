@@ -28,10 +28,14 @@ class AsioSocket final : public ISocketAsync<awaitable>
 {
     TLogger* logger;
     SocketType socket;
+    asio::steady_timer write_timer;
 
 public:
     explicit AsioSocket(TLogger* logger, SocketType&& socket) noexcept
-        : ISocketAsync<awaitable>(), logger(logger), socket(std::move(socket))
+        : ISocketAsync<awaitable>(),
+          logger(logger),
+          socket(std::move(socket)),
+          write_timer(this->socket.get_executor())
     {
     }
 
@@ -74,20 +78,23 @@ public:
         const span<byte> buffer, std::chrono::milliseconds timeout
     ) noexcept
     {
-        asio::steady_timer timer(this->socket.get_executor());
-        timer.expires_after(timeout);
+        // set a timeout for the write operation
+        write_timer.expires_after(timeout);
 
         asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
         auto result = co_await (
             asio::async_write(this->socket, buf, asio::redirect_error(asio::use_awaitable, ec)) ||
-            timer.async_wait(asio::use_awaitable)
+            write_timer.async_wait(asio::use_awaitable)
         );
 
         // check which operation completed
         if (result.index() == 1)
         {
+            // cancel all outstanding asynchronous operations
+            this->socket.lowest_layer().cancel();
+
             // timer completed, indicating a timeout
             co_return WS_ERROR(TRANSPORT_ERROR, "Write timed out", NOT_SET);
         }
@@ -105,7 +112,9 @@ public:
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept
+    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(
+        std::chrono::milliseconds timeout
+    ) noexcept
     {
         logger->template log<LogLevel::D>("Cancelling socket operations");
 
