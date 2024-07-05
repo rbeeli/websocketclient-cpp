@@ -23,6 +23,7 @@ enum class WSErrorCode : uint8_t
     UNCATEGORIZED = 7,
     COMPRESSION_ERROR = 8,
     TIMEOUT = 9,
+    LOGIC_ERROR = 10,
 };
 
 static constexpr string_view to_string(const WSErrorCode& error)
@@ -45,6 +46,8 @@ static constexpr string_view to_string(const WSErrorCode& error)
             return "COMPRESSION_ERROR";
         case WSErrorCode::TIMEOUT:
             return "TIMEOUT";
+        case WSErrorCode::LOGIC_ERROR:
+            return "LOGIC_ERROR";
         default:
             return "UNKNOWN_ERROR";
     }

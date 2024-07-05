@@ -171,12 +171,24 @@ public:
      * Returns `true` if the WebSocket connection has been established
      * and the handshake has been completed successfully.
      * 
-     * Does not check whether connection is physically open and alive.
+     * Does not check whether connection is physically open and/or alive.
      * Reverts to `false` after `close()` has been called.
      */
     inline bool is_open() const noexcept
     {
         return !this->closed;
+    }
+
+    /**
+     * Returns `true` if the WebSocket connection has been closed,
+     * or if the connection has not been established yet.
+     * 
+     * Does not check whether connection is physically open and/or alive.
+     * Value is set to `true` during `close()` call.
+     */
+    inline bool is_closed() const noexcept
+    {
+        return this->closed;
     }
 
     /**
@@ -188,6 +200,9 @@ public:
      */
     [[nodiscard]] TTask<expected<void, WSError>> init(Handshake<TLogger>& handshake)
     {
+        if (!this->closed)
+            co_return WS_ERROR(LOGIC_ERROR, "Connection already open.", NOT_SET);
+        
         // send HTTP request for websocket upgrade
         auto req_str = handshake.get_request_message();
         span<byte> req_data = span(reinterpret_cast<byte*>(req_str.data()), req_str.size());
@@ -538,6 +553,9 @@ public:
         span<byte> payload, std::chrono::milliseconds timeout = std::chrono::seconds{10}
     ) noexcept
     {
+        if (this->closed)
+            co_return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
+        
         Frame frame;
         frame.set_opcode(opcode::PONG);
         frame.set_is_final(true);
