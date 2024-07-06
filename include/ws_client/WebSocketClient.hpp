@@ -743,13 +743,11 @@ private:
         frame.mask_key.mask(payload);
 
         // write frame header
-        logger->template log<LogLevel::D>("Writing frame header");
         WS_TRYV(this->socket.write(write_buffer.subspan(0, offset), timeout));
 
         // write frame payload
         if (frame.payload_size > 0)
         {
-            logger->template log<LogLevel::D>("Writing frame payload");
             WS_TRYV(this->socket.write(payload, timeout));
             offset += frame.payload_size;
         }
