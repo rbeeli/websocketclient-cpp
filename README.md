@@ -13,7 +13,7 @@ A transport-agnostic, high-performance C++23 WebSocket client library with minim
 - Fast payload masking using SIMD
 - Does not throw exceptions (works with `-fno-exceptions`)
 - No hidden networking control flow
-  - User decides when and what to write as response to ping/pong/close frames
+  - User decides when and what to write as response to ping/close frames
 - Few dependencies (STL, OpenSSL, zlib, simdutf)
 - Pluggable transport layer
   - Blocking I/O support (built-in)
