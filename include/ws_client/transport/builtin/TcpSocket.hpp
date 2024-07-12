@@ -252,7 +252,7 @@ public:
 
         // check for timeout
         if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return WS_ERROR(TRANSPORT_ERROR, "Read timeout", NOT_SET);
+            return WS_ERROR(TIMEOUT, "Read timeout", NOT_SET);
 
         WS_TRYV(this->check_errno(ret, "read"));
 
@@ -281,7 +281,7 @@ public:
 
         // check for timeout
         if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return WS_ERROR(TRANSPORT_ERROR, "Write timeout", NOT_SET);
+            return WS_ERROR(TIMEOUT, "Write timeout", NOT_SET);
 
         WS_TRYV(this->check_errno(ret, "write"));
 
