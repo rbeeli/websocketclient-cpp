@@ -20,14 +20,27 @@ find_package(ZLIB REQUIRED)
 pkg_check_modules(ZLIBNG REQUIRED IMPORTED_TARGET zlib-ng)
 
 # --------------------------------------
-add_executable(ex_hello ex_hello.cpp)
-target_link_libraries(ex_hello PRIVATE
+add_executable(ex_hello_ws ex_hello_ws.cpp)
+target_link_libraries(ex_hello_ws PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     PkgConfig::ZLIBNG
     simdutf::simdutf
     websocketclient)
-target_compile_definitions(ex_hello PRIVATE
+target_compile_definitions(ex_hello_ws PRIVATE
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
+)
+
+# --------------------------------------
+add_executable(ex_hello_wss ex_hello_wss.cpp)
+target_link_libraries(ex_hello_wss PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    PkgConfig::ZLIBNG
+    simdutf::simdutf
+    websocketclient)
+target_compile_definitions(ex_hello_wss PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
     WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
 )

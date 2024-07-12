@@ -146,6 +146,38 @@ public:
     }
 
     /**
+     * Set the socket timeout for read operations (recv).
+     */
+    [[nodiscard]] expected<void, WSError> set_recv_timeout(std::chrono::duration<int, std::milli> timeout)
+    {
+        struct timeval tv;
+        tv.tv_sec = timeout.count() / 1000;
+        tv.tv_usec = (timeout.count() % 1000) * 1000;
+        int ret = setsockopt(this->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        WS_TRYV(this->check_errno(ret, "set SO_RCVTIMEO"));
+        logger->template log<LogLevel::D>(
+            "socket read timeout SO_RCVTIMEO=" + std::to_string(timeout.count()) + " ms"
+        );
+        return {};
+    }
+
+    /**
+     * Set the socket timeout for send operations.
+     */
+    [[nodiscard]] expected<void, WSError> set_send_timeout(std::chrono::duration<int, std::milli> timeout)
+    {
+        struct timeval tv;
+        tv.tv_sec = timeout.count() / 1000;
+        tv.tv_usec = (timeout.count() % 1000) * 1000;
+        int ret = setsockopt(this->fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        WS_TRYV(this->check_errno(ret, "set SO_SNDTIMEO"));
+        logger->template log<LogLevel::D>(
+            "socket send timeout SO_SNDTIMEO=" + std::to_string(timeout.count()) + " ms"
+        );
+        return {};
+    }
+
+    /**
      * Enable or disable TCP_NODELAY option (Nagle's algorithm).
      * Disabling Nagle's algorithm can reduce latency due to reduced buffering.
      */
@@ -218,6 +250,10 @@ public:
         if (ret == 0)
             return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
 
+        // check for timeout
+        if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return WS_ERROR(TRANSPORT_ERROR, "Read timeout", NOT_SET);
+
         WS_TRYV(this->check_errno(ret, "read"));
 
         return static_cast<size_t>(ret);
@@ -229,10 +265,10 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline expected<size_t, WSError> write_some( //
-        const span<byte> buffer, std::chrono::milliseconds timeout
+        const span<byte> buffer,
+        std::chrono::milliseconds timeout
     ) noexcept override
     {
-        // TODO: Implement timeout
         ssize_t ret = 0;
         do
         {
@@ -242,6 +278,10 @@ public:
 
         if (ret == 0)
             return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+
+        // check for timeout
+        if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return WS_ERROR(TRANSPORT_ERROR, "Write timeout", NOT_SET);
 
         WS_TRYV(this->check_errno(ret, "write"));
 
@@ -258,7 +298,7 @@ public:
     virtual expected<void, WSError> shutdown(std::chrono::milliseconds timeout) noexcept override
     {
         // TODO: Implement timeout
-        
+
         if (this->fd != -1)
         {
             logger->template log<LogLevel::D>(

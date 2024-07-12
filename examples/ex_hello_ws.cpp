@@ -1,4 +1,8 @@
-// Must run first: run_hello_server.py
+// Must run first: run_ws_server.py
+
+// This example demonstrates how to create a WebSocket client using the ws_client library.
+// It uses a bare, unencrypted TCP socket to connect to a WebSocket server running on localhost:8080.
+// Read and write timeouts are set to 1000 ms directly on the POSIX socket (see set_recv_timeout, set_send_timeout).
 
 #include <iostream>
 #include <string>
@@ -18,10 +22,11 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 
 expected<void, WSError> run()
 {
-    WS_TRY(url_res, URL::parse("wss://localhost:9443"));
+    WS_TRY(url_res, URL::parse("wss://localhost:8080"));
     URL& url = *url_res;
 
     // websocketclient logger
@@ -35,20 +40,12 @@ expected<void, WSError> run()
     // create socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
+    WS_TRYV(tcp.set_recv_timeout(1000ms)); // 1000 ms read timeout
+    WS_TRYV(tcp.set_send_timeout(1000ms)); // 1000 ms write timeout
     WS_TRYV(tcp.connect());
 
-    // SSL socket wrapper
-    OpenSslContext ctx(&logger);
-    WS_TRYV(ctx.init());
-    WS_TRYV(ctx.set_default_verify_paths());
-    WS_TRYV(ctx.load_verify_file("cert.pem"));
-    WS_TRYV(ctx.set_session_cache_mode_client());
-    auto ssl = OpenSslSocket(&logger, tcp.get_fd(), &ctx, url.host(), true);
-    WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect());
-
     // create websocket client
-    auto client = WebSocketClient(&logger, std::move(ssl));
+    auto client = WebSocketClient(&logger, std::move(tcp));
     
     // handshake handler
     auto handshake = Handshake(&logger, url);
@@ -111,7 +108,6 @@ expected<void, WSError> run()
 
     return {};
 };
-
 
 int main()
 {

@@ -21,7 +21,7 @@ async def send_ping(websocket, path):
     i = 1
     while True:
         try:
-            await websocket.send(f"Helllllllllllllllllllllllllllo {i}")
+            await websocket.send(f"This is message #{i}")
             message = await websocket.recv()
             print(message)
             i += 1
