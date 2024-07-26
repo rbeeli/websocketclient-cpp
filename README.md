@@ -180,7 +180,7 @@ struct CustomLogger
 ```
 
 Sometimes, changing the log-level will either show too many messages, or hide the ones of interest.
-In order to filter for specific implementation details, the following macro-switches are available (`0` = disabled, `1` = enabled):
+In order to filter for specific implementation details, the following compile definitions are available (`0` = disabled, `1` = enabled):
 
 ```cpp
 #define WS_CLIENT_LOG_HANDSHAKE 0
@@ -195,6 +195,8 @@ By setting a variable to `0` = disabled (`1` = enabled), the compiler will optim
 For example, the handshake log messages are useful to inspect the HTTP headers sent and received during the WebSocket handshake.
 Among others, the negotiated parameters for the permessage-deflate compression extension can be inspected this way.
 
+Alternatively, use CMake's compile definition function `target_compile_definitions` to set the log levels (see above).
+
 ## Implementation details
 
 Template type parameters are supplemented by C++23 concepts, which are used to validate template parameters at compile-time.
@@ -203,7 +205,7 @@ Concepts have the advantage to formalize requirements for a template parameter, 
 ### Multi-threading
 
 This client implementation is not thread-aware, hence does not employ any synchronization primitives.
-If used in a multi-threaded environment, synchronization needs to be conducted by the user.
+If used in a multi-threaded environment, synchronization needs to be handled by the user.
 
 The control frames *ping*, *pong* and *close* are returned to the client in the same order as they are received.
 The user is responsible for sending the corresponding pong or close frame in response.
