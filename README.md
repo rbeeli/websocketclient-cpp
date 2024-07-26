@@ -39,28 +39,21 @@ A transport-agnostic, high-performance C++23 WebSocket client library with minim
 
 ## Dependencies
 
-| Dependency                                       | Description                                                                        | Required | Compile definition switch |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------- | ------------------------- |
-| [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional | `WS_CLIENT_USE_SIMD_UTF8` |
-| [openssl 3+](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | Required for WSS |                           |
-| [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | Required for permessage-deflate | `WS_CLIENT_USE_ZLIB_NG=0` |
-| [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | Required for permessage-deflate (alternative to `zlib`) | `WS_CLIENT_USE_ZLIB_NG=1` |
+| Dependency                                       | Description                                                                        | Required |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------- |
+| [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional |
+| [openssl 3+](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | If using WSS. |
+| [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | If using compression (permessage-deflate). |
+| [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | If using compression (permessage-deflate), alternative to `zlib`. |
 
-In CMake, compile definition switches can be set as follows:
+See the [examples](examples) directory for more information.
 
-```cmake
-target_compile_definitions(my_binary PRIVATE
-    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
-    WS_CLIENT_USE_SIMD_UTF8=0 # Use simdutf for utf-8 validation
-    WS_CLIENT_VALIDATE_UTF8=0 # Disable utf-8 validation
-)
-```
-
-See the examples directory for more information.
+For configuration of dependencies, refer to the section [Configuration](#configuration).
 
 ## Examples
 
 Working examples can be found in the [examples](examples) directory.
+Examples exist for both built-in synchronous, and asynchronous (ASIO) transport mechanisms.
 
 
 ## Configuration
