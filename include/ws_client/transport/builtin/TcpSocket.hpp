@@ -10,6 +10,7 @@
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "ws_client/errors.hpp"
 #include "ws_client/log.hpp"
@@ -124,7 +125,11 @@ public:
         auto now = std::chrono::system_clock::now();
 
         // connect using sockaddr from addrinfo
-        int ret = ::connect(this->fd, this->address.sockaddr_ptr(), this->address.addrlen());
+        int ret;
+        do {
+            ret = ::connect(this->fd, this->address.sockaddr_ptr(), this->address.addrlen());
+        } while (ret == -1 && errno == EINTR);
+
         WS_TRYV(this->check_errno(ret, "connecting to the server"));
 
         if (logger->template is_enabled<LogLevel::I>())

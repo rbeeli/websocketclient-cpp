@@ -184,8 +184,32 @@ public:
 
     [[nodiscard]] expected<void, WSError> connect() noexcept
     {
-        if (SSL_connect(this->ssl) != 1)
-            return make_error("Unable to establish SSL connection");
+        int result;
+        do
+        {
+            result = SSL_connect(this->ssl);
+            if (result == 1)
+                break; // SSL connection established successfully
+
+            int ssl_error = SSL_get_error(this->ssl, result);
+            if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
+            {
+                // non-blocking operation in progress, retry
+                continue;
+            }
+            else if (ssl_error == SSL_ERROR_SYSCALL)
+            {
+                if (errno == EINTR)
+                    // interrupted system call, retry
+                    continue;
+
+                return make_error("SSL_connect failed due to system error");
+            }
+            else
+            {
+                return make_error("SSL_connect failed");
+            }
+        } while (result != 1);
 
         // Step 1: verify a server certificate was presented during the negotiation
         X509* cert = SSL_get_peer_certificate(this->ssl);
@@ -270,7 +294,8 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline expected<size_t, WSError> write_some( //
-        const span<byte> buffer, std::chrono::milliseconds timeout
+        const span<byte> buffer,
+        std::chrono::milliseconds timeout
     ) noexcept override
     {
         // TODO: Implement timeout
@@ -314,7 +339,7 @@ public:
     virtual expected<void, WSError> shutdown(std::chrono::milliseconds timeout) noexcept override
     {
         // TODO: Implement timeout
-        
+
         // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
         if (this->ssl)
         {
