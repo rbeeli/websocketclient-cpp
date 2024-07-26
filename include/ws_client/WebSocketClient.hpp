@@ -403,7 +403,7 @@ public:
             {
                 case opcode::TEXT:
                 {
-#if WS_CLIENT_VALIDATE_UTF8
+#if WS_CLIENT_VALIDATE_UTF8 == 1
                     if (!is_valid_utf8(
                             const_cast<char*>((char*)payload_buffer.data()), payload_buffer.size()
                         ))
@@ -418,7 +418,7 @@ public:
 
                     if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
                     {
-#if WS_CLIENT_LOG_MSG_PAYLOADS
+#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
                         std::stringstream ss;
                         ss << "Received TEXT message (";
                         ss << payload_buffer.size();
@@ -428,7 +428,7 @@ public:
                         );
                         ss << "\033[0m";
                         logger->template log<LogLevel::I>(ss.str());
-#elif WS_CLIENT_LOG_MSG_SIZES
+#elif WS_CLIENT_LOG_MSG_SIZES == 1
                         logger->template log(
                             LogLevel::I, "Received TEXT message (", payload_buffer.size(), " bytes)"
                         );
@@ -449,7 +449,7 @@ public:
                 {
                     if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
                     {
-#if WS_CLIENT_LOG_MSG_PAYLOADS
+#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
                         std::stringstream ss;
                         ss << "Received BINARY message (";
                         ss << payload_buffer.size();
@@ -459,7 +459,7 @@ public:
                         );
                         ss << "\033[0m";
                         logger->template log<LogLevel::I>(ss.str());
-#elif WS_CLIENT_LOG_MSG_SIZES
+#elif WS_CLIENT_LOG_MSG_SIZES == 1
                         logger->template log(
                             LogLevel::I,
                             "Received BINARY message (" + std::to_string(payload_buffer.size()) +
@@ -499,7 +499,7 @@ public:
 
         if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
         {
-#if WS_CLIENT_LOG_MSG_PAYLOADS
+#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
             std::stringstream ss;
             ss << "Writing ";
             ss << to_string(msg.type);
@@ -509,7 +509,7 @@ public:
             ss << msg.to_string_view();
             ss << "\033[0m";
             logger->template log<LogLevel::I>(ss.str());
-#elif WS_CLIENT_LOG_MSG_SIZES
+#elif WS_CLIENT_LOG_MSG_SIZES == 1
             logger->template log<LogLevel::I>(
                 "Writing " + to_string(msg.type) + " message (" + std::to_string(msg.data.size()) +
                 " bytes)"
@@ -659,7 +659,7 @@ private:
 
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-#if WS_CLIENT_LOG_FRAMES
+#if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
             msg << "Received ";
             msg << to_string(frame.header.op_code());
@@ -690,7 +690,7 @@ private:
     {
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-#if WS_CLIENT_LOG_FRAMES
+#if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
             msg << "Writing ";
             msg << to_string(frame.header.op_code());
@@ -864,7 +864,7 @@ private:
                         }
                     }
 
-#if WS_CLIENT_VALIDATE_UTF8
+#if WS_CLIENT_VALIDATE_UTF8 == 1
                     // check close reason string is valid UTF-8 string
                     if (!close_frame.is_reason_valid_utf8())
                     {

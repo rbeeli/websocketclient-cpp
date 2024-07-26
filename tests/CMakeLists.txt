@@ -1,3 +1,5 @@
+add_subdirectory(autobahn)
+
 # file(GLOB_RECURSE SOURCES "../include/*.cpp")
 
 # copy cert.pem public key to build directory

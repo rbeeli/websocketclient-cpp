@@ -14,7 +14,7 @@ A transport-agnostic, high-performance C++23 WebSocket client library with minim
 - Does not throw exceptions (works with `-fno-exceptions`)
 - No hidden networking control flow
   - User decides when and what to write as response to ping/close frames
-- Few dependencies (STL, OpenSSL, zlib, simdutf)
+- Few dependencies (STL, OpenSSL, zlib or zlib-ng, simdutf)
 - Pluggable transport layer
   - Blocking I/O support (built-in)
   - Non-blocking I/O support using C++20 coroutines, e.g. using standalone ASIO
@@ -39,16 +39,81 @@ A transport-agnostic, high-performance C++23 WebSocket client library with minim
 
 ## Dependencies
 
-| Dependency                                       | Description                                                                        | Required | Switch                    |
+| Dependency                                       | Description                                                                        | Required | Compile definition switch |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------- | ------------------------- |
 | [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional | `WS_CLIENT_USE_SIMD_UTF8` |
-| [openssl 3+](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | Optional |                           |
-| [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | Optional | `WS_CLIENT_USE_ZLIB_NG=0` |
-| [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | Optional | `WS_CLIENT_USE_ZLIB_NG=1` |
+| [openssl 3+](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | Required for WSS |                           |
+| [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | Required for permessage-deflate | `WS_CLIENT_USE_ZLIB_NG=0` |
+| [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | Required for permessage-deflate (alternative to `zlib`) | `WS_CLIENT_USE_ZLIB_NG=1` |
+
+In CMake, compile definition switches can be set as follows:
+
+```cmake
+target_compile_definitions(my_binary PRIVATE
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=0 # Use simdutf for utf-8 validation
+    WS_CLIENT_VALIDATE_UTF8=0 # Disable utf-8 validation
+)
+```
+
+See the examples directory for more information.
 
 ## Examples
 
 Working examples can be found in the [examples](examples) directory.
+
+
+## Configuration
+
+### Compile-time configuration
+
+The following compile-time configuration switches can be set:
+
+| Option                       | Values      | Description |
+| -------------------------    | ----------- | ------------------------------------------------------------------ |
+| `WS_CLIENT_USE_SIMD_UTF8`    | `0` or `1`  | Enable/disable SIMD instructions based UTF-8 validator for TEXT messages payload validation. |
+| `WS_CLIENT_USE_ZLIB_NG`      | `0` or `1`  | Enable/disable `zlib-ng` instead of `zlib` library for permessage-deflate compression. |
+| `WS_CLIENT_VALIDATE_UTF8`    | `0` or `1`  | Enable/disable UTF-8 validation for TEXT messages payload. |
+| `WS_CLIENT_LOG_HANDSHAKE`    | `0` or `1`  | Enable/disable handshake log messages. |
+| `WS_CLIENT_LOG_MSG_PAYLOADS` | `0` or `1`  | Enable/disable message payload log messages. |
+| `WS_CLIENT_LOG_MSG_SIZES`    | `0` or `1`  | Enable/disable message size log messages. |
+| `WS_CLIENT_LOG_FRAMES`       | `0` or `1`  | Enable/disable frame log messages. |
+| `WS_CLIENT_LOG_COMPRESSION`  | `0` or `1`  | Enable/disable compression log messages. |
+
+Example:
+
+```cmake
+target_compile_definitions(my_binary PRIVATE
+    WS_CLIENT_USE_SIMD_UTF8=1
+    WS_CLIENT_USE_ZLIB_NG=1
+    WS_CLIENT_VALIDATE_UTF8=1
+    WS_CLIENT_LOG_HANDSHAKE=1
+    WS_CLIENT_LOG_MSG_PAYLOADS=0
+    WS_CLIENT_LOG_MSG_SIZES=1
+    WS_CLIENT_LOG_FRAMES=0
+    WS_CLIENT_LOG_COMPRESSION=0
+)
+```
+
+### CMake options
+
+The following CMake options can be set in order to build examples, tests and/or benchmarks:
+
+| Option                       | Description |
+| ---------------------------- | ----------- |
+| `WS_CLIENT_BUILD_EXAMPLES`   | Build all examples in the `examples` directory. |
+| `WS_CLIENT_BUILD_TESTS`      | Build all unit tests in the `test` directory. |
+| `WS_CLIENT_BUILD_BENCH`      | Build all performance benchmarks in the `bench` directory. |
+
+## Build / Install
+
+Output files are generated in the `out` directory.
+
+```bash
+cmake --preset dev_install
+cmake --build --preset dev_install
+cmake --install out/dev_install --config Release
+```
 
 ## Transport layer
 

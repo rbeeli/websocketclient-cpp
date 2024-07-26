@@ -161,7 +161,7 @@ struct PermessageDeflate
         WS_TRY(res3, this->negotiate_server_max_window_bits(extensions));
         WS_TRY(res4, this->negotiate_client_max_window_bits(extensions));
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
             logger->template log<LogLevel::D>(
@@ -202,7 +202,7 @@ struct PermessageDeflate
             {
                 this->server_no_context_takeover = false; // adjust configured value!
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
                     logger->template log<LogLevel::D>(
@@ -215,7 +215,7 @@ struct PermessageDeflate
         }
         else if (extensions.find("server_no_context_takeover") != extensions.end())
         {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
                 logger->template log<LogLevel::D>(
@@ -248,7 +248,7 @@ struct PermessageDeflate
         }
         else if (extensions.find("client_no_context_takeover") != extensions.end())
         {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
                 logger->template log<LogLevel::D>(
@@ -279,7 +279,7 @@ struct PermessageDeflate
         {
             if (extensions.find("server_max_window_bits") == extensions.end())
             {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
                     logger->template log<LogLevel::D>(
@@ -319,7 +319,7 @@ struct PermessageDeflate
 
                 if (this->server_max_window_bits != res_value)
                 {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
                     if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                     {
                         logger->template log<LogLevel::D>(
@@ -350,7 +350,7 @@ struct PermessageDeflate
 
             this->server_max_window_bits = res_value;
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
                 logger->template log<LogLevel::D>(
@@ -365,7 +365,7 @@ struct PermessageDeflate
         {
             this->server_max_window_bits = default_server_max_window_bits;
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
             {
                 logger->template log<LogLevel::I>(
@@ -395,7 +395,7 @@ struct PermessageDeflate
         {
             if (extensions.find("client_max_window_bits") == extensions.end())
             {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
                     logger->template log<LogLevel::D>(
@@ -436,7 +436,7 @@ struct PermessageDeflate
 
                 if (this->client_max_window_bits != res_value)
                 {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
                     if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                     {
                         logger->template log<LogLevel::D>(
@@ -487,7 +487,7 @@ struct PermessageDeflate
         {
             this->client_max_window_bits = default_client_max_window_bits;
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
             {
                 logger->template log<LogLevel::I>(
@@ -755,7 +755,7 @@ public:
             size += avail.size() - this->istate->avail_out;
         } while (this->istate->avail_out == 0);
 
-#if WS_CLIENT_LOG_COMPRESSION
+#if WS_CLIENT_LOG_COMPRESSION == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
             logger->template log<LogLevel::D>(
@@ -828,7 +828,7 @@ public:
             output.discard_end(this->ostate->avail_out);
         } while (this->ostate->avail_out == 0);
 
-#if WS_CLIENT_LOG_COMPRESSION
+#if WS_CLIENT_LOG_COMPRESSION == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
             logger->template log<LogLevel::D>(

@@ -65,12 +65,27 @@
       }
     },
     {
-      "name": "clang_debug_native",
-      "description": "Build with no optimizations and debug information",
-      "inherits": ["_clang"],
+      "name": "gcc_debug examples",
+      "description": "Build examples with no optimizations and debug information",
+      "inherits": ["gcc_debug"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0 -march=native"
+        "WS_CLIENT_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "gcc_debug tests",
+      "description": "Build tests with no optimizations and debug information",
+      "inherits": ["gcc_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "gcc_debug bench",
+      "description": "Build benchmarks with no optimizations and debug information",
+      "inherits": ["gcc_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_BENCH": "ON"
       }
     },
     {
@@ -110,24 +125,6 @@
       }
     },
     {
-      "name": "clang_release_native",
-      "description": "Build with optimizations and little debug information",
-      "inherits": ["_clang"],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG -march=native"
-      }
-    },
-    {
-      "name": "gcc_release_native",
-      "description": "Build with optimizations and little debug information",
-      "inherits": ["_gcc"],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG -march=native"
-      }
-    },
-    {
       "name": "gcc_perf",
       "description": "Build with optimizations for performance profilers",
       "inherits": ["_gcc"],
@@ -144,7 +141,7 @@
       "binaryDir": "${sourceDir}/out/dev_install",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/dev_install",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG -march=native",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG",
         "CMAKE_BUILD_TYPE": "Release"
       }
     }

@@ -10,10 +10,24 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-add_subdirectory(bench)
-add_subdirectory(tests)
-add_subdirectory(tests/autobahn)
-add_subdirectory(examples)
+option(WS_CLIENT_BUILD_EXAMPLES "Build all examples in ./examples directory" OFF)
+option(WS_CLIENT_BUILD_TESTS "Build tests in ./test directory" OFF)
+option(WS_CLIENT_BUILD_BENCH "Build benchmarks in ./bench directory" OFF)
+
+# ./examples
+if(WS_CLIENT_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
+# ./tests
+if(WS_CLIENT_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
+
+# ./bench
+if(WS_CLIENT_BUILD_BENCH)
+    add_subdirectory(bench)
+endif()
 
 # Install
 include(GNUInstallDirs)

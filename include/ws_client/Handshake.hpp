@@ -167,7 +167,7 @@ public:
         stream << this->request_header;
         string request = stream.str();
 
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
         if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
         {
             logger->template log<LogLevel::I>(
@@ -181,7 +181,7 @@ public:
 
     [[nodiscard]] expected<void, WSError> process_response(const string& header_str)
     {
-#if WS_CLIENT_LOG_HANDSHAKE
+#if WS_CLIENT_LOG_HANDSHAKE == 1
         if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
         {
             logger->template log<LogLevel::I>(

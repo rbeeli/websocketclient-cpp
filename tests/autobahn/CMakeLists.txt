@@ -5,6 +5,8 @@ find_package(asio CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZLIBNG REQUIRED IMPORTED_TARGET zlib-ng)
 
+# --------------------------------------
+
 # file(GLOB_RECURSE SOURCES "../../include/*.cpp")
 add_executable(autobahn_sync_zlib_utf8_naive autobahn_sync.cpp) # ${SOURCES})
 target_link_libraries(autobahn_sync_zlib_utf8_naive PRIVATE
@@ -31,14 +33,7 @@ target_compile_definitions(autobahn_sync_zlib_ng_utf_simd PRIVATE
     WS_AUTOBAHN_AGENT_NAME="sync_zlib_ng_utf_simd"
 )
 
-# file(GLOB_RECURSE SOURCES "../../include/*.cpp")
-# add_executable(autobahn_coroio autobahn_coroio.cpp ${SOURCES})
-# target_link_libraries(autobahn_coroio PRIVATE
-# OpenSSL::SSL
-# OpenSSL::Crypto
-# ZLIB::ZLIB
-# simdutf::simdutf
-# websocketclient)
+# --------------------------------------
 
 file(GLOB_RECURSE SOURCES "../../include/*.cpp")
 add_executable(autobahn_asio autobahn_asio.cpp ${SOURCES})
@@ -56,3 +51,16 @@ target_compile_definitions(autobahn_asio PRIVATE
     ASIO_NO_TYPEID=1
     WS_AUTOBAHN_AGENT_NAME="asio_zlib_ng_utf_simd"
 )
+
+# --------------------------------------
+
+# file(GLOB_RECURSE SOURCES "../../include/*.cpp")
+# add_executable(autobahn_coroio autobahn_coroio.cpp ${SOURCES})
+# target_link_libraries(autobahn_coroio PRIVATE
+# OpenSSL::SSL
+# OpenSSL::Crypto
+# ZLIB::ZLIB
+# simdutf::simdutf
+# websocketclient)
+
+# --------------------------------------
