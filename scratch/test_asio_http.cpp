@@ -1,6 +1,3 @@
-#define ASIO_STANDALONE 1
-#define ASIO_NO_TYPEID 1
-
 #include <asio.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -23,6 +20,8 @@ using std::byte;
 
 asio::awaitable<void> http_get_request()
 {
+    ConsoleLogger<LogLevel::D> logger;
+
     string host = "httpbin.org";
 
     auto executor = co_await asio::this_coro::executor;
@@ -45,7 +44,7 @@ Upgrade-Insecure-Requests: 1
 User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0)
 
 )";
-    AsioSocket asio_socket(std::move(socket));
+    AsioSocket asio_socket(&logger, std::move(socket));
 
     auto timeout = std::chrono::milliseconds(5000);
     auto res = co_await asio_socket.write_some(

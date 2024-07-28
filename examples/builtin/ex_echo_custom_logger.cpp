@@ -5,12 +5,6 @@
 #include <thread>
 #include <source_location>
 
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 1
-#define WS_CLIENT_LOG_MSG_SIZES 1
-#define WS_CLIENT_LOG_FRAMES 1
-#define WS_CLIENT_LOG_COMPRESSION 0
-
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
 #include "ws_client/transport/builtin/OpenSslSocket.hpp"

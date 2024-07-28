@@ -6,12 +6,6 @@
 #include <algorithm>
 #include <iomanip>
 
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 0
-#define WS_CLIENT_LOG_MSG_SIZES 0
-#define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_COMPRESSION 0
-
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
 #include "ws_client/transport/builtin/OpenSslSocket.hpp"

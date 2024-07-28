@@ -89,6 +89,14 @@
       }
     },
     {
+      "name": "gcc_debug scratch",
+      "description": "Build scratch programs with no optimizations and debug information",
+      "inherits": ["gcc_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_SCRATCH": "ON"
+      }
+    },
+    {
       "name": "gcc_debug_sanitized",
       "description": "Build with no optimizations and debug information incl. safety checks",
       "inherits": ["_gcc"],

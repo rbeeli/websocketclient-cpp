@@ -10,9 +10,10 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-option(WS_CLIENT_BUILD_EXAMPLES "Build all examples in ./examples directory" OFF)
+option(WS_CLIENT_BUILD_EXAMPLES "Build example programs in ./examples directory" OFF)
 option(WS_CLIENT_BUILD_TESTS "Build tests in ./test directory" OFF)
-option(WS_CLIENT_BUILD_BENCH "Build benchmarks in ./bench directory" OFF)
+option(WS_CLIENT_BUILD_BENCH "Build benchmarks programs in ./bench directory" OFF)
+option(WS_CLIENT_BUILD_SCRATCH "Build scratch programs in ./scratch directory" OFF)
 
 # ./examples
 if(WS_CLIENT_BUILD_EXAMPLES)
@@ -27,6 +28,11 @@ endif()
 # ./bench
 if(WS_CLIENT_BUILD_BENCH)
     add_subdirectory(bench)
+endif()
+
+# ./scratch
+if(WS_CLIENT_BUILD_SCRATCH)
+    add_subdirectory(scratch)
 endif()
 
 # Install

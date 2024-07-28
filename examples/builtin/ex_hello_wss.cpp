@@ -1,6 +1,6 @@
-// Must run first: run_wss_server.py
+// NOTE: Must run Python 3 script `run_wss_server.py` before running this example.
 
-// This example demonstrates how to create a WebSocket client using the ws_client library.
+// This example demonstrates how to create a WebSocket client with TLS encryption (WSS).
 // It uses a OpenSSL wrapped TCP socket to connect to a WebSocket server running on localhost:9443.
 
 #include <iostream>
@@ -8,12 +8,6 @@
 #include <chrono>
 #include <algorithm>
 #include <iomanip>
-
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 1
-#define WS_CLIENT_LOG_MSG_SIZES 1
-#define WS_CLIENT_LOG_FRAMES 1
-#define WS_CLIENT_LOG_COMPRESSION 0
 
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"

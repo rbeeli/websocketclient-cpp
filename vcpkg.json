@@ -6,7 +6,6 @@
       "zlib-ng",
       "simdutf",
       "openssl",
-      "wolfssl",
       "asio",
       "benchmark",
       "gtest"

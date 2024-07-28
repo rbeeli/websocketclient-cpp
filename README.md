@@ -64,14 +64,14 @@ The following compile-time configuration switches can be set:
 
 | Option                       | Values      | Description |
 | -------------------------    | ----------- | ------------------------------------------------------------------ |
-| `WS_CLIENT_USE_SIMD_UTF8`    | `0` or `1`  | Enable/disable SIMD instructions based UTF-8 validator for TEXT messages payload validation. |
-| `WS_CLIENT_USE_ZLIB_NG`      | `0` or `1`  | Enable/disable `zlib-ng` instead of `zlib` library for permessage-deflate compression. |
-| `WS_CLIENT_VALIDATE_UTF8`    | `0` or `1`  | Enable/disable UTF-8 validation for TEXT messages payload. |
-| `WS_CLIENT_LOG_HANDSHAKE`    | `0` or `1`  | Enable/disable handshake log messages. |
-| `WS_CLIENT_LOG_MSG_PAYLOADS` | `0` or `1`  | Enable/disable message payload log messages. |
-| `WS_CLIENT_LOG_MSG_SIZES`    | `0` or `1`  | Enable/disable message size log messages. |
-| `WS_CLIENT_LOG_FRAMES`       | `0` or `1`  | Enable/disable frame log messages. |
-| `WS_CLIENT_LOG_COMPRESSION`  | `0` or `1`  | Enable/disable compression log messages. |
+| `WS_CLIENT_USE_SIMD_UTF8`    | `1` or `0`  | Enable/disable SIMD instructions based UTF-8 validator for TEXT messages payload validation. |
+| `WS_CLIENT_USE_ZLIB_NG`      | `1` or `0`  | Enable/disable `zlib-ng` instead of `zlib` library for permessage-deflate compression. |
+| `WS_CLIENT_VALIDATE_UTF8`    | `1` or `0`  | Enable/disable UTF-8 validation for TEXT messages payload. |
+| `WS_CLIENT_LOG_HANDSHAKE`    | `1` or `0`  | Enable/disable handshake log messages. |
+| `WS_CLIENT_LOG_MSG_PAYLOADS` | `1` or `0`  | Enable/disable message payload log messages. |
+| `WS_CLIENT_LOG_MSG_SIZES`    | `1` or `0`  | Enable/disable message size log messages. |
+| `WS_CLIENT_LOG_FRAMES`       | `1` or `0`  | Enable/disable frame log messages. |
+| `WS_CLIENT_LOG_COMPRESSION`  | `1` or `0`  | Enable/disable compression log messages. |
 
 Example:
 
