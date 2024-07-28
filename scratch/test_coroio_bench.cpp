@@ -1,6 +1,5 @@
 #include <signal.h>
 #include <thread>
-
 #include <x86intrin.h>
 
 #include "coroio/all.hpp"

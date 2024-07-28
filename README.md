@@ -77,9 +77,9 @@ Example:
 
 ```cmake
 target_compile_definitions(my_binary PRIVATE
-    WS_CLIENT_USE_SIMD_UTF8=1
-    WS_CLIENT_USE_ZLIB_NG=1
-    WS_CLIENT_VALIDATE_UTF8=1
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_VALIDATE_UTF8=1 # Enable utf-8 validation
+    WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
     WS_CLIENT_LOG_HANDSHAKE=1
     WS_CLIENT_LOG_MSG_PAYLOADS=0
     WS_CLIENT_LOG_MSG_SIZES=1
@@ -94,9 +94,10 @@ The following CMake options can be set in order to build examples, tests and/or 
 
 | Option                       | Description |
 | ---------------------------- | ----------- |
-| `WS_CLIENT_BUILD_EXAMPLES`   | Build all examples in the `examples` directory. |
-| `WS_CLIENT_BUILD_TESTS`      | Build all unit tests in the `test` directory. |
-| `WS_CLIENT_BUILD_BENCH`      | Build all performance benchmarks in the `bench` directory. |
+| `WS_CLIENT_BUILD_EXAMPLES`   | Build examples in the `examples` directory. |
+| `WS_CLIENT_BUILD_TESTS`      | Build unit tests in the `test` directory. |
+| `WS_CLIENT_BUILD_BENCH`      | Build performance benchmarks in the `bench` directory. |
+| `WS_CLIENT_BUILD_SCRATCH`    | Build scratch examples in the `scratch` directory. |
 
 ## Build / Install
 

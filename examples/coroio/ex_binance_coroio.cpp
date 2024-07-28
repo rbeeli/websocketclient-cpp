@@ -3,13 +3,7 @@
 #include <string>
 #include <chrono>
 
-#include "../../coroio/all.hpp"
-
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 0
-#define WS_CLIENT_LOG_MSG_SIZES 0
-#define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_COMPRESSION 0
+#include "coroio/all.hpp"
 
 #include "ws_client/ws_client_async.hpp"
 #include "ws_client/PermessageDeflate.hpp"

@@ -1,11 +1,12 @@
-#include <asio.hpp>
-#include <asio/awaitable.hpp>
-#include <asio/co_spawn.hpp>
 #include <iostream>
 #include <string>
 #include <span>
 #include <cstddef>
 #include <expected>
+
+#include <asio.hpp>
+#include <asio/awaitable.hpp>
+#include <asio/co_spawn.hpp>
 
 #include "ws_client/errors_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
