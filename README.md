@@ -3,23 +3,23 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Maintenance](https://img.shields.io/maintenance/yes/2024)
 
-A transport-agnostic, high-performance C++23 WebSocket client library with minimal dependencies.
+A transport-agnostic, high-performance, header-only C++23 WebSocket client library with minimal dependencies.
 
 - Full [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455.html) compliance
 - WebSocket Secure (WSS) support
 - Compression support (permessage-deflate protocol extension, [RFC 7692](https://www.rfc-editor.org/rfc/rfc7692.html))
-- Support for `zlib-ng` over `zlib` library for improved deflate performance on modern architectures
+- Support for `zlib-ng` over `zlib` library for improved (de-)compression performance on modern architectures
 - Fast UTF-8 validation using SIMD ([simdutf](https://github.com/simdutf/simdutf), optional)
 - Fast payload masking using SIMD
 - Does not throw exceptions (works with `-fno-exceptions`)
 - No hidden networking control flow
   - User decides when and what to write as response to ping/close frames
-- Few dependencies (STL, OpenSSL, zlib or zlib-ng, simdutf)
+- Few dependencies (STL, [OpenSSL](https://github.com/openssl/openssl), [zlib](https://github.com/madler/zlib) or [zlib-ng](https://github.com/zlib-ng/zlib-ng), [simdutf](https://github.com/simdutf/simdutf))
 - Pluggable transport layer
-  - Blocking I/O support (built-in)
-  - Non-blocking I/O support using C++20 coroutines, e.g. using standalone ASIO
-  - No callback hell and easier object liftime management using C++20 coroutines
-- Pluggable logging
+  - Blocking POSIX I/O support (built-in)
+  - Non-blocking async I/O support with C++20 coroutines, e.g. using standalone [ASIO](https://github.com/chriskohlhoff/asio)
+  - No callback hell and easier object liftime management when using C++20 coroutines
+- Pluggable logging (optional)
 - **GCC** compiler support, C++23 required (TODO Clang)
 - Tested on 64-bit **x86** and **ARM64** (**Ubuntu x86**, **MacOS M2 ARM64**) platforms (32-bit NOT supported)
 - Passes all [Autobahn Testsuite](https://github.com/crossbario/autobahn-testsuite) tests
