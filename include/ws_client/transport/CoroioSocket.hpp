@@ -4,12 +4,12 @@
 #include <cstddef>
 #include <span>
 
+#include "coroio/ssl.hpp"
+#include "coroio/corochain.hpp"
+
 #include "ws_client/errors_async.hpp"
 #include "ws_client/log.hpp"
 #include "ws_client/transport/ISocketAsync.hpp"
-
-#include "coroio/ssl.hpp"
-#include "coroio/corochain.hpp"
 
 namespace ws_client
 {

@@ -2,6 +2,8 @@
 
 #include <assert.h>
 #include <span>
+#include <string>
+#include <string_view>
 #include "corochain.hpp"
 
 namespace NNet {

@@ -15,7 +15,7 @@ using std::span;
 /**
  * Base class for non-blocking asynchronous socket implementations (raw TCP, SSL, etc.).
  */
-template <template <typename> typename TTask>
+template <template <typename...> typename TTask>
 class ISocketAsync
 {
 public:

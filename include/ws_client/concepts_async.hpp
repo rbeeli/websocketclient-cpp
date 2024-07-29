@@ -20,7 +20,7 @@ using std::byte;
  * Requires the socket to support reading and writing bytes to the underlying socket, and closing the socket.
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
-template <typename T, template <typename> typename TTask>
+template <typename T, template <typename...> typename TTask>
 concept HasAsyncSocketOperations = requires(T t, span<byte> buffer, std::chrono::milliseconds timeout) {
     /**
      * Reads data from socket into `buffer`.

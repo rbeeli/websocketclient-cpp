@@ -66,7 +66,7 @@ using std::span;
  *                      -  `DefaultMaskKeyGen` (default), based on `xoshiro128p`
  */
 template <
-    template <typename>
+    template <typename...>
     typename TTask,
     typename TLogger,
     typename TSocket,
@@ -155,11 +155,6 @@ public:
             this->compress_buffer = std::move(other.compress_buffer);
         }
         return *this;
-    }
-
-    [[nodiscard]] inline const URL& get_url() const noexcept
-    {
-        return this->url;
     }
 
     [[nodiscard]] inline BufferedSocketAsync<TSocket, TTask>& underlying() noexcept

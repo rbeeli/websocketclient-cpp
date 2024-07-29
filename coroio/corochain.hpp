@@ -4,6 +4,7 @@
 #include <optional>
 #include <variant>
 #include <memory>
+#include <exception>
 
 namespace NNet {
 

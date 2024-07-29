@@ -155,11 +155,6 @@ public:
         return *this;
     }
 
-    [[nodiscard]] inline const URL& get_url() const noexcept
-    {
-        return this->url;
-    }
-
     [[nodiscard]] inline BufferedSocket<TSocket>& underlying() noexcept
     {
         return this->socket;

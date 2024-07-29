@@ -21,7 +21,7 @@ using std::byte;
 using std::span;
 using std::optional;
 
-template <typename TSocket, template <typename> typename TTask>
+template <typename TSocket, template <typename...> typename TTask>
     requires HasAsyncSocketOperations<TSocket, TTask>
 class BufferedSocketAsync final
 {

@@ -5,16 +5,16 @@
 #include <span>
 #include <chrono>
 
-#include "ws_client/errors_async.hpp"
-#include "ws_client/log.hpp"
-#include "ws_client/transport/ISocketAsync.hpp"
-
 #include <asio.hpp>
 #include <asio/read_until.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/experimental/awaitable_operators.hpp>
 #include <asio/ssl.hpp>
+
+#include "ws_client/errors_async.hpp"
+#include "ws_client/log.hpp"
+#include "ws_client/transport/ISocketAsync.hpp"
 
 namespace ws_client
 {
@@ -24,7 +24,7 @@ using asio::awaitable;
 using namespace asio::experimental::awaitable_operators;
 
 template <typename TLogger, typename SocketType>
-class AsioSocket final : public ISocketAsync<awaitable>
+class AsioSocket final : public ISocketAsync<asio::awaitable>
 {
     TLogger* logger;
     SocketType socket;
@@ -32,7 +32,7 @@ class AsioSocket final : public ISocketAsync<awaitable>
 
 public:
     explicit AsioSocket(TLogger* logger, SocketType&& socket) noexcept
-        : ISocketAsync<awaitable>(),
+        : ISocketAsync<asio::awaitable>(),
           logger(logger),
           socket(std::move(socket)),
           write_timer(this->socket.get_executor())
