@@ -1,0 +1,59 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/cpp
+{
+	"name": "GCC",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			"settings": {
+				"terminal.integrated.shell.linux": "/bin/bash",
+				"terminal.integrated.allowChords": false,
+				"terminal.integrated.drawBoldTextInBrightColors": false,
+				"terminal.integrated.gpuAcceleration": "on",
+				"terminal.integrated.scrollback": 1000
+			},
+			"extensions": [
+				"twxs.cmake",
+				"ms-vscode.cmake-tools",
+				"JackBoosY.vcpkg-cmake-tools",
+				"ms-vscode.cpptools",
+				"ms-vscode.cpptools-extension-pack",
+				"xaver.clang-format",
+				"go2sh.cmake-integration-vscode",
+				"cameronbieganek.julia-color-themes",
+				"josetr.cmake-language-support-vscode",
+				"ms-python.python",
+				"ms-python.debugpy",
+				"donjayamanne.python-environment-manager"
+			]
+		}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "vcpkg install",
+	// && python3 -m venv .venv && source .venv/bin/activate && pip install websockets && deactivate
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root"
+	
+	// "features": {
+	// 	"ghcr.io/devcontainers/features/python:1": {
+	// 		"installTools": true,
+	// 		"version": "os-provided"
+	// 	},
+	// 	"ghcr.io/oleksis/devcontainer-features/python-launcher:1": {
+	// 		"version": "latest"
+	// 	}
+	// }
+}
