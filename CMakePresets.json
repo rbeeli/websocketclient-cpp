@@ -35,10 +35,11 @@
       "hidden": true,
       "binaryDir": "${sourceDir}/build/clang",
       "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-libcxx",
         "CMAKE_EXE_LINKER_FLAGS": "-lc++ -lc++abi",
         "CMAKE_SHARED_LINKER_FLAGS": "-lc++ -lc++abi",
-        "VCPKG_TARGET_TRIPLET": "x64-linux-libcxx",
         "CMAKE_TOOLCHAIN_FILE": {
           "type": "FILEPATH",
           "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
@@ -46,7 +47,7 @@
       },
       "environment": {
         "__DISABLED": "-fno-exceptions -Wfatal-errors -Wunused -Wconversion",
-        "CMAKE_EXE_LINKER_FLAGS": "$env{CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi",
+        "___CMAKE_EXE_LINKER_FLAGS": "$env{CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi",
         "CMAKE_CXX_FLAGS": "-stdlib=libc++ -Wall -Wpedantic -Wextra -fno-rtti -Wno-unused-parameter -Wno-unused-function -Werror=return-type -Woverloaded-virtual -Wnon-virtual-dtor -Wno-ignored-attributes"
       }
     },

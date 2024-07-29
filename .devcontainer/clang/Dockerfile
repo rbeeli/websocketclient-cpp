@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/cpp:dev-ubuntu-24.04
+
 USER root
 
-ENV VCPKG_ROOT /usr/local/vcpkg
 ENV VCPKG_FORCE_SYSTEM_BINARIES 1
 ENV VCPKG_MANIFEST_MODE 1
 
@@ -24,20 +24,8 @@ RUN apt-get update \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Install vcpkg dependency manager
-RUN git clone https://github.com/Microsoft/vcpkg ${VCPKG_ROOT} \
-    && cd ${VCPKG_ROOT} \
-    && ./bootstrap-vcpkg.sh
-
-ENV PATH "${VCPKG_ROOT}:${PATH}"
-
 # Install C++ dependencies using vcpkg
 RUN vcpkg integrate install
-
-# Install C++ dependencies using vcpkg
-# RUN vcpkg integrate install \
-#     && vcpkg install --triplet x64-linux-clang
-
 
 # Set Clang as the default compiler
 ENV CC=/usr/bin/clang
