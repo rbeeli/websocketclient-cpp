@@ -3,22 +3,21 @@
   "configurePresets": [
     {
       "name": "_common",
-      "description": "Builds with minimum standards.",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_MAKE_PROGRAM": "make",
-        "CMAKE_CXX_EXTENSIONS": "OFF",
-        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_CXX_STANDARD": "23"
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "CMAKE_MAKE_PROGRAM": "make"
       }
     },
     {
       "name": "_gcc",
       "inherits": ["_common"],
-      "description": "GCC compiler.",
+      "description": "GCC C++ compiler.",
       "hidden": true,
+      "binaryDir": "${sourceDir}/build/gcc",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+        "VCPKG_TARGET_TRIPLET": "x64-linux",
         "CMAKE_TOOLCHAIN_FILE": {
           "type": "FILEPATH",
           "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
@@ -32,10 +31,14 @@
     {
       "name": "_clang",
       "inherits": ["_common"],
-      "description": "GCC compiler.",
+      "description": "Clang C++ compiler.",
       "hidden": true,
+      "binaryDir": "${sourceDir}/build/clang",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_EXE_LINKER_FLAGS": "-lc++ -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-lc++ -lc++abi",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-libcxx",
         "CMAKE_TOOLCHAIN_FILE": {
           "type": "FILEPATH",
           "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
@@ -43,12 +46,13 @@
       },
       "environment": {
         "__DISABLED": "-fno-exceptions -Wfatal-errors -Wunused -Wconversion",
+        "CMAKE_EXE_LINKER_FLAGS": "$env{CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi",
         "CMAKE_CXX_FLAGS": "-stdlib=libc++ -Wall -Wpedantic -Wextra -fno-rtti -Wno-unused-parameter -Wno-unused-function -Werror=return-type -Woverloaded-virtual -Wnon-virtual-dtor -Wno-ignored-attributes"
       }
     },
     {
       "name": "clang_debug",
-      "description": "Build with no optimizations and debug information",
+      "hidden": true,
       "inherits": ["_clang"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -57,7 +61,7 @@
     },
     {
       "name": "gcc_debug",
-      "description": "Build with no optimizations and debug information",
+      "hidden": true,
       "inherits": ["_gcc"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -66,7 +70,6 @@
     },
     {
       "name": "gcc_debug examples",
-      "description": "Build examples with no optimizations and debug information",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
@@ -74,7 +77,6 @@
     },
     {
       "name": "gcc_debug tests",
-      "description": "Build tests with no optimizations and debug information",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_TESTS": "ON"
@@ -82,7 +84,6 @@
     },
     {
       "name": "gcc_debug bench",
-      "description": "Build benchmarks with no optimizations and debug information",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_BENCH": "ON"
@@ -90,42 +91,27 @@
     },
     {
       "name": "gcc_debug scratch",
-      "description": "Build scratch programs with no optimizations and debug information",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_SCRATCH": "ON"
       }
     },
     {
-      "name": "gcc_debug_sanitized",
-      "description": "Build with no optimizations and debug information incl. safety checks",
-      "inherits": ["_gcc"],
+      "name": "gcc_debug tests sanitized",
+      "inherits": ["gcc_debug tests"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0 -fsanitize=leak -fsanitize=address -fsanitize=undefined"
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined"
       }
     },
     {
-      "name": "clang_debug_sanitized",
-      "description": "Build with no optimizations and debug information incl. safety checks",
-      "inherits": ["_clang"],
+      "name": "gcc_debug examples sanitized",
+      "inherits": ["gcc_debug examples"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0 -fsanitize=leak -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -funwind-tables"
-      }
-    },
-    {
-      "name": "clang_release",
-      "description": "Build with optimizations and little debug information",
-      "inherits": ["_clang"],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined"
       }
     },
     {
       "name": "gcc_release",
-      "description": "Build with optimizations and little debug information",
       "inherits": ["_gcc"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -134,7 +120,6 @@
     },
     {
       "name": "gcc_perf",
-      "description": "Build with optimizations for performance profilers",
       "inherits": ["_gcc"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -142,13 +127,75 @@
       }
     },
     {
-      "name": "dev_install",
-      "description": "Build for development and install into out/dev_install",
+      "name": "clang_debug examples",
+      "inherits": ["clang_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "clang_debug tests",
+      "inherits": ["clang_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "clang_debug bench",
+      "inherits": ["clang_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_BENCH": "ON"
+      }
+    },
+    {
+      "name": "clang_debug scratch",
+      "inherits": ["clang_debug"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_SCRATCH": "ON"
+      }
+    },
+    {
+      "name": "clang_debug tests sanitized",
+      "inherits": ["clang_debug tests"],
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -funwind-tables"
+      }
+    },
+    {
+      "name": "clang_debug examples sanitized",
+      "inherits": ["clang_debug examples"],
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -funwind-tables"
+      }
+    },
+    {
+      "name": "clang_release",
+      "inherits": ["_clang"],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
+      }
+    },
+    {
+      "name": "gcc_dev_install",
+      "description": "Build for development with GCC and install into ./build/gcc/dev_install",
       "inherits": ["_gcc"],
       "hidden": false,
-      "binaryDir": "${sourceDir}/out/dev_install",
+      "binaryDir": "${sourceDir}/build/gcc/dev_install",
       "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/dev_install",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/gcc/dev_install",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "clang_dev_install",
+      "description": "Build for development with Clang and install into ./build/clang/dev_install",
+      "inherits": ["_clang"],
+      "hidden": false,
+      "binaryDir": "${sourceDir}/build/clang/dev_install",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/clang/dev_install",
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG",
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -156,9 +203,14 @@
   ],
   "buildPresets": [
     {
-      "name": "dev_install",
-      "description": "Build for development with local install",
-      "configurePreset": "dev_install"
+      "name": "gcc_dev_install",
+      "description": "Build for development with GCC to folder ./build/gcc/dev_install",
+      "configurePreset": "gcc_dev_install"
+    },
+    {
+      "name": "clang_dev_install",
+      "description": "Build for development with Clang to folder ./build/clang/dev_install",
+      "configurePreset": "clang_dev_install"
     }
   ]
 }

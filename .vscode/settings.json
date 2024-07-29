@@ -5,10 +5,6 @@
   "terminal.integrated.scrollback": 1000,
   "vcpkg.target.useManifest": true,
   "vcpkg.target.useStaticLib": false,
-  "cmake.configureArgs": [
-    "-DVCPKG_MANIFEST_MODE=ON",
-    "-DVCPKG_TARGET_TRIPLET=x64-linux"
-  ],
   "cmake.options.statusBarVisibility": "visible",
   "cmake.options.advanced": {
     "buildPreset": {
@@ -123,13 +119,12 @@
     "forward_list": "cpp",
     "print": "cpp"
   },
-  "vcpkg.target.defaultTriplet": "x64-linux",
   "editor.defaultFormatter": "xaver.clang-format",
   "[cmake]": {
     "editor.defaultFormatter": "josetr.cmake-language-support-vscode"
   },
-  "restructuredtext.pythonRecommendation.disabled": true,
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  }
+  "vcpkg.general.autoUpdateTriplet": false,
+  "cmake.configureArgs": [
+  ],
+  "vcpkg.target.defaultTriplet": ""
 }

@@ -101,12 +101,22 @@ The following CMake options can be set in order to build examples, tests and/or 
 
 ## Build / Install
 
-Output files are generated in the `out` directory.
+Output files are generated in the `build` directory.
+
+### GCC
 
 ```bash
-cmake --preset dev_install
-cmake --build --preset dev_install
-cmake --install out/dev_install --config Release
+cmake --preset gcc_dev_install
+cmake --build --preset gcc_dev_install
+cmake --install build/gcc/dev_install --config Release
+```
+
+### Clang
+
+```bash
+cmake --preset clang_dev_install
+cmake --build --preset clang_dev_install
+cmake --install build/clang/dev_install --config Release
 ```
 
 ## Transport layer

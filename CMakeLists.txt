@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Set the C++ standard and related settings
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 project(websocketclient
     VERSION 0.1
     LANGUAGES CXX)
@@ -34,6 +39,8 @@ endif()
 if(WS_CLIENT_BUILD_SCRATCH)
     add_subdirectory(scratch)
 endif()
+
+# --------------------------------------------------
 
 # Install
 include(GNUInstallDirs)
