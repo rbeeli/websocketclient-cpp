@@ -1,5 +1,5 @@
 #!/bin/sh
 
-cmake --preset dev_install
-cmake --build --preset dev_install
-cmake --install out/dev_install --config Release
+cmake --preset gcc_dev_install
+cmake --build --preset gcc_dev_install
+cmake --install build/gcc/dev_install --config Release
