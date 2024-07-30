@@ -93,7 +93,7 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
  * A simple buffer class for storing binary data, similar to `std::vector<byte>`.
  * The buffer can be resized and data can be appended to it.
  * 
- * The default maximum size is 16 MB, use `set_max_size` to adjust it.
+ * The default maximum size is 16 MiB, use `set_max_size` to adjust it.
  */
 class Buffer
 {

@@ -127,8 +127,8 @@ Built-in blocking I/O transport layers are provided, incl. bindings for C++20 co
 
 The user can provide their own transport layer implementation if needed.
 
-- Synchronous example: [examples/ex_echo_sync.cpp](examples/ex_echo_sync.cpp)
-- ASIO example: [examples/ex_echo_asio.cpp](examples/ex_echo_asio.cpp)
+- Synchronous example: [examples/builtin/ex_echo_sync.cpp](examples/builtin/ex_echo_sync.cpp)
+- ASIO example: [examples/asio/ex_echo_asio.cpp](examples/asio/ex_echo_asio.cpp)
 
 ## Logging
 
@@ -155,7 +155,7 @@ enum class LogLevel : uint8_t
 };
 ```
 
-You can implement a custom logger like the following:
+You can implement a custom logger like the following. It logs all messages to `std::cout`:
 
 ```cpp
 struct CustomLogger
@@ -186,13 +186,13 @@ struct CustomLogger
 Sometimes, changing the log-level will either show too many messages, or hide the ones of interest.
 In order to filter for specific implementation details, the following compile definitions are available (`0` = disabled, `1` = enabled):
 
-```cpp
-#define WS_CLIENT_LOG_HANDSHAKE 0
-#define WS_CLIENT_LOG_MSG_PAYLOADS 0
-#define WS_CLIENT_LOG_MSG_SIZES 0
-#define WS_CLIENT_LOG_FRAMES 0
-#define WS_CLIENT_LOG_COMPRESSION 0
-```
+| Option                       | Values      | Description |
+| -------------------------    | ----------- | ------------------------------------------------------------------ |
+| `WS_CLIENT_LOG_HANDSHAKE`    | `1` or `0`  | Enable/disable handshake log messages. |
+| `WS_CLIENT_LOG_MSG_PAYLOADS` | `1` or `0`  | Enable/disable message payload log messages. |
+| `WS_CLIENT_LOG_MSG_SIZES`    | `1` or `0`  | Enable/disable message size log messages. |
+| `WS_CLIENT_LOG_FRAMES`       | `1` or `0`  | Enable/disable frame log messages. |
+| `WS_CLIENT_LOG_COMPRESSION`  | `1` or `0`  | Enable/disable compression log messages. |
 
 By setting a variable to `0` = disabled (`1` = enabled), the compiler will optimize out all logging code for maximum performance.
 
@@ -218,19 +218,23 @@ By returning those frames to the user, the library enables the user to decide wh
 ### Buffers and maximum message size
 
 The implementation does not allocate separate memory for each message and/or frames.
-`WebSocketClient` maintains a configurable read buffer, which are reused for all messages and frames.
+The client maintains a configurable read buffer, which are reused for all messages and frames.
 On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
 
-Additionally, if enabled, the `PermessageDeflate` compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
+Additionally, if enabled, the permessage-deflate compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
 
 This implies that the maximum message size is limited by the size of the read/write/compression buffers.
 If exceeded, a `BUFFER_ERROR` error will be returned.
 
+The default maximum buffer size of the `Buffer` class is 16 MiB, which can be configured using `Buffer::set_max_size()` instance method.
+Buffer memory is allocated lazily on the heap (on-demand).
+
 ### Message payload lifetime
 
-Received `Message` objects must be processed immediately after receiving them, otherwise the next message will overwrite the payload.
+Received `Message` objects must be processed immediately after receiving them, otherwise, the next message will overwrite the payload since all message objects share the same buffer.
 
-`Message` objects must not be stored for later processing. If delayed processing is required, the payload must be copied away to a user-defined buffer.
+`Message` objects must not be stored for later processing.
+If deferred processing is required, the payload must be copied away to a user-defined buffer.
 
 ## Contribute
 
