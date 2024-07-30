@@ -52,6 +52,24 @@
       }
     },
     {
+      "name": "gcc_debug",
+      "hidden": true,
+      "inherits": ["_gcc"],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0"
+      }
+    },
+    {
+      "name": "gcc_release",
+      "inherits": ["_gcc"],
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
+      }
+    },
+    {
       "name": "clang_debug",
       "hidden": true,
       "inherits": ["_clang"],
@@ -61,12 +79,12 @@
       }
     },
     {
-      "name": "gcc_debug",
+      "name": "clang_release",
+      "inherits": ["_clang"],
       "hidden": true,
-      "inherits": ["_gcc"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
       }
     },
     {
@@ -112,11 +130,17 @@
       }
     },
     {
-      "name": "gcc_release",
-      "inherits": ["_gcc"],
+      "name": "gcc_release bench",
+      "inherits": ["gcc_release"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
+        "WS_CLIENT_BUILD_BENCH": "ON"
+      }
+    },
+    {
+      "name": "gcc_release examples",
+      "inherits": ["gcc_release"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_EXAMPLES": "ON"
       }
     },
     {
@@ -170,11 +194,17 @@
       }
     },
     {
-      "name": "clang_release",
-      "inherits": ["_clang"],
+      "name": "clang_release bench",
+      "inherits": ["clang_release"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -g1 -O3 -flto=auto -DNDEBUG"
+        "WS_CLIENT_BUILD_BENCH": "ON"
+      }
+    },
+    {
+      "name": "clang_release examples",
+      "inherits": ["clang_release"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_EXAMPLES": "ON"
       }
     },
     {
