@@ -16,7 +16,8 @@
 #include "ws_client/errors.hpp"
 #include "ws_client/log.hpp"
 #include "ws_client/utils/networking.hpp"
-#include "ws_client/concepts.hpp"
+#include "ws_client/utils/Timeout.hpp"
+#include "ws_client/transport/HasSocketOperations.hpp"
 #include "ws_client/URL.hpp"
 #include "ws_client/MaskKey.hpp"
 #include "ws_client/Frame.hpp"
@@ -35,13 +36,14 @@ using std::variant;
 using std::optional;
 using std::byte;
 using std::span;
+using namespace std::chrono_literals;
 
 /**
  * Web socket client class with blocking I/O operations and
  * customizable, templated socket and mask key generator types.
  * 
  * The `close()` method for closing the underlying socket connection
- * is not called automatically.It is the responsibility of the caller
+ * is not called automatically. It is the responsibility of the caller
  * to close the connection when it is no longer needed or in case of
  * errors. The caller MUST close the client upon receiving a close frame
  * or an error, read or write operations afterwards are undefined behaviour.
@@ -51,7 +53,7 @@ using std::span;
  * @tparam TSocket       Socket implementation type for transportation.
  *                       Must implement contract `HasSocketOperations`.
  * 
- *                       Blocking library implementations:
+ *                       Blocking I/O built-in implementations:
  *                          - `TcpSocket`, derives from `ISocket`
  *                          - `OpenSslSocket`, derives from `ISocket`
  * 
@@ -73,45 +75,45 @@ template <typename TLogger, typename TSocket, typename TMaskKeyGen = DefaultMask
 class WebSocketClient
 {
 private:
-    bool closed = true;
+    bool closed_ = true;
 
-    BufferedSocket<TSocket> socket;
-    TLogger* logger;
+    BufferedSocket<TSocket> socket_;
+    TLogger* logger_;
 
     // mask key generator
-    TMaskKeyGen mask_key_generator;
+    TMaskKeyGen mask_key_gen_;
 
     // negotiation handshake
-    optional<PermessageDeflateContext<TLogger>> permessage_deflate_context = std::nullopt;
+    optional<PermessageDeflateContext<TLogger>> permessage_deflate_ctx_ = std::nullopt;
 
     // buffers for header data and control frame payloads
-    alignas(64) array<byte, 128> write_buffer_storage;
-    span<byte> write_buffer = span(write_buffer_storage);
+    alignas(64) array<byte, 128> write_buffer_storage_;
+    span<byte> write_buffer = span(write_buffer_storage_);
 
-    alignas(64) array<byte, 128> read_buffer_storage;
-    span<byte> read_buffer = span(read_buffer_storage);
+    alignas(64) array<byte, 128> read_buffer_storage_;
+    span<byte> read_buffer = span(read_buffer_storage_);
 
     // maintain state for reading messages (might get interrupted with control frames, which require immediate handling)
-    MessageReadState read_state;
+    MessageReadState read_state_;
 
     // permessage-deflate buffers
-    Buffer decompress_buffer;
-    Buffer compress_buffer;
+    Buffer decompress_buffer_;
+    Buffer compress_buffer_;
 
 public:
     explicit WebSocketClient(
         TLogger* logger, TSocket&& socket, TMaskKeyGen&& mask_key_generator
     ) noexcept
-        : socket(BufferedSocket(std::move(socket))),
-          logger(logger),
-          mask_key_generator(mask_key_generator)
+        : socket_(BufferedSocket(std::move(socket))),
+          logger_(logger),
+          mask_key_gen_(mask_key_generator)
     {
     }
 
     explicit WebSocketClient(TLogger* logger, TSocket&& socket) noexcept
-        : socket(BufferedSocket(std::move(socket))),
-          logger(logger),
-          mask_key_generator(DefaultMaskKeyGen())
+        : socket_(BufferedSocket(std::move(socket))),
+          logger_(logger),
+          mask_key_gen_(DefaultMaskKeyGen())
     {
     }
 
@@ -121,43 +123,43 @@ public:
 
     // enable move
     WebSocketClient(WebSocketClient&& other) noexcept
-        : closed(other.closed),
-          socket(other.socket),
-          logger(other.logger),
-          mask_key_generator(std::move(other.mask_key_generator)),
-          permessage_deflate_context(std::move(other.permessage_deflate_context)),
-          read_state(other.read_state),
-          decompress_buffer(std::move(other.decompress_buffer)),
-          compress_buffer(std::move(other.compress_buffer))
+        : closed_(other.closed_),
+          socket_(other.socket_),
+          logger_(other.logger_),
+          mask_key_gen_(std::move(other.mask_key_gen_)),
+          permessage_deflate_ctx_(std::move(other.permessage_deflate_ctx_)),
+          read_state_(other.read_state_),
+          decompress_buffer_(std::move(other.decompress_buffer_)),
+          compress_buffer_(std::move(other.compress_buffer_))
     {
-        this->write_buffer_storage = std::move(other.write_buffer_storage);
-        this->write_buffer = span(this->write_buffer_storage);
-        this->read_buffer_storage = std::move(other.read_buffer_storage);
-        this->read_buffer = span(this->read_buffer_storage);
+        this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
+        this->write_buffer = span(this->write_buffer_storage_);
+        this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
+        this->read_buffer = span(this->read_buffer_storage_);
     }
     WebSocketClient& operator=(WebSocketClient&& other) noexcept
     {
         if (this != &other)
         {
-            this->closed = other.closed;
-            this->socket = other.socket;
-            this->logger = other.logger;
-            this->mask_key_generator = std::move(other.mask_key_generator);
-            this->permessage_deflate_context = std::move(other.permessage_deflate_context);
-            this->write_buffer_storage = std::move(other.write_buffer_storage);
-            this->write_buffer = span(this->write_buffer_storage);
-            this->read_buffer_storage = std::move(other.read_buffer_storage);
-            this->read_buffer = span(this->read_buffer_storage);
-            this->read_state = other.read_state;
-            this->decompress_buffer = std::move(other.decompress_buffer);
-            this->compress_buffer = std::move(other.compress_buffer);
+            this->closed_ = other.closed_;
+            this->socket_ = other.socket_;
+            this->logger_ = other.logger_;
+            this->mask_key_gen_ = std::move(other.mask_key_gen_);
+            this->permessage_deflate_ctx_ = std::move(other.permessage_deflate_ctx_);
+            this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
+            this->write_buffer = span(this->write_buffer_storage_);
+            this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
+            this->read_buffer = span(this->read_buffer_storage_);
+            this->read_state_ = other.read_state_;
+            this->decompress_buffer_ = std::move(other.decompress_buffer_);
+            this->compress_buffer_ = std::move(other.compress_buffer_);
         }
         return *this;
     }
 
     [[nodiscard]] inline BufferedSocket<TSocket>& underlying() noexcept
     {
-        return this->socket;
+        return this->socket_;
     }
 
     /**
@@ -169,7 +171,7 @@ public:
      */
     inline bool is_open() const noexcept
     {
-        return !this->closed;
+        return !this->closed_;
     }
 
     /**
@@ -181,34 +183,41 @@ public:
      */
     inline bool is_closed() const noexcept
     {
-        return this->closed;
+        return this->closed_;
     }
 
     /**
-     * Performs the WebSocket handshake using a HTTP request, which
-     * should result in a connection upgrade to a WebSocket connection.
+     * Performs the WebSocket handshake using a HTTP request,
+     * which should result in a connection upgrade to a WebSocket connection.
+     * 
      * Compression parameters are negotiated during the handshake (permessage-deflate extension).
+     * 
      * Messages can be sent and received after this method returns successfully.
+     * 
      * User needs to ensure this method is called only once.
      */
-    [[nodiscard]] expected<void, WSError> init(Handshake<TLogger>& handshake)
+    [[nodiscard]] expected<void, WSError> handshake(
+        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5000ms
+    )
     {
-        if (!this->closed)
+        if (!this->closed_)
             return WS_ERROR(LOGIC_ERROR, "Connection already open.", NOT_SET);
-        
+
+        Timeout timeout(timeout_ms);
+
         // send HTTP request for websocket upgrade
         auto req_str = handshake.get_request_message();
         span<byte> req_data = span(reinterpret_cast<byte*>(req_str.data()), req_str.size());
-        WS_TRYV(socket.write(req_data, handshake.get_timeout()));
+        WS_TRYV(socket_.write(req_data, timeout));
 
         // read HTTP response
         Buffer headers_buffer;
         byte delim[4] = {byte{'\r'}, byte{'\n'}, byte{'\r'}, byte{'\n'}};
         span<byte> delim_span = span(delim);
-        WS_TRYV(socket.read_until(headers_buffer, delim_span, handshake.get_timeout()));
+        WS_TRYV(socket_.read_until(headers_buffer, delim_span, timeout));
 
         // read and discard header terminator bytes \r\n\r\n
-        WS_TRYV(socket.read_exact(delim_span));
+        WS_TRYV(socket_.read_exact(delim_span, timeout));
 
         // process HTTP response
         WS_TRYV(handshake.process_response(string_from_bytes(headers_buffer.data())));
@@ -217,270 +226,274 @@ public:
         if (handshake.is_compression_negotiated())
         {
             auto& permessage_deflate = handshake.get_permessage_deflate();
-            this->permessage_deflate_context.emplace(logger, permessage_deflate);
-            WS_TRYV(this->permessage_deflate_context->init());
+            this->permessage_deflate_ctx_.emplace(logger_, permessage_deflate);
+            WS_TRYV(this->permessage_deflate_ctx_->init());
 
             // allocate buffers
-            this->decompress_buffer.set_max_size(permessage_deflate.decompress_buffer_size);
-            this->compress_buffer.set_max_size(permessage_deflate.compress_buffer_size);
-            WS_TRYV(this->decompress_buffer.reserve(1024)); // reserve 1 KB initial size
-            WS_TRYV(this->compress_buffer.reserve(1024));   // reserve 1 KB initial size
+            this->decompress_buffer_.set_max_size(permessage_deflate.decompress_buffer_size);
+            this->compress_buffer_.set_max_size(permessage_deflate.compress_buffer_size);
+            WS_TRYV(this->decompress_buffer_.reserve(1024)); // reserve 1 KB initial size
+            WS_TRYV(this->compress_buffer_.reserve(1024));   // reserve 1 KB initial size
         }
 
-        this->closed = false;
+        this->closed_ = false;
 
         return expected<void, WSError>{};
     }
 
+    /**
+     * Reads a message from the WebSocket connection.
+     * The message is read into the provided buffer, which must have enough space to hold the message.
+     * 
+     * This method blocks until a message is received, the timeout expires, or an error occurs.
+     * 
+     * Upon receiving any error, the connection must be closed using `close()` method, this includes timeouts.
+     */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] variant<Message, PingFrame, PongFrame, CloseFrame, WSError> read_message(
-        TBuffer& buffer
+        TBuffer& buffer, std::chrono::milliseconds timeout_ms
     ) noexcept
     {
-        if (this->closed)
+        if (this->closed_)
             return WS_ERROR_RAW(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
 
-        while (true)
+        Timeout timeout(timeout_ms);
+
+        while (!timeout.is_expired())
         {
-            while (true)
+            // read next frame w/o payload
+            WS_TRY_RAW(frame_res, this->read_frame(timeout));
+            Frame& frame = *frame_res;
+
+            // check reserved opcodes
+            if (is_reserved(frame.header.op_code()))
             {
-                // read next frame w/o payload
-                WS_TRY_RAW(frame_res, this->read_frame());
-                Frame& frame = *frame_res;
+                return WS_ERROR_RAW(
+                    PROTOCOL_ERROR,
+                    "Reserved opcode received: " + to_string(frame.header.op_code()),
+                    PROTOCOL_ERROR
+                );
+            }
 
-                // check reserved opcodes
-                if (is_reserved(frame.header.op_code()))
+            // handle control frames
+            if (frame.header.is_control())
+            {
+                auto res = this->handle_control_frame(frame, timeout);
+
+                // convert to outer variant
+                return std::visit(
+                    [](auto&& arg) //
+                    -> variant<Message, PingFrame, PongFrame, CloseFrame, WSError> { return arg; },
+                    res
+                );
+            }
+
+            if (read_state_.is_first)
+            {
+                // clear buffer if this is the first frame
+                buffer.clear();
+            }
+
+            // check if payload fits into buffer
+            if (buffer.max_size() - buffer.size() < frame.payload_size) [[unlikely]]
+            {
+                string msg = "Received message payload of " + std::to_string(frame.payload_size) +
+                             " bytes is too large, only " +
+                             std::to_string(buffer.max_size() - buffer.size()) +
+                             " bytes available.";
+                return WS_ERROR_RAW(BUFFER_ERROR, msg, MESSAGE_TOO_BIG);
+            }
+
+            // check if this is the first frame
+            if (read_state_.is_first)
+            {
+                read_state_.is_first = false;
+                read_state_.op_code = frame.header.op_code();
+
+                // RSV1 indicates DEFLATE compressed message, only if negotiated.
+                if (frame.header.rsv1_bit())
                 {
-                    return WS_ERROR_RAW(
-                        PROTOCOL_ERROR,
-                        "Reserved opcode received: " + to_string(frame.header.op_code()),
-                        PROTOCOL_ERROR
-                    );
-                }
+                    read_state_.is_compressed = true;
 
-                // handle control frames
-                if (frame.header.is_control())
-                {
-                    auto res = this->handle_control_frame(frame);
-
-                    // convert to outer variant
-                    return std::visit(
-                        [](auto&& arg) //
-                        -> variant<Message, PingFrame, PongFrame, CloseFrame, WSError>
-                        { return arg; },
-                        res
-                    );
-                }
-
-                if (read_state.is_first)
-                {
-                    // clear buffer if this is the first frame
-                    buffer.clear();
-                }
-
-                // check if payload fits into buffer
-                if (buffer.max_size() - buffer.size() < frame.payload_size)
-                {
-                    string msg = "Received message payload of " +
-                                 std::to_string(frame.payload_size) + " bytes is too large, only " +
-                                 std::to_string(buffer.max_size() - buffer.size()) +
-                                 " bytes available.";
-                    return WS_ERROR_RAW(BUFFER_ERROR, msg, MESSAGE_TOO_BIG);
-                }
-
-                // check if this is the first frame
-                if (read_state.is_first)
-                {
-                    read_state.is_first = false;
-                    read_state.op_code = frame.header.op_code();
-
-                    // RSV1 indicates DEFLATE compressed message, only if negotiated.
-                    if (frame.header.rsv1_bit())
+                    if (this->permessage_deflate_ctx_ != std::nullopt) [[likely]]
                     {
-                        read_state.is_compressed = true;
-
-                        if (this->permessage_deflate_context != std::nullopt)
-                        {
-                            this->decompress_buffer.clear();
-                        }
-                        else
-                        {
-                            return WS_ERROR_RAW(
-                                PROTOCOL_ERROR,
-                                "Received compressed frame, but compression not enabled.",
-                                PROTOCOL_ERROR
-                            );
-                        }
-                    }
-
-                    if (frame.header.rsv2_bit() || frame.header.rsv3_bit())
-                    {
-                        return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "RSV2 or RSV3 bit set, but not supported.",
-                            PROTOCOL_ERROR
-                        );
-                    }
-                }
-                else
-                {
-                    if (frame.header.op_code() != opcode::CONTINUATION)
-                    {
-                        return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "Expected continuation frame, but received " +
-                                to_string(frame.header.op_code()),
-                            PROTOCOL_ERROR
-                        );
-                    }
-
-                    if (frame.header.has_rsv_bits())
-                    {
-                        return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "RSV bits must not be set on non-first frames.",
-                            PROTOCOL_ERROR
-                        );
-                    }
-                }
-
-                // check opcode
-                if (read_state.op_code != opcode::CONTINUATION &&
-                    read_state.op_code != opcode::TEXT && read_state.op_code != opcode::BINARY)
-                {
-                    return WS_ERROR_RAW(
-                        PROTOCOL_ERROR,
-                        "Unexpected opcode in websocket frame received: " +
-                            to_string(read_state.op_code),
-                        PROTOCOL_ERROR
-                    );
-                }
-
-                // read payload
-                if (frame.payload_size > 0) [[likely]]
-                {
-                    if (read_state.is_compressed)
-                    {
-                        // read payload into decompression buffer
-                        WS_TRY_RAW(
-                            frame_data_compressed_res,
-                            this->decompress_buffer.append(frame.payload_size)
-                        );
-                        WS_TRYV_RAW(this->socket.read_exact(*frame_data_compressed_res));
+                        this->decompress_buffer_.clear();
                     }
                     else
                     {
-                        // read payload into message buffer
-                        WS_TRY_RAW(frame_data_res, buffer.append(frame.payload_size));
-                        WS_TRYV_RAW(this->socket.read_exact(*frame_data_res));
+                        return WS_ERROR_RAW(
+                            PROTOCOL_ERROR,
+                            "Received compressed frame, but compression not enabled.",
+                            PROTOCOL_ERROR
+                        );
                     }
                 }
 
-                if (frame.header.is_final())
-                    break;
-            }
-
-            span<byte> payload_buffer;
-
-            // handle permessage-deflate compression
-            if (read_state.is_compressed)
-            {
-                span<byte> input = this->decompress_buffer.data();
-                WS_TRYV_RAW(this->permessage_deflate_context.value().decompress(input, buffer));
-                payload_buffer = buffer.data();
+                if (frame.header.rsv2_bit() || frame.header.rsv3_bit()) [[unlikely]]
+                {
+                    return WS_ERROR_RAW(
+                        PROTOCOL_ERROR, "RSV2 or RSV3 bit set, but not supported.", PROTOCOL_ERROR
+                    );
+                }
             }
             else
             {
-                payload_buffer = buffer.data();
-            }
-
-            switch (read_state.op_code)
-            {
-                case opcode::TEXT:
-                {
-#if WS_CLIENT_VALIDATE_UTF8 == 1
-                    if (!is_valid_utf8(
-                            const_cast<char*>((char*)payload_buffer.data()), payload_buffer.size()
-                        ))
-                    {
-                        return WS_ERROR_RAW(
-                            PROTOCOL_ERROR,
-                            "Invalid UTF-8 in websocket TEXT message.",
-                            INVALID_FRAME_PAYLOAD_DATA
-                        );
-                    }
-#endif
-
-                    if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
-                    {
-#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
-                        std::stringstream ss;
-                        ss << "Received TEXT message (";
-                        ss << payload_buffer.size();
-                        ss << " bytes):\033[1;35m\n";
-                        ss << string(
-                            reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
-                        );
-                        ss << "\033[0m";
-                        logger->template log<LogLevel::I>(ss.str());
-#elif WS_CLIENT_LOG_MSG_SIZES == 1
-                        logger->template log(
-                            LogLevel::I, "Received TEXT message (", payload_buffer.size(), " bytes)"
-                        );
-#endif
-                    }
-
-                    auto msg = Message(
-                        static_cast<MessageType>(read_state.op_code), payload_buffer
-                    );
-
-                    // reset reading state - message complete
-                    read_state.reset();
-
-                    return msg;
-                }
-
-                case opcode::BINARY:
-                {
-                    if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
-                    {
-#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
-                        std::stringstream ss;
-                        ss << "Received BINARY message (";
-                        ss << payload_buffer.size();
-                        ss << " bytes):\033[1;35m\n";
-                        ss << string(
-                            reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
-                        );
-                        ss << "\033[0m";
-                        logger->template log<LogLevel::I>(ss.str());
-#elif WS_CLIENT_LOG_MSG_SIZES == 1
-                        logger->template log(
-                            LogLevel::I,
-                            "Received BINARY message (" + std::to_string(payload_buffer.size()) +
-                                " bytes)"
-                        );
-#endif
-                    }
-
-                    auto msg = Message(
-                        static_cast<MessageType>(read_state.op_code), payload_buffer
-                    );
-
-                    // reset reading state - message complete
-                    read_state.reset();
-
-                    return msg;
-                }
-
-                default:
+                if (frame.header.op_code() != opcode::CONTINUATION) [[unlikely]]
                 {
                     return WS_ERROR_RAW(
                         PROTOCOL_ERROR,
-                        "Unexpected opcode frame received: " + to_string(read_state.op_code),
+                        "Expected continuation frame, but received " +
+                            to_string(frame.header.op_code()),
                         PROTOCOL_ERROR
                     );
                 }
+
+                if (frame.header.has_rsv_bits()) [[unlikely]]
+                {
+                    return WS_ERROR_RAW(
+                        PROTOCOL_ERROR,
+                        "RSV bits must not be set on non-first frames.",
+                        PROTOCOL_ERROR
+                    );
+                }
+            }
+
+            // check opcode
+            if (read_state_.op_code != opcode::CONTINUATION && read_state_.op_code != opcode::TEXT &&
+                read_state_.op_code != opcode::BINARY)
+            {
+                return WS_ERROR_RAW(
+                    PROTOCOL_ERROR,
+                    "Unexpected opcode in websocket frame received: " +
+                        to_string(read_state_.op_code),
+                    PROTOCOL_ERROR
+                );
+            }
+
+            // read payload
+            if (frame.payload_size > 0) [[likely]]
+            {
+                if (read_state_.is_compressed)
+                {
+                    // read payload into decompression buffer
+                    WS_TRY_RAW(
+                        frame_data_compressed_res,
+                        this->decompress_buffer_.append(frame.payload_size)
+                    );
+                    WS_TRYV_RAW(this->socket_.read_exact(*frame_data_compressed_res, timeout));
+                }
+                else
+                {
+                    // read payload into message buffer
+                    WS_TRY_RAW(frame_data_res, buffer.append(frame.payload_size));
+                    WS_TRYV_RAW(this->socket_.read_exact(*frame_data_res, timeout));
+                }
+            }
+
+            if (frame.header.is_final()) [[likely]]
+                break;
+        }
+
+        // check if timeout occurred
+        if (timeout.is_expired())
+            return WS_ERROR_RAW(TIMEOUT, "Timeout while reading message.", NOT_SET);
+
+        span<byte> payload_buffer;
+
+        // handle permessage-deflate compression
+        if (read_state_.is_compressed)
+        {
+            span<byte> input = this->decompress_buffer_.data();
+            WS_TRYV_RAW(this->permessage_deflate_ctx_.value().decompress(input, buffer));
+            payload_buffer = buffer.data();
+        }
+        else
+        {
+            payload_buffer = buffer.data();
+        }
+
+        switch (read_state_.op_code)
+        {
+            case opcode::TEXT:
+            {
+#if WS_CLIENT_VALIDATE_UTF8 == 1
+                if (!is_valid_utf8(
+                        const_cast<char*>((char*)payload_buffer.data()), payload_buffer.size()
+                    ))
+                {
+                    return WS_ERROR_RAW(
+                        PROTOCOL_ERROR,
+                        "Invalid UTF-8 in websocket TEXT message.",
+                        INVALID_FRAME_PAYLOAD_DATA
+                    );
+                }
+#endif
+
+                if (logger_->template is_enabled<LogLevel::I>())
+                {
+#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
+                    std::stringstream ss;
+                    ss << "Received TEXT message (";
+                    ss << payload_buffer.size();
+                    ss << " bytes):\033[1;35m\n";
+                    ss << string(
+                        reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
+                    );
+                    ss << "\033[0m";
+                    logger_->template log<LogLevel::I>(ss.str());
+#elif WS_CLIENT_LOG_MSG_SIZES == 1
+                    logger_->template log(
+                        LogLevel::I, "Received TEXT message (", payload_buffer.size(), " bytes)"
+                    );
+#endif
+                }
+
+                auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
+
+                // reset reading state - message complete
+                read_state_.reset();
+
+                return msg;
+            }
+
+            case opcode::BINARY:
+            {
+                if (logger_->template is_enabled<LogLevel::I>())
+                {
+#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
+                    std::stringstream ss;
+                    ss << "Received BINARY message (";
+                    ss << payload_buffer.size();
+                    ss << " bytes):\033[1;35m\n";
+                    ss << string(
+                        reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
+                    );
+                    ss << "\033[0m";
+                    logger_->template log<LogLevel::I>(ss.str());
+#elif WS_CLIENT_LOG_MSG_SIZES == 1
+                    logger_->template log(
+                        LogLevel::I,
+                        "Received BINARY message (" + std::to_string(payload_buffer.size()) +
+                            " bytes)"
+                    );
+#endif
+                }
+
+                auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
+
+                // reset reading state - message complete
+                read_state_.reset();
+
+                return msg;
+            }
+
+            default:
+            {
+                return WS_ERROR_RAW(
+                    PROTOCOL_ERROR,
+                    "Unexpected opcode frame received: " + to_string(read_state_.op_code),
+                    PROTOCOL_ERROR
+                );
             }
         }
     }
@@ -489,10 +502,10 @@ public:
         const Message& msg, SendOptions options = {}
     ) noexcept
     {
-        if (this->closed)
+        if (this->closed_)
             return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
 
-        if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::I>())
         {
 #if WS_CLIENT_LOG_MSG_PAYLOADS == 1
             std::stringstream ss;
@@ -503,9 +516,9 @@ public:
             ss << " bytes):\033[1;34m\n";
             ss << msg.to_string_view();
             ss << "\033[0m";
-            logger->template log<LogLevel::I>(ss.str());
+            logger_->template log<LogLevel::I>(ss.str());
 #elif WS_CLIENT_LOG_MSG_SIZES == 1
-            logger->template log<LogLevel::I>(
+            logger_->template log<LogLevel::I>(
                 "Writing " + to_string(msg.type) + " message (" + std::to_string(msg.data.size()) +
                 " bytes)"
             );
@@ -516,17 +529,17 @@ public:
         frame.set_opcode(static_cast<opcode>(msg.type));
         frame.set_is_final(true); // TODO: support fragmented messages
         frame.set_is_masked(true);
-        frame.mask_key = this->mask_key_generator();
+        frame.mask_key = this->mask_key_gen_();
 
         span<byte> payload;
-        if (this->permessage_deflate_context != std::nullopt && options.compress)
+        if (this->permessage_deflate_ctx_ != std::nullopt && options.compress)
         {
             frame.set_is_compressed(true);
 
             // perform deflate compression using zlib
-            Buffer& output = this->compress_buffer;
+            Buffer& output = this->compress_buffer_;
             output.clear();
-            WS_TRY(res, this->permessage_deflate_context.value().compress(msg.data, output));
+            WS_TRY(res, this->permessage_deflate_ctx_.value().compress(msg.data, output));
             payload = *res;
         }
         else
@@ -534,26 +547,28 @@ public:
 
         frame.set_payload_size(payload.size());
 
-        WS_TRYV(this->write_frame(frame, payload, options.timeout));
+        Timeout timeout(options.timeout);
+        WS_TRYV(this->write_frame(frame, payload, timeout));
 
         return expected<void, WSError>{};
     }
 
 
     [[nodiscard]] expected<void, WSError> send_pong_frame(
-        span<byte> payload, std::chrono::milliseconds timeout = std::chrono::seconds{10}
+        span<byte> payload, std::chrono::milliseconds timeout_ms = 5000ms
     ) noexcept
     {
-        if (this->closed)
+        if (this->closed_)
             return WS_ERROR(CONNECTION_CLOSED, "Connection in closed state.", NOT_SET);
-        
+
         Frame frame;
         frame.set_opcode(opcode::PONG);
         frame.set_is_final(true);
         frame.set_is_masked(true); // write_frame does the actual masking
         frame.set_payload_size(payload.size());
-        frame.mask_key = this->mask_key_generator();
+        frame.mask_key = this->mask_key_gen_();
 
+        Timeout timeout(timeout_ms);
         WS_TRYV(this->write_frame(frame, payload, timeout));
 
         return expected<void, WSError>{};
@@ -568,37 +583,39 @@ public:
      * This method is thread-safe and can be called multiple times.
      */
     [[nodiscard]] inline expected<void, WSError> close(
-        const close_code code, std::chrono::milliseconds timeout = std::chrono::seconds(10)
-    )
+        const close_code code, std::chrono::milliseconds timeout_ms = 5000ms
+    ) noexcept
     {
-        if (this->closed)
+        if (this->closed_)
             return expected<void, WSError>{};
+
+        Timeout timeout(timeout_ms);
 
         // send close frame
         {
             auto res = this->send_close_frame(code, timeout);
             if (!res.has_value())
             {
-                logger->template log<LogLevel::W>(
+                logger_->template log<LogLevel::W>(
                     "Failed to send close frame: " + res.error().message
                 );
             }
         }
 
         // mark as closed
-        this->closed = true;
+        this->closed_ = true;
 
         // shutdown socket communication (ignore errors, close socket anyway).
         // often times, the server will close the connection after receiving the close frame,
         // which will result in an error when trying to shutdown the socket.
-        this->socket.underlying().shutdown(timeout);
+        this->socket_.underlying().shutdown(timeout);
 
         // close underlying socket connection
         {
-            auto res = this->socket.underlying().close();
+            auto res = this->socket_.underlying().close();
             if (!res.has_value())
             {
-                logger->template log<LogLevel::W>("Socket close failed: " + res.error().message);
+                logger_->template log<LogLevel::W>("Socket close failed: " + res.error().message);
                 return WS_UNEXPECTED(res.error());
             }
         }
@@ -607,13 +624,13 @@ public:
     }
 
 private:
-    [[nodiscard]] expected<Frame, WSError> read_frame()
+    [[nodiscard]] expected<Frame, WSError> read_frame(Timeout<>& timeout)
     {
         Frame frame;
 
         // read frame header (2 bytes)
         byte tmp1[2];
-        WS_TRYV(this->socket.read_exact(span<byte>(tmp1, 2)));
+        WS_TRYV(this->socket_.read_exact(span<byte>(tmp1, 2), timeout));
 
         frame.header.b0 = tmp1[0];
         frame.header.b1 = tmp1[1];
@@ -631,8 +648,8 @@ private:
         {
             // 16 bit payload size
             uint16_t tmp2;
-            WS_TRYV(this->socket.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t))
+            WS_TRYV(this->socket_.read_exact(
+                span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
             ));
             payload_size = network_to_host(tmp2);
         }
@@ -640,8 +657,8 @@ private:
         {
             // 64 bit payload size
             uint64_t tmp3;
-            WS_TRYV(this->socket.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t))
+            WS_TRYV(this->socket_.read_exact(
+                span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
             ));
             payload_size = network_to_host(tmp3);
         }
@@ -652,7 +669,7 @@ private:
         if (frame.header.is_masked()) [[unlikely]]
             return WS_ERROR(PROTOCOL_ERROR, "Received masked frame from server.", PROTOCOL_ERROR);
 
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::D>())
         {
 #if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
@@ -672,7 +689,7 @@ private:
             msg << frame.header.is_masked();
             msg << " payload_size=";
             msg << frame.payload_size;
-            logger->template log<LogLevel::D>(msg.str());
+            logger_->template log<LogLevel::D>(msg.str());
 #endif
         }
 
@@ -680,10 +697,10 @@ private:
     }
 
     [[nodiscard]] expected<void, WSError> write_frame(
-        Frame& frame, span<byte> payload, std::chrono::milliseconds timeout
+        Frame& frame, span<byte> payload, Timeout<>& timeout
     ) noexcept
     {
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::D>())
         {
 #if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
@@ -703,7 +720,7 @@ private:
             msg << frame.header.is_masked();
             msg << " payload_size=";
             msg << frame.payload_size;
-            logger->template log<LogLevel::D>(msg.str());
+            logger_->template log<LogLevel::D>(msg.str());
 #endif
         }
 
@@ -738,12 +755,12 @@ private:
         frame.mask_key.mask(payload);
 
         // write frame header
-        WS_TRYV(this->socket.write(write_buffer.subspan(0, offset), timeout));
+        WS_TRYV(this->socket_.write(write_buffer.subspan(0, offset), timeout));
 
         // write frame payload
         if (frame.payload_size > 0)
         {
-            WS_TRYV(this->socket.write(payload, timeout));
+            WS_TRYV(this->socket_.write(payload, timeout));
             offset += frame.payload_size;
         }
 
@@ -751,14 +768,14 @@ private:
     }
 
     [[nodiscard]] expected<void, WSError> send_close_frame(
-        close_code code, std::chrono::milliseconds timeout
+        close_code code, Timeout<>& timeout
     ) noexcept
     {
         Frame frame;
         frame.set_opcode(opcode::CLOSE);
         frame.set_is_final(true);
         frame.set_is_masked(true);
-        frame.mask_key = this->mask_key_generator();
+        frame.mask_key = this->mask_key_gen_();
 
         span<byte> payload;
 
@@ -776,25 +793,25 @@ private:
             msg << static_cast<int>(code);
             msg << " ";
             msg << to_string(code);
-            logger->template log<LogLevel::I>(msg.str());
+            logger_->template log<LogLevel::I>(msg.str());
         }
         else
         {
             // close frame without status code
-            logger->template log<LogLevel::I>("Writing close frame");
+            logger_->template log<LogLevel::I>("Writing close frame");
         }
 
         frame.set_payload_size(payload.size());
 
         WS_TRY(ret, this->write_frame(frame, payload, timeout));
 
-        logger->template log<LogLevel::D>("Close frame sent");
+        logger_->template log<LogLevel::D>("Close frame sent");
 
         return expected<void, WSError>{};
     }
 
     [[nodiscard]] variant<PingFrame, PongFrame, CloseFrame, WSError> handle_control_frame(
-        Frame& frame
+        Frame& frame, Timeout<>& timeout
     ) noexcept
     {
         if (!frame.header.is_final())
@@ -825,10 +842,10 @@ private:
         {
             case opcode::CLOSE:
             {
-                if (!this->closed)
+                if (!this->closed_)
                 {
                     // close frame sent by server
-                    logger->template log<LogLevel::W>("Unsolicited close frame received");
+                    logger_->template log<LogLevel::W>("Unsolicited close frame received");
                 }
 
                 CloseFrame close_frame(frame.payload_size);
@@ -843,7 +860,7 @@ private:
                         );
                     }
 
-                    WS_TRYV_RAW(this->socket.read_exact(close_frame.payload_bytes()));
+                    WS_TRYV_RAW(this->socket_.read_exact(close_frame.payload_bytes(), timeout));
 
                     // check close code if provided
                     if (close_frame.has_close_code())
@@ -882,7 +899,7 @@ private:
                 // read control frame payload (max. 125 bytes)
                 if (frame.payload_size > 0)
                 {
-                    WS_TRYV_RAW(this->socket.read_exact(ping_frame.payload_bytes()));
+                    WS_TRYV_RAW(this->socket_.read_exact(ping_frame.payload_bytes(), timeout));
                 }
 
                 return ping_frame;
@@ -895,7 +912,7 @@ private:
                 // read control frame payload (max. 125 bytes)
                 if (frame.payload_size > 0)
                 {
-                    WS_TRYV_RAW(this->socket.read_exact(pong_frame.payload_bytes()));
+                    WS_TRYV_RAW(this->socket_.read_exact(pong_frame.payload_bytes(), timeout));
                 }
 
                 return pong_frame;

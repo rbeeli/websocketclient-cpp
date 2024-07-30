@@ -63,14 +63,14 @@ target_compile_definitions(ex_echo_sync PRIVATE
     WS_CLIENT_LOG_COMPRESSION=0)
 
 # --------------------------------------
-add_executable(ex_echo_custom_logger ex_echo_custom_logger.cpp)
-target_link_libraries(ex_echo_custom_logger PRIVATE
+add_executable(ex_custom_logger ex_custom_logger.cpp)
+target_link_libraries(ex_custom_logger PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     simdutf::simdutf
     PkgConfig::ZLIBNG
     websocketclient)
-target_compile_definitions(ex_echo_custom_logger PRIVATE
+target_compile_definitions(ex_custom_logger PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
     WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
     WS_CLIENT_LOG_HANDSHAKE=1

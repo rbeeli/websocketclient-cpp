@@ -8,11 +8,11 @@
 #include <cassert>
 
 #include "ws_client/errors.hpp"
-#include "ws_client/utils/CircularBuffer.hpp"
 #include "ws_client/log.hpp"
+#include "ws_client/utils/CircularBuffer.hpp"
+#include "ws_client/utils/Timeout.hpp"
+#include "ws_client/transport/HasSocketOperations.hpp"
 #include "ws_client/Buffer.hpp"
-#include "ws_client/concepts.hpp"
-#include "ws_client/transport/ISocket.hpp"
 
 namespace ws_client
 {
@@ -28,13 +28,12 @@ class BufferedSocket final
     static constexpr int read_buffer_size = 4096;
 
 private:
-    TSocket socket;
-    CircularBuffer<byte> read_buffer;
-
+    TSocket socket_;
+    CircularBuffer<byte> read_buffer_;
 
 public:
     explicit BufferedSocket(TSocket&& socket) noexcept
-        : socket(std::move(socket)), read_buffer(read_buffer_size)
+        : socket_(std::move(socket)), read_buffer_(read_buffer_size)
     {
     }
 
@@ -48,7 +47,7 @@ public:
 
     [[nodiscard]] inline TSocket& underlying() noexcept
     {
-        return this->socket;
+        return socket_;
     }
 
     /**
@@ -56,9 +55,11 @@ public:
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] inline expected<size_t, WSError> read_some(span<byte> buffer) noexcept
+    [[nodiscard]] inline expected<size_t, WSError> read_some(
+        span<byte> buffer, Timeout<>& timeout
+    ) noexcept
     {
-        return this->socket.read_some(buffer);
+        return socket_.read_some(buffer, timeout);
     }
 
     /**
@@ -66,17 +67,19 @@ public:
      * Reads exactly 'length' bytes, unless an error occurs, usually due to
      * connection closure by peer.
      */
-    [[nodiscard]] expected<size_t, WSError> read_exact(span<byte> buffer) noexcept
+    [[nodiscard]] expected<size_t, WSError> read_exact(
+        span<byte> buffer, Timeout<>& timeout
+    ) noexcept
     {
         size_t total_read = 0;
         size_t remaining = buffer.size();
         while (remaining > 0)
         {
-            WS_TRY(read_bytes_res, this->fill_read_buffer(remaining));
+            WS_TRY(read_bytes_res, this->fill_read_buffer(remaining, timeout));
             size_t read_bytes = *read_bytes_res;
 
             // copy from read buffer to destination buffer
-            this->read_buffer.pop(buffer.data() + total_read, read_bytes);
+            read_buffer_.pop(buffer.data() + total_read, read_bytes);
 
             total_read += read_bytes;
             remaining -= read_bytes;
@@ -88,33 +91,22 @@ public:
     /**
      * Reads from the socket into the passed buffer until the delimiter is found.
      * The delimiter is not included in the buffer.
-     * 
-     * Note: The timeout is only for the read-loop, not for individual reads / read-calls.
-     * If a read call never returns, the timeout will not be triggered.
      */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] expected<void, WSError> read_until(
-        TBuffer& buffer, const span<byte> delimiter, optional<std::chrono::milliseconds> timeout
+        TBuffer& buffer, const span<byte> delimiter, Timeout<>& timeout
     ) noexcept
     {
-        auto start = std::chrono::system_clock::now();
         size_t search_offset = 0;
         while (true)
         {
-            if (timeout.has_value())
-            {
-                auto elapsed = std::chrono::system_clock::now() - start;
-                if (elapsed > timeout.value())
-                    return WS_ERROR(TIMEOUT, "read_until timed out.", NOT_SET);
-            }
-
             // read some data into circular buffer
-            WS_TRYV(this->fill_read_buffer(this->read_buffer.capacity()));
+            WS_TRYV(this->fill_read_buffer(read_buffer_.capacity(), timeout));
 
             // append circular buffer data to buffer
-            WS_TRY(cb_read_span_res, buffer.append(this->read_buffer.size()));
+            WS_TRY(cb_read_span_res, buffer.append(read_buffer_.size()));
             span<byte> cb_read_span = *cb_read_span_res;
-            this->read_buffer.pop(cb_read_span);
+            read_buffer_.pop(cb_read_span);
 
             // std::cout << string_from_bytes(cb_read_span) << std::endl;
 
@@ -128,7 +120,7 @@ public:
             {
                 // delimiter found.
                 // move delimiter and after back into circular buffer
-                this->read_buffer.push(res, buffer_end - res);
+                read_buffer_.push(res, buffer_end - res);
 
                 // remove data starting from delimiter from buffer
                 WS_TRYV(buffer.resize(res - buffer_start));
@@ -150,10 +142,10 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline expected<size_t, WSError> write_some(
-        const span<byte> buffer, std::chrono::milliseconds timeout
+        const span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
-        return this->socket.write_some(buffer, timeout);
+        return socket_.write_some(buffer, timeout);
     }
 
     /**
@@ -161,7 +153,7 @@ public:
      * Does not perform partial writes unless an error occurs.
      */
     [[nodiscard]] inline expected<void, WSError> write(
-        const span<byte> buffer, std::chrono::milliseconds timeout
+        const span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         size_t total_written = 0;
@@ -173,15 +165,18 @@ public:
             total_written += written;
             remaining -= written;
         }
+
         return expected<void, WSError>{};
     }
 
 private:
-    [[nodiscard]] expected<size_t, WSError> fill_read_buffer(const size_t desired_bytes) noexcept
+    [[nodiscard]] expected<size_t, WSError> fill_read_buffer(
+        const size_t desired_bytes, Timeout<>& timeout
+    ) noexcept
     {
         assert(desired_bytes > 0 && "Desired bytes must be greater than 0");
 
-        if (read_buffer.size() >= desired_bytes)
+        if (read_buffer_.size() >= desired_bytes)
             return desired_bytes; // already have enough bytes in buffer
 
         // directly read into circular buffer.
@@ -189,14 +184,15 @@ private:
         // available_as_contiguous_span might return a span that's shorter
         // than the available space in the buffer, because it can only return
         // a single continguous span (from head to end of buffer or from start to tail).
-        span<byte> buf_span = this->read_buffer.available_as_contiguous_span();
-        WS_TRY(read_bytes_res, this->socket.read_some(buf_span));
+        span<byte> buf_span = read_buffer_.available_as_contiguous_span();
+        WS_TRY(read_bytes_res, socket_.read_some(buf_span, timeout));
 
         // move head by the number of bytes read into buffer
-        this->read_buffer.move_head(read_bytes_res.value());
+        read_buffer_.move_head(read_bytes_res.value());
 
-        size_t n_read = this->read_buffer.size() < desired_bytes ? this->read_buffer.size()
-                                                                 : desired_bytes;
+        size_t n_read = read_buffer_.size() < desired_bytes //
+                            ? read_buffer_.size()
+                            : desired_bytes;
         return n_read;
     }
 };

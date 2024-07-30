@@ -7,6 +7,7 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <fcntl.h>
@@ -15,6 +16,7 @@
 #include "ws_client/errors.hpp"
 #include "ws_client/log.hpp"
 #include "ws_client/utils/networking.hpp"
+#include "ws_client/utils/Timeout.hpp"
 #include "ws_client/transport/ISocket.hpp"
 #include "ws_client/transport/builtin/DnsResolver.hpp"
 
@@ -22,6 +24,7 @@ namespace ws_client
 {
 using std::string;
 using std::byte;
+using namespace std::chrono_literals;
 
 /**
  * A blocking TCP socket implementation.
@@ -31,10 +34,10 @@ template <typename TLogger>
 class TcpSocket final : public ISocket
 {
 private:
-    TLogger* logger;
-    int fd = -1;
-    AddressInfo address;
-    bool connected = false;
+    TLogger* logger_;
+    int fd_ = -1;
+    AddressInfo address_;
+    bool connected_ = false;
 
 public:
     /**
@@ -43,17 +46,14 @@ public:
      * @param address       The address info of the server to connect to.
      */
     explicit TcpSocket(TLogger* logger, AddressInfo address) noexcept
-        : ISocket(), logger(logger), address(std::move(address))
+        : ISocket(), logger_(logger), address_(std::move(address))
     {
     }
 
     ~TcpSocket() noexcept override
     {
-        if (this->fd != -1)
-        {
+        if (fd_ != -1)
             this->close();
-        }
-        this->logger = nullptr;
     }
 
     // disable copy
@@ -62,37 +62,48 @@ public:
 
     // enable move
     TcpSocket(TcpSocket&& other) noexcept
-        : logger(other.logger), fd(other.fd), address(std::move(other.address))
+        : logger_(other.logger_),
+          fd_(other.fd_),
+          address_(std::move(other.address_)),
+          connected_(other.connected_)
     {
-        other.fd = -1;
+        other.fd_ = -1;
     }
     TcpSocket& operator=(TcpSocket&& other) noexcept
     {
         if (this != &other)
         {
-            if (this->fd != -1)
+            if (fd_ != -1)
                 this->close();
-            this->logger = other.logger;
-            this->fd = other.fd;
-            this->address = std::move(other.address);
-            other.fd = -1;
+            logger_ = other.logger_;
+            fd_ = other.fd_;
+            address_ = std::move(other.address_);
+            connected_ = other.connected_;
+            other.fd_ = -1;
         }
         return *this;
     }
 
+    /**
+     * Get the file descriptor of the socket.
+     */
     [[nodiscard]] int get_fd() const noexcept
     {
-        return fd;
+        return fd_;
     }
 
+    /**
+     * Initialize the socket and set options.
+     * This function must be called before `connect`.
+     */
     [[nodiscard]] expected<void, WSError> init()
     {
         // create a socket based on family (IPv4 or IPv6)
-        logger->template log<LogLevel::D>(
-            "Creating socket (family=" + std::to_string(this->address.family()) + ")"
+        logger_->template log<LogLevel::D>(
+            "Creating socket (family=" + std::to_string(address_.family()) + ")"
         );
-        this->fd = ::socket(this->address.family(), SOCK_STREAM, 0);
-        if (this->fd == -1)
+        fd_ = ::socket(address_.family(), SOCK_STREAM, 0);
+        if (fd_ == -1)
         {
             int error_code = errno;
             return WS_ERROR(
@@ -103,7 +114,8 @@ public:
             );
         }
 
-        logger->template log<LogLevel::D>("Socket created (fd=" + std::to_string(this->fd) + ")");
+        // set non-blocking mode by default
+        WS_TRYV(this->set_O_NONBLOCK(true));
 
         // disable Nagle's algorithm by default
         WS_TRYV(this->set_TCP_NODELAY(true));
@@ -111,74 +123,83 @@ public:
         // enable quickack by default (if available on platform)
         WS_TRYV(this->set_TCP_QUICKACK(true));
 
+        logger_->template log<LogLevel::D>("Socket created (fd=" + std::to_string(fd_) + ")");
+
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> connect()
+    /**
+     * Establish a connection to the server.
+     */
+    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5000ms)
     {
-        if (connected)
-            return {};
-
-        if (this->fd == -1)
-            return WS_ERROR(TRANSPORT_ERROR, "Socket not created. Call init() first.", NOT_SET);
-
-        auto now = std::chrono::system_clock::now();
-
-        // connect using sockaddr from addrinfo
-        int ret;
-        do {
-            ret = ::connect(this->fd, this->address.sockaddr_ptr(), this->address.addrlen());
-        } while (ret == -1 && errno == EINTR);
-
-        WS_TRYV(this->check_errno(ret, "connecting to the server"));
-
-        if (logger->template is_enabled<LogLevel::I>())
+        if (connected_)
         {
-            std::stringstream ss;
-            ss << "Connected to " << this->address.hostname() << ":" << this->address.port() << " ("
-               << this->address.ip() << ") in "
-               << std::chrono::duration_cast<std::chrono::microseconds>(
-                      std::chrono::system_clock::now() - now
-                  )
-                      .count()
-               << " µs";
-            logger->template log<LogLevel::I>(ss.str());
+            logger_->template log<LogLevel::D>("Connection already established");
+            return {};
         }
 
-        connected = true;
+        if (fd_ == -1)
+            return WS_ERROR(LOGIC_ERROR, "Socket not created. Call init() first.", NOT_SET);
 
-        return {};
-    }
+        Timeout timeout(timeout_ms);
 
-    /**
-     * Set the socket timeout for read operations (recv).
-     */
-    [[nodiscard]] expected<void, WSError> set_recv_timeout(std::chrono::duration<int, std::milli> timeout)
-    {
-        struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
-        int ret = setsockopt(this->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-        WS_TRYV(this->check_errno(ret, "set SO_RCVTIMEO"));
-        logger->template log<LogLevel::D>(
-            "socket read timeout SO_RCVTIMEO=" + std::to_string(timeout.count()) + " ms"
-        );
-        return {};
-    }
+        // attempt to connect
+        int ret = ::connect(fd_, address_.sockaddr_ptr(), address_.addrlen());
+        if (ret == 0)
+        {
+            connected_ = true;
+            return {};
+        }
 
-    /**
-     * Set the socket timeout for send operations.
-     */
-    [[nodiscard]] expected<void, WSError> set_send_timeout(std::chrono::duration<int, std::milli> timeout)
-    {
-        struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
-        int ret = setsockopt(this->fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-        WS_TRYV(this->check_errno(ret, "set SO_SNDTIMEO"));
-        logger->template log<LogLevel::D>(
-            "socket send timeout SO_SNDTIMEO=" + std::to_string(timeout.count()) + " ms"
-        );
+        // check if connection is in progress due to non-blocking mode
+        if (errno != EINPROGRESS)
+            return this->check_errno(-1, "connecting to the server");
+
+        // use select to wait for the connection or timeout
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(fd_, &write_fds);
+
+        // wait for data to read or timeout
+        int select_ret;
+        do
+        {
+            auto remaining = timeout.remaining_timeval();
+            select_ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
+        } while (select_ret == -1 && errno == EINTR);
+
+        if (select_ret == 0) [[unlikely]]
+            return WS_ERROR(TIMEOUT, "Connect timeout", NOT_SET);
+
+        WS_TRYV(this->check_errno(select_ret, "connect"));
+
+        // check if the connection was successful
+        int error;
+        socklen_t len = sizeof(error);
+        ret = getsockopt(fd_, SOL_SOCKET, SO_ERROR, &error, &len);
+        WS_TRYV(this->check_errno(ret, "getsockopt"));
+        if (error != 0)
+        {
+            std::string error_message = std::strerror(error);
+            std::stringstream ss;
+            ss << "Connect failed to " << address_.hostname() << ":" << address_.port()
+               << " (" << address_.ip() << "): " << error_message << " (error code: " << error
+               << ")";
+            return WS_ERROR(TRANSPORT_ERROR, ss.str(), NOT_SET);
+        }
+
+        connected_ = true;
+
+        if (logger_->template is_enabled<LogLevel::I>())
+        {
+            auto elapsed = timeout.template elapsed<std::chrono::microseconds>();
+            std::stringstream ss;
+            ss << "Connected to " << address_.hostname() << ":" << address_.port() << " ("
+               << address_.ip() << ") in " << elapsed.count() << " µs";
+            logger_->template log<LogLevel::I>(ss.str());
+        }
+
         return {};
     }
 
@@ -189,9 +210,30 @@ public:
     [[nodiscard]] expected<void, WSError> set_TCP_NODELAY(bool value)
     {
         int flag = value ? 1 : 0;
-        int ret = setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+        int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_errno(ret, "set TCP_NODELAY"));
-        logger->template log<LogLevel::D>("TCP_NODELAY=" + std::to_string(value));
+        logger_->template log<LogLevel::D>("TCP_NODELAY=" + std::to_string(value));
+        return {};
+    }
+
+    /**
+     * Enable or disable O_NONBLOCK option (non-blocking mode).
+     */
+    [[nodiscard]] expected<void, WSError> set_O_NONBLOCK(bool value)
+    {
+        int flags = fcntl(fd_, F_GETFL, 0);
+        if (flags == -1)
+            return WS_ERROR(TRANSPORT_ERROR, "Failed to get socket flags", NOT_SET);
+
+        if (value)
+            flags |= O_NONBLOCK;
+        else
+            flags &= ~O_NONBLOCK;
+
+        if (fcntl(fd_, F_SETFL, flags) == -1)
+            return WS_ERROR(TRANSPORT_ERROR, "Failed to set socket to non-blocking", NOT_SET);
+
+        logger_->template log<LogLevel::D>("O_NONBLOCK=" + std::to_string(value));
         return {};
     }
 
@@ -200,9 +242,9 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_SO_RCVBUF(int buffer_size)
     {
-        int ret = setsockopt(this->fd, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
+        int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_errno(ret, "set SO_RCVBUF"));
-        logger->template log<LogLevel::D>(
+        logger_->template log<LogLevel::D>(
             "socket receive buffer size SO_RCVBUF=" + std::to_string(buffer_size)
         );
         return {};
@@ -213,9 +255,9 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_SO_SNDBUF(int buffer_size)
     {
-        int ret = setsockopt(this->fd, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
+        int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_errno(ret, "set SO_SNDBUF"));
-        logger->template log<LogLevel::D>(
+        logger_->template log<LogLevel::D>(
             "socket send buffer size SO_SNDBUF=" + std::to_string(buffer_size)
         );
         return {};
@@ -224,6 +266,7 @@ public:
     /**
      * Enable or disable TCP_QUICKACK option.
      * Enabling TCP_QUICKACK can reduce latency by disabling delayed ACKs.
+     * 
      * Note: TCP_QUICKACK is not available on macOS, hence a no-op on that platform.
      */
     [[nodiscard]] expected<void, WSError> set_TCP_QUICKACK(bool value)
@@ -231,9 +274,9 @@ public:
         (void)value; // suppress unused parameter warning
 #ifdef TCP_QUICKACK
         int flag = value ? 1 : 0;
-        int ret = setsockopt(this->fd, IPPROTO_TCP, TCP_QUICKACK, (char*)&flag, sizeof(int));
+        int ret = setsockopt(fd_, IPPROTO_TCP, TCP_QUICKACK, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_errno(ret, "set TCP_QUICKACK"));
-        logger->template log<LogLevel::D>("TCP_QUICKACK=" + std::to_string(value));
+        logger_->template log<LogLevel::D>("TCP_QUICKACK=" + std::to_string(value));
 #endif
         return {};
     }
@@ -241,25 +284,48 @@ public:
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
-     * Returns the number of bytes read.
+     * 
+     * @return The number of bytes read, or an error.
      */
-    [[nodiscard]] inline expected<size_t, WSError> read_some(span<byte> buffer) noexcept override
+    [[nodiscard]] inline expected<size_t, WSError> read_some(
+        span<byte> buffer, Timeout<>& timeout
+    ) noexcept override
     {
+        // create fd_set for select with timeout
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(fd_, &read_fds);
+
         ssize_t ret = 0;
         do
         {
-            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
-            ret = ::recv(this->fd, buffer.data(), buffer.size(), flags);
-        } while (ret == -1 && errno == EINTR);
+            // wait for data to read or timeout
+            int select_ret;
+            do
+            {
+                auto remaining = timeout.remaining_timeval();
+                select_ret = ::select(fd_ + 1, &read_fds, nullptr, nullptr, &remaining);
+            } while (select_ret == -1 && errno == EINTR);
 
-        if (ret == 0)
-            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+            if (select_ret == 0) [[unlikely]]
+                return WS_ERROR(TIMEOUT, "Read timeout", NOT_SET);
 
-        // check for timeout
-        if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return WS_ERROR(TIMEOUT, "Read timeout", NOT_SET);
+            WS_TRYV(this->check_errno(select_ret, "read_some (select)"));
 
-        WS_TRYV(this->check_errno(ret, "read"));
+            // read data from socket using `recv`, retry on EINTR
+            do
+            {
+                constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
+                ret = ::recv(fd_, buffer.data(), buffer.size(), flags);
+            } while (ret == -1 && errno == EINTR);
+
+            if (ret == 0) [[unlikely]]
+                return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+
+            // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
+        } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
+
+        WS_TRYV(this->check_errno(ret, "read_some"));
 
         return static_cast<size_t>(ret);
     }
@@ -267,53 +333,70 @@ public:
     /**
      * Writes `buffer` to underlying socket.
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
-     * Returns the number of bytes written.
+     * 
+     * @return The number of bytes written, or an error.
      */
-    [[nodiscard]] inline expected<size_t, WSError> write_some( //
-        const span<byte> buffer,
-        std::chrono::milliseconds timeout
+    [[nodiscard]] inline expected<size_t, WSError> write_some(
+        const span<byte> buffer, Timeout<>& timeout
     ) noexcept override
     {
+        // create fd_set for select with timeout
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(fd_, &write_fds);
+
         ssize_t ret = 0;
         do
         {
-            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
-            ret = ::send(this->fd, buffer.data(), buffer.size(), flags);
-        } while (ret == -1 && errno == EINTR);
+            // wait for socket to be ready for writing or timeout
+            int select_ret;
+            do
+            {
+                auto remaining = timeout.remaining_timeval();
+                select_ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
+            } while (select_ret == -1 && errno == EINTR);
 
-        if (ret == 0)
-            return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+            if (select_ret == 0) [[unlikely]]
+                return WS_ERROR(TIMEOUT, "Write timeout", NOT_SET);
 
-        // check for timeout
-        if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return WS_ERROR(TIMEOUT, "Write timeout", NOT_SET);
+            WS_TRYV(this->check_errno(select_ret, "write_some (select)"));
 
-        WS_TRYV(this->check_errno(ret, "write"));
+            // write data to socket using `send`, retry on EINTR
+            do
+            {
+                constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
+                ret = ::send(fd_, buffer.data(), buffer.size(), flags);
+            } while (ret == -1 && errno == EINTR);
+
+            if (ret == 0) [[unlikely]]
+                return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+
+            // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
+        } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
+
+        WS_TRYV(this->check_errno(ret, "write_some"));
 
         return static_cast<size_t>(ret);
     }
 
     /**
      * Shuts down socket communication.
-     * This function should be called before closing the socket
-     * for a clean shutdown.
+     * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    virtual expected<void, WSError> shutdown(std::chrono::milliseconds timeout) noexcept override
+    virtual expected<void, WSError> shutdown(Timeout<>& timeout) noexcept override
     {
-        // TODO: Implement timeout
-
-        if (this->fd != -1)
+        if (fd_ != -1)
         {
-            logger->template log<LogLevel::D>(
-                "Shutting down socket (fd=" + std::to_string(this->fd) + ")"
+            logger_->template log<LogLevel::D>(
+                "Shutting down socket (fd=" + std::to_string(fd_) + ")"
             );
-            int ret = ::shutdown(this->fd, SHUT_RDWR);
+            int ret = ::shutdown(fd_, SHUT_RDWR);
             if (ret != 0)
             {
                 auto err = this->check_errno(ret, "Shut down of socket failed");
-                logger->template log<LogLevel::W>(err.error().message);
+                logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
         }
@@ -326,19 +409,19 @@ public:
      */
     virtual expected<void, WSError> close() noexcept override
     {
-        if (this->fd != -1)
+        if (fd_ != -1)
         {
-            logger->template log<LogLevel::D>(
-                "Closing socket (fd=" + std::to_string(this->fd) + ")"
+            logger_->template log<LogLevel::D>(
+                "Closing socket (fd=" + std::to_string(fd_) + ")"
             );
-            int ret = ::close(this->fd);
+            int ret = ::close(fd_);
             if (ret != 0)
             {
                 auto err = this->check_errno(ret, "Socket close failed");
-                logger->template log<LogLevel::W>(err.error().message);
+                logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
-            this->fd = -1;
+            fd_ = -1;
         }
         return {};
     }

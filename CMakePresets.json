@@ -53,8 +53,8 @@
     },
     {
       "name": "gcc_debug",
-      "hidden": true,
       "inherits": ["_gcc"],
+      "hidden": true,
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -ggdb -O0"
@@ -141,6 +141,13 @@
       "inherits": ["gcc_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "gcc_release tests",
+      "inherits": ["gcc_release"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_TESTS": "ON"
       }
     },
     {

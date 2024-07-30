@@ -65,15 +65,15 @@ asio::awaitable<expected<void, WSError>> run()
     // handshake handler
     auto handshake = Handshake(&logger, url);
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     Buffer buffer;
     for (int i = 0;; i++)
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+            co_await client.read_message(buffer, 5000ms); // 5 sec timeout
 
         if (std::get_if<Message>(&var))
         {

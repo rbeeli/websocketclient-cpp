@@ -10,6 +10,7 @@
 
 #include "ws_client/errors_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
+#include "ws_client/utils/Timeout.hpp"
 
 using asio::ip::tcp;
 using namespace std;
@@ -47,7 +48,8 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 )";
     AsioSocket asio_socket(&logger, std::move(socket));
 
-    auto timeout = std::chrono::milliseconds(5000);
+    auto timeout_ms = std::chrono::milliseconds(5000);
+    Timeout timeout(timeout_ms);
     auto res = co_await asio_socket.write_some(
         span<byte>(reinterpret_cast<byte*>(request.data()), request.size()), timeout
     );
@@ -62,7 +64,7 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
     // read response
     char data[1024];
     auto read_res = co_await asio_socket.read_some(
-        span<byte>(reinterpret_cast<byte*>(data), sizeof(data))
+        span<byte>(reinterpret_cast<byte*>(data), sizeof(data)), timeout
     );
     if (!read_res.has_value())
     {

@@ -4,13 +4,8 @@ Pull requests and issues are welcome.
 
 ## TODOs
 
-- Timeouts for read/write calls, handshake
-  * https://cppalliance.org/asio/2023/01/02/Asio201Timeouts.html
-
 - Git builds
 - auto fragmentation write
-- log levels per topic
-- switches for TLS implementations: mbedtls, wolfssl, openssl
 
 - SSL_shutdown sig pipe
 
@@ -26,11 +21,6 @@ Pull requests and issues are welcome.
 - https://jamespascoe.github.io/accu2023/#/9/2/3
 - https://habr.com/en/articles/768418/
 - https://dzone.com/articles/implementation-of-the-raft-consensus-algorithm-usi
-
-## How to build
-
-```bash
-```
 
 ## WebSocket connections inspection and testing
 
@@ -65,5 +55,5 @@ clang++ -stdlib=libc++ -std=c++23 -v -E -x c++ /dev/null
 Install libc++19:
 
 ```bash
-sudo apt-get install libc++-19-dev
+sudo apt-get install libc++-19-dev libc++abi-19-dev
 ```

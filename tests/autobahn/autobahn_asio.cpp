@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <variant>
+#include <chrono>
 #include <signal.h>
 #include <netinet/tcp.h>
 
@@ -21,6 +22,7 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 using namespace asio;
 using std::string;
 using std::variant;
@@ -65,7 +67,7 @@ using asio::ip::tcp;
         &logger, std::move(socket)
     );
     auto handshake = Handshake(&logger, url);
-    WS_CO_TRYV(co_await client.init(handshake));
+    WS_CO_TRYV(co_await client.handshake(handshake));
 
     string response;
     if (read_response)
@@ -74,7 +76,7 @@ using asio::ip::tcp;
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+            co_await client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {
@@ -137,8 +139,8 @@ using asio::ip::tcp;
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     });
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake));
 
     Buffer buffer;
     buffer.set_max_size(100 * 1024 * 1024); // 100 MB
@@ -146,7 +148,7 @@ using asio::ip::tcp;
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+            co_await client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

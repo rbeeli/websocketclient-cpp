@@ -570,28 +570,28 @@ template <typename TLogger>
 class PermessageDeflateContext
 {
 private:
-    TLogger* logger;
-    PermessageDeflate<TLogger> permessage_deflate;
-    z_stream* istate;
-    z_stream* ostate;
+    TLogger* logger_;
+    PermessageDeflate<TLogger> permessage_deflate_;
+    z_stream* istate_;
+    z_stream* ostate_;
 
 public:
     explicit PermessageDeflateContext(
         TLogger* logger, const PermessageDeflate<TLogger> permessage_deflate
     ) noexcept
-        : logger(logger), permessage_deflate(std::move(permessage_deflate))
+        : logger_(logger), permessage_deflate_(std::move(permessage_deflate))
     {
     }
 
     ~PermessageDeflateContext() noexcept
     {
-        if (this->istate != nullptr)
+        if (istate_ != nullptr)
         {
-            inflateEnd(this->istate);
-            deflateEnd(this->ostate);
+            inflateEnd(istate_);
+            deflateEnd(ostate_);
 
-            delete this->istate;
-            delete this->ostate;
+            delete istate_;
+            delete ostate_;
         }
     }
 
@@ -601,25 +601,25 @@ public:
 
     // enable move
     PermessageDeflateContext(PermessageDeflateContext&& other) noexcept
-        : logger(other.logger),
-          permessage_deflate(std::move(other.permessage_deflate)),
-          istate(other.istate),
-          ostate(other.ostate)
+        : logger_(other.logger_),
+          permessage_deflate_(std::move(other.permessage_deflate_)),
+          istate_(other.istate_),
+          ostate_(other.ostate_)
     {
-        other.istate = nullptr;
-        other.ostate = nullptr;
+        other.istate_ = nullptr;
+        other.ostate_ = nullptr;
     }
     PermessageDeflateContext& operator=(PermessageDeflateContext&& other) noexcept
     {
         if (this != &other)
         {
-            this->logger = other.logger;
-            this->permessage_deflate = std::move(other.permessage_deflate);
-            this->istate = other.istate;
-            this->ostate = other.ostate;
+            logger_ = other.logger_;
+            permessage_deflate_ = std::move(other.permessage_deflate_);
+            istate_ = other.istate_;
+            ostate_ = other.ostate_;
 
-            other.istate = nullptr;
-            other.ostate = nullptr;
+            other.istate_ = nullptr;
+            other.ostate_ = nullptr;
         }
     }
 
@@ -631,107 +631,44 @@ public:
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
         // initialize zlib decompressor
-        this->istate = new z_stream();
-        this->istate->zalloc = Z_NULL;
-        this->istate->zfree = Z_NULL;
-        this->istate->opaque = Z_NULL;
-        this->istate->avail_in = 0;
-        this->istate->next_in = Z_NULL;
+        istate_ = new z_stream();
+        istate_->zalloc = Z_NULL;
+        istate_->zfree = Z_NULL;
+        istate_->opaque = Z_NULL;
+        istate_->avail_in = 0;
+        istate_->next_in = Z_NULL;
 
-        auto ret = inflateInit2(this->istate, -1 * this->permessage_deflate.server_max_window_bits);
+        auto ret = inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits);
         if (ret != Z_OK)
-            return make_error("inflateInit2", this->istate->msg);
+            return make_error("inflateInit2", istate_->msg);
 
         // initialize zlib compressor
-        this->ostate = new z_stream();
-        this->ostate->zalloc = Z_NULL;
-        this->ostate->zfree = Z_NULL;
-        this->ostate->opaque = Z_NULL;
-        this->ostate->avail_in = 0;
-        this->ostate->next_in = Z_NULL;
+        ostate_ = new z_stream();
+        ostate_->zalloc = Z_NULL;
+        ostate_->zfree = Z_NULL;
+        ostate_->opaque = Z_NULL;
+        ostate_->avail_in = 0;
+        ostate_->next_in = Z_NULL;
 
         ret = deflateInit2(
-            this->ostate,
-            this->permessage_deflate.deflate_compression_level,
+            ostate_,
+            permessage_deflate_.deflate_compression_level,
             Z_DEFLATED,
-            -1 * this->permessage_deflate.client_max_window_bits,
-            this->permessage_deflate.deflate_memory_level,
+            -1 * permessage_deflate_.client_max_window_bits,
+            permessage_deflate_.deflate_memory_level,
             Z_DEFAULT_STRATEGY
         );
         if (ret != Z_OK)
-            return make_error("deflateInit2", this->ostate->msg);
+            return make_error("deflateInit2", ostate_->msg);
 
         return {};
     }
 
-    // [[nodiscard]] expected<void, WSError> decompress_chunk(
-    //     span<byte> input, Buffer& output, bool final
-    // ) noexcept
-    // {
-    //     size_t processed = 0;
-    //     int ret = 0;
-    //     do
-    //     {
-    //         size_t buffer_pos = output.size();
-
-    //         // set zlib input buffer to frame payload
-    //         size_t avail_size = input.size() - processed;
-    //         this->istate->next_in = reinterpret_cast<Bytef*>(input.data() + processed);
-    //         this->istate->avail_in = static_cast<unsigned int>(avail_size);
-
-    //         // extend output buffer, if required, assumes compression ratio of 3:1
-    //         WS_TRY(alloc_res, output.append(input.size() * 3000));
-    //         span<byte> avail = *alloc_res;
-
-    //         this->istate->next_out = reinterpret_cast<Bytef*>(avail.data());
-    //         this->istate->avail_out = static_cast<unsigned int>(avail.size());
-
-    //         ret = inflate(this->istate, final ? Z_FINISH : Z_NO_FLUSH);
-    //         std::cout << "ret: " << ret << " final: " << final
-    //                   << " avail_in: " << this->istate->avail_in
-    //                   << " avail_out: " << this->istate->avail_out << std::endl;
-    //         if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR)
-    //         {
-    //             // std::cout << string_from_bytes(avail);
-    //             return make_error("inflate", this->istate->msg);
-    //         }
-
-    //         // append decompressed data to output buffer
-    //         size_t decompressed_size = avail.size() - this->istate->avail_out;
-    //         WS_TRYV(output.resize(buffer_pos + decompressed_size));
-
-    //         processed += avail_size - this->istate->avail_in;
-    //     } while (this->istate->avail_out == 0);
-
-    //     if (final)
-    //     {
-    //         if (this->permessage_deflate.server_no_context_takeover)
-    //         {
-    //             // reset inflate state (discard LZ77 sliding window, no context takeover)
-    //             if (Z_OK != inflateEnd(this->istate))
-    //                 return make_error("inflateEnd", this->istate->msg);
-
-    //             if (Z_OK != inflateInit2(
-    //                             this->istate, -1 * this->permessage_deflate.server_max_window_bits
-    //                         ))
-    //                 return make_error("inflateInit2", this->istate->msg);
-    //         }
-    //         else
-    //         {
-    //             // reset inflate state (preserve LZ77 sliding window)
-    //             if (Z_OK != inflateReset(this->istate))
-    //                 return make_error("inflateReset", this->istate->msg);
-    //         }
-    //     }
-
-    //     return {};
-    // }
-
     [[nodiscard]] expected<size_t, WSError> decompress(span<byte> input, Buffer& output) noexcept
     {
         // set zlib input buffer to frame payload
-        this->istate->next_in = reinterpret_cast<Bytef*>(input.data());
-        this->istate->avail_in = static_cast<unsigned int>(input.size());
+        istate_->next_in = reinterpret_cast<Bytef*>(input.data());
+        istate_->avail_in = static_cast<unsigned int>(input.size());
 
         size_t buffer_pos = output.size();
         size_t size = 0;
@@ -740,20 +677,20 @@ public:
             // extend output buffer if required.
             // assumes average compression ratio of 5:1.
             // if more than 5x the input size is required, the buffer will be extended again.
-            WS_TRY(alloc_res, output.append(std::max(64U, this->istate->avail_in * 5)));
+            WS_TRY(alloc_res, output.append(std::max(64U, istate_->avail_in * 5)));
             span<byte> avail = *alloc_res;
 
             // set zlib output buffer
-            this->istate->next_out = reinterpret_cast<Bytef*>(avail.data());
-            this->istate->avail_out = static_cast<unsigned int>(avail.size());
+            istate_->next_out = reinterpret_cast<Bytef*>(avail.data());
+            istate_->avail_out = static_cast<unsigned int>(avail.size());
 
             // decompress using zlib inflate
-            int ret = inflate(this->istate, Z_SYNC_FLUSH);
+            int ret = inflate(istate_, Z_SYNC_FLUSH);
             if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR)
-                return make_error("inflate", this->istate->msg);
+                return make_error("inflate", istate_->msg);
 
-            size += avail.size() - this->istate->avail_out;
-        } while (this->istate->avail_out == 0);
+            size += avail.size() - istate_->avail_out;
+        } while (istate_->avail_out == 0);
 
 #if WS_CLIENT_LOG_COMPRESSION == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
@@ -767,21 +704,21 @@ public:
         // resize output buffer
         output.discard_end(output.size() - buffer_pos - size);
 
-        if (this->permessage_deflate.server_no_context_takeover)
+        if (permessage_deflate_.server_no_context_takeover)
         {
             // reset inflate state (discard LZ77 sliding window, no context takeover)
-            if (Z_OK != inflateEnd(this->istate))
-                return make_error("inflateEnd", this->istate->msg);
+            if (Z_OK != inflateEnd(istate_))
+                return make_error("inflateEnd", istate_->msg);
 
             if (Z_OK !=
-                inflateInit2(this->istate, -1 * this->permessage_deflate.server_max_window_bits))
-                return make_error("inflateInit2", this->istate->msg);
+                inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits))
+                return make_error("inflateInit2", istate_->msg);
         }
         else
         {
             // reset inflate state (preserve LZ77 sliding window)
-            if (Z_OK != inflateReset(this->istate))
-                return make_error("inflateReset", this->istate->msg);
+            if (Z_OK != inflateReset(istate_))
+                return make_error("inflateReset", istate_->msg);
         }
 
         return size;
@@ -801,11 +738,11 @@ public:
         }
 
         // set zlib input buffer to frame payload
-        this->ostate->next_in = reinterpret_cast<Bytef*>(input.data());
-        this->ostate->avail_in = static_cast<unsigned int>(input.size());
+        ostate_->next_in = reinterpret_cast<Bytef*>(input.data());
+        ostate_->avail_in = static_cast<unsigned int>(input.size());
 
         // zlib flush mode (preserve LZ77 sliding window or not)
-        int client_flush_mode = this->permessage_deflate.client_no_context_takeover //
+        int client_flush_mode = permessage_deflate_.client_no_context_takeover //
                                     ? Z_FULL_FLUSH
                                     : Z_SYNC_FLUSH;
 
@@ -813,20 +750,20 @@ public:
         do
         {
             // extend output buffer if required, usually over-allocates.
-            WS_TRY(alloc_res, output.append(std::max(64U, this->ostate->avail_in)));
+            WS_TRY(alloc_res, output.append(std::max(64U, ostate_->avail_in)));
             span<byte> avail = *alloc_res;
 
             // set zlib output buffer
-            this->ostate->next_out = reinterpret_cast<Bytef*>(avail.data());
-            this->ostate->avail_out = static_cast<unsigned int>(avail.size());
+            ostate_->next_out = reinterpret_cast<Bytef*>(avail.data());
+            ostate_->avail_out = static_cast<unsigned int>(avail.size());
 
-            int ret = deflate(this->ostate, client_flush_mode);
+            int ret = deflate(ostate_, client_flush_mode);
             if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR)
-                return make_error("deflate", this->ostate->msg);
+                return make_error("deflate", ostate_->msg);
 
-            size += avail.size() - this->ostate->avail_out;
-            output.discard_end(this->ostate->avail_out);
-        } while (this->ostate->avail_out == 0);
+            size += avail.size() - ostate_->avail_out;
+            output.discard_end(ostate_->avail_out);
+        } while (ostate_->avail_out == 0);
 
 #if WS_CLIENT_LOG_COMPRESSION == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
@@ -838,10 +775,10 @@ public:
 #endif
 
         // reset deflate state depending on negotiated configuration
-        if (this->permessage_deflate.client_no_context_takeover)
+        if (permessage_deflate_.client_no_context_takeover)
         {
-            if (Z_OK != deflateReset(this->ostate))
-                return make_error("deflateReset", this->ostate->msg);
+            if (Z_OK != deflateReset(ostate_))
+                return make_error("deflateReset", ostate_->msg);
         }
 
         // remove trailer bytes (0x00 0x00 0xff 0xff)

@@ -7,17 +7,19 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
 
 - Full [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455.html) compliance
 - WebSocket Secure (WSS) support
-- Compression support (permessage-deflate protocol extension, [RFC 7692](https://www.rfc-editor.org/rfc/rfc7692.html))
+- Compression support (`permessage-deflate` protocol extension, [RFC 7692](https://www.rfc-editor.org/rfc/rfc7692.html))
 - Support for `zlib-ng` over `zlib` library for improved (de-)compression performance on modern architectures
-- Fast UTF-8 validation using SIMD ([simdutf](https://github.com/simdutf/simdutf), optional)
+- Fast, optional UTF-8 text frame validation using SIMD ([simdutf](https://github.com/simdutf/simdutf))
 - Fast payload masking using SIMD
 - Does not throw exceptions (works with `-fno-exceptions`)
 - No hidden networking control flow
   - User decides when and what to write as response to ping/close frames
+  - No hidden synchronization needed
 - Few dependencies (STL, [OpenSSL](https://github.com/openssl/openssl), [zlib](https://github.com/madler/zlib) or [zlib-ng](https://github.com/zlib-ng/zlib-ng), [simdutf](https://github.com/simdutf/simdutf))
-- Pluggable transport layer
-  - Blocking POSIX I/O support (built-in)
-  - Non-blocking async I/O support with C++20 coroutines, e.g. using standalone [ASIO](https://github.com/chriskohlhoff/asio)
+- Pluggable transport layers
+  - Blocking I/O support (built-in based on POSIX)
+  - Non-blocking async I/O support based on C++20 coroutines, e.g. using [ASIO](https://github.com/chriskohlhoff/asio)
+  - Ability to provide custom transport layer
   - No callback hell and easier object liftime management when using C++20 coroutines
 - Pluggable logging (optional)
 - **GCC 12+** and **Clang 19+** compiler support
@@ -42,7 +44,7 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
 | Dependency                                       | Description                                                                        | Required |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------- |
 | [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional |
-| [openssl 3+](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | If using WSS. |
+| [openssl 3](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | If using WSS. |
 | [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | If using compression (permessage-deflate). |
 | [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | If using compression (permessage-deflate), alternative to `zlib`. |
 
@@ -53,8 +55,18 @@ For configuration of dependencies, refer to the section [Configuration](#configu
 ## Examples
 
 Working examples can be found in the [examples](examples) directory.
-Examples exist for both built-in synchronous, and asynchronous (ASIO) transport mechanisms.
+Examples exist for both built-in blocking I/O based on POSIX, and asynchronous I/O using ASIO.
 
+- Blocking I/O examples: [examples/builtin/](examples/builtin/)
+- Async I/O ASIO examples: [examples/asio/](examples/asio/)
+
+### Setting custom HTTP headers
+
+Custom HTTP headers, e.g. for authentication, can be set on the `Handshake` instance as follows:
+
+```cpp
+handshake.get_request_header().fields.set("X-Custom-Header", "Custom-Value");
+```
 
 ## Configuration
 
@@ -121,14 +133,24 @@ cmake --install build/clang/dev_install --config Release
 
 ## Transport layer
 
-The library is designed to be transport layer agnostic.
-The library supports both synchronous and asynchronous transport layers.
-Built-in blocking I/O transport layers are provided, incl. bindings for C++20 coroutines using standalone ASIO (no Boost dependency).
+The library is designed to be transport layer agnostic, which is one of its unique features compared to other WebSocket libraries.
+The library supports both blocking and non-blocking, asynchronous transport layers via `WebSocketClient`, or `WebSocketClientAsync` respectively.
 
-The user can provide their own transport layer implementation if needed.
+Blocking I/O is provided by the built-in transport layers`TcpSocket` and `OpenSslSocket`, which uses POSIX I/O functions and OpenSSL for TLS connections.
 
-- Synchronous example: [examples/builtin/ex_echo_sync.cpp](examples/builtin/ex_echo_sync.cpp)
-- ASIO example: [examples/asio/ex_echo_asio.cpp](examples/asio/ex_echo_asio.cpp)
+An async I/O socket implementation is provided using the ASIO library and C++20 coroutines, see `AsioSocket` class.
+
+The user can provide their own transport layer (socket) implementation if needed.
+All that is required is to implement the following functions in a custom socket class:
+
+```cpp
+read_some(buffer, timeout)
+write_some(buffer, timeout)
+shutdown(timeout)
+close()
+```
+
+For details, see the concepts `HasSocketOperations` in [HasSocketOperations.hpp](include/ws_client/transport/HasSocketOperations.hpp), or `HasSocketOperationsAsync` in [HasSocketOperationsAsync.hpp](include/ws_client/transport/HasSocketOperationsAsync.hpp) respectively.
 
 ## Logging
 
@@ -158,6 +180,10 @@ enum class LogLevel : uint8_t
 You can implement a custom logger like the following. It logs all messages to `std::cout`:
 
 ```cpp
+/**
+ * Custom logger implementation.
+ * Logs all messages to `std::cout`.
+ */
 struct CustomLogger
 {
     /**

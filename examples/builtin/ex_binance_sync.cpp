@@ -62,13 +62,13 @@ expected<void, WSError> run()
     WS_TRY(dns_res, dns.resolve(url.host(), url.port_str()));
     AddressInfo& addr = (*dns_res)[0];
 
-    // create socket
+    // create TCP socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
     WS_TRYV(tcp.set_TCP_NODELAY(true));
     WS_TRYV(tcp.set_TCP_QUICKACK(true));
     WS_TRYV(tcp.set_SO_RCVBUF(1 * 1024 * 1024)); // 1 MB
-    WS_TRYV(tcp.connect());
+    WS_TRYV(tcp.connect(2000ms));                // 2 sec connect timeout
 
     // SSL socket wrapper
     OpenSslContext ctx(&logger);
@@ -76,7 +76,7 @@ expected<void, WSError> run()
     WS_TRYV(ctx.set_default_verify_paths());
     auto ssl = OpenSslSocket(&logger, tcp.get_fd(), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect());
+    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
 
     // websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
@@ -95,8 +95,8 @@ expected<void, WSError> run()
         .compress_buffer_size = 2 * 1024 * 1024    // 2 MB
     });
 
-    // start client
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     // subscribe
     std::string sub_msg = R"({
@@ -150,7 +150,7 @@ expected<void, WSError> run()
         auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 30'000ms);                        // 30 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

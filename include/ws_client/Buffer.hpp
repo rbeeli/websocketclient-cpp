@@ -99,9 +99,9 @@ class Buffer
 {
 private:
     size_t max_size_;
-    size_t capacity;
-    size_t used;
-    byte* buffer = nullptr;
+    size_t capacity_;
+    size_t used_;
+    byte* buffer_ = nullptr;
 
 public:
     /**
@@ -111,14 +111,14 @@ public:
     static constexpr size_t default_max_size = 16 * 1024 * 1024;
 
     explicit Buffer(size_t max_size = default_max_size) noexcept
-        : max_size_(max_size), capacity(0), used(0)
+        : max_size_(max_size), capacity_(0), used_(0)
     {
     }
 
     ~Buffer() noexcept
     {
-        std::free(this->buffer);
-        this->buffer = nullptr;
+        std::free(buffer_);
+        buffer_ = nullptr;
     }
 
     // delete copy constructor and copy assignment operator
@@ -128,26 +128,26 @@ public:
     // move constructor and move assignment operator
     Buffer(Buffer&& other) noexcept
         : max_size_(other.max_size_),
-          capacity(other.capacity),
-          used(other.used),
-          buffer(other.buffer)
+          capacity_(other.capacity_),
+          used_(other.used_),
+          buffer_(other.buffer_)
     {
-        other.buffer = nullptr;
-        other.capacity = 0;
-        other.used = 0;
+        other.buffer_ = nullptr;
+        other.capacity_ = 0;
+        other.used_ = 0;
     }
     Buffer& operator=(Buffer&& other) noexcept
     {
         if (this != &other)
         {
-            std::free(this->buffer);
-            this->max_size_ = other.max_size_;
-            this->capacity = other.capacity;
-            this->used = other.used;
-            this->buffer = other.buffer;
-            other.buffer = nullptr;
-            other.capacity = 0;
-            other.used = 0;
+            std::free(buffer_);
+            max_size_ = other.max_size_;
+            capacity_ = other.capacity_;
+            used_ = other.used_;
+            buffer_ = other.buffer_;
+            other.buffer_ = nullptr;
+            other.capacity_ = 0;
+            other.used_ = 0;
         }
         return *this;
     }
@@ -157,7 +157,7 @@ public:
      */
     [[nodiscard]] inline size_t size() const noexcept
     {
-        return this->used;
+        return used_;
     }
 
     /**
@@ -167,7 +167,7 @@ public:
      */
     [[nodiscard]] inline size_t allocated() const noexcept
     {
-        return this->capacity;
+        return capacity_;
     }
 
     /**
@@ -177,7 +177,7 @@ public:
      */
     inline void clear() noexcept
     {
-        this->used = 0;
+        used_ = 0;
     }
 
     /**
@@ -185,10 +185,10 @@ public:
      */
     inline void reset() noexcept
     {
-        std::free(this->buffer);
-        this->buffer = nullptr;
-        this->capacity = 0;
-        this->used = 0;
+        std::free(buffer_);
+        buffer_ = nullptr;
+        capacity_ = 0;
+        used_ = 0;
     }
 
     /**
@@ -196,7 +196,7 @@ public:
      */
     [[nodiscard]] inline bool empty() const noexcept
     {
-        return this->used == 0;
+        return used_ == 0;
     }
 
     /**
@@ -205,19 +205,19 @@ public:
      */
     [[nodiscard]] inline bool full() const noexcept
     {
-        return this->used == this->max_size_;
+        return used_ == max_size_;
     }
 
     [[nodiscard]] inline byte& at(size_t pos) noexcept
     {
-        assert(pos < this->used && "Buffer index out of bounds");
-        return this->buffer[pos];
+        assert(pos < used_ && "Buffer index out of bounds");
+        return buffer_[pos];
     }
 
     [[nodiscard]] inline byte& operator[](size_t pos) noexcept
     {
-        assert(pos < this->used && "Buffer index out of bounds");
-        return this->buffer[pos];
+        assert(pos < used_ && "Buffer index out of bounds");
+        return buffer_[pos];
     }
 
     /**
@@ -225,7 +225,7 @@ public:
      */
     void set_max_size(size_t max_size) noexcept
     {
-        this->max_size_ = max_size;
+        max_size_ = max_size;
     }
 
     /**
@@ -233,7 +233,7 @@ public:
      */
     [[nodiscard]] size_t max_size() const noexcept
     {
-        return this->max_size_;
+        return max_size_;
     }
 
     /**
@@ -242,8 +242,8 @@ public:
      */
     [[nodiscard]] inline expected<void, WSError> reserve(size_t size) noexcept
     {
-        if (size > this->capacity)
-            WS_TRYV(this->internal_reserve(size));
+        if (size > capacity_)
+            WS_TRYV(internal_reserve(size));
         return {};
     }
 
@@ -254,9 +254,9 @@ public:
      */
     [[nodiscard]] inline expected<void, WSError> resize(size_t size) noexcept
     {
-        if (size != this->capacity)
-            WS_TRYV(this->internal_reserve(size));
-        this->used = size;
+        if (size != capacity_)
+            WS_TRYV(internal_reserve(size));
+        used_ = size;
         return {};
     }
 
@@ -267,8 +267,8 @@ public:
      */
     inline void discard_end(size_t size) noexcept
     {
-        assert(size <= this->used && "Buffer index out of bounds");
-        this->used -= size;
+        assert(size <= used_ && "Buffer index out of bounds");
+        used_ -= size;
     }
 
     /**
@@ -281,11 +281,11 @@ public:
     {
         auto pos = size();
         auto new_pos = pos + len;
-        if (new_pos > this->capacity)
-            WS_TRYV(this->internal_reserve(new_pos));
-        std::memcpy(this->buffer + pos, data, len);
-        this->used = new_pos;
-        return span<byte>(this->buffer + pos, len);
+        if (new_pos > capacity_)
+            WS_TRYV(internal_reserve(new_pos));
+        std::memcpy(buffer_ + pos, data, len);
+        used_ = new_pos;
+        return span<byte>(buffer_ + pos, len);
     }
 
     /**
@@ -298,10 +298,10 @@ public:
     {
         auto pos = size();
         auto new_pos = pos + len;
-        if (new_pos > this->capacity)
-            WS_TRYV(this->internal_reserve(new_pos));
-        this->used = new_pos;
-        return span<byte>(this->buffer + pos, len);
+        if (new_pos > capacity_)
+            WS_TRYV(internal_reserve(new_pos));
+        used_ = new_pos;
+        return span<byte>(buffer_ + pos, len);
     }
 
     /**
@@ -309,20 +309,20 @@ public:
      */
     [[nodiscard]] inline span<byte> data() noexcept
     {
-        if (this->buffer == nullptr)
+        if (buffer_ == nullptr)
             return {};
-        return span<byte>(this->buffer, this->used);
+        return span<byte>(buffer_, used_);
     }
 
 private:
     [[nodiscard]] expected<void, WSError> internal_reserve(size_t size) noexcept
     {
-        if (size > this->max_size_)
+        if (size > max_size_)
         {
             return WS_ERROR(
                 BUFFER_ERROR,
                 "Requested buffer size " + std::to_string(size) +
-                    " exceeds maximum allowed size of " + std::to_string(this->max_size_) +
+                    " exceeds maximum allowed size of " + std::to_string(max_size_) +
                     " bytes",
                 NOT_SET
             );
@@ -330,7 +330,7 @@ private:
 
         // allocate new buffer, or resize existing one
         byte* newbuf = static_cast<byte*>(
-            std::realloc(this->buffer, std::max(static_cast<size_t>(1), size))
+            std::realloc(buffer_, std::max(static_cast<size_t>(1), size))
         );
         if (newbuf == nullptr)
         {
@@ -339,9 +339,9 @@ private:
             );
         }
 
-        this->buffer = newbuf;
-        this->capacity = size;
-        this->used = std::min(this->used, size);
+        buffer_ = newbuf;
+        capacity_ = size;
+        used_ = std::min(used_, size);
         return {};
     }
 };

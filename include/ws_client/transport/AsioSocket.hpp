@@ -14,6 +14,7 @@
 
 #include "ws_client/errors_async.hpp"
 #include "ws_client/log.hpp"
+#include "ws_client/utils/Timeout.hpp"
 #include "ws_client/transport/ISocketAsync.hpp"
 
 namespace ws_client
@@ -26,16 +27,19 @@ using namespace asio::experimental::awaitable_operators;
 template <typename TLogger, typename SocketType>
 class AsioSocket final : public ISocketAsync<asio::awaitable>
 {
-    TLogger* logger;
-    SocketType socket;
-    asio::steady_timer write_timer;
+private:
+    TLogger* logger_;
+    SocketType socket_;
+    asio::steady_timer read_timer_;
+    asio::steady_timer write_timer_;
 
 public:
     explicit AsioSocket(TLogger* logger, SocketType&& socket) noexcept
         : ISocketAsync<asio::awaitable>(),
-          logger(logger),
-          socket(std::move(socket)),
-          write_timer(this->socket.get_executor())
+          logger_(logger),
+          socket_(std::move(socket)),
+          read_timer_(socket_.get_executor()),
+          write_timer_(socket_.get_executor())
     {
     }
 
@@ -49,54 +53,76 @@ public:
 
     inline SocketType& underlying() noexcept
     {
-        return this->socket;
+        return socket_;
     }
 
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
-     * Returns the number of bytes read.
+     * 
+     * @return The number of bytes read, or an error.
      */
-    [[nodiscard]] inline awaitable<expected<size_t, WSError>> read_some(span<byte> buffer) noexcept
+    [[nodiscard]] inline awaitable<expected<size_t, WSError>> read_some(
+        span<byte> buffer, Timeout<>& timeout
+    ) noexcept
     {
         asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
-        size_t n = co_await this->socket.async_read_some(
-            buf, asio::redirect_error(asio::use_awaitable, ec)
+
+        // set a timeout for the read operation
+        read_timer_.expires_after(timeout.remaining());
+
+        auto result = co_await (
+            socket_.async_read_some(buf, asio::redirect_error(asio::use_awaitable, ec)) ||
+            read_timer_.async_wait(asio::use_awaitable)
         );
+
+        // check if timed out
+        if (result.index() == 1)
+        {
+            // cancel all outstanding asynchronous operations
+            socket_.lowest_layer().cancel();
+
+            // timer completed, indicating a timeout
+            co_return WS_ERROR(TIMEOUT, "Read timed out", NOT_SET);
+        }
+
         if (ec)
             co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
-        co_return n;
+
+        // return the number of bytes read
+        co_return std::get<0>(result);
     }
 
     /**
      * Writes `buffer` to underlying socket.
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
-     * Returns the number of bytes written.
+     * 
+     * @return The number of bytes written, or an error.
      */
     [[nodiscard]] inline awaitable<expected<size_t, WSError>> write_some(
-        const span<byte> buffer, std::chrono::milliseconds timeout
+        const span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
-        // set a timeout for the write operation
-        write_timer.expires_after(timeout);
-
         asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
+        // set a timeout for the write operation
+        write_timer_.expires_after(timeout.remaining());
+
         auto result = co_await (
-            asio::async_write(this->socket, buf, asio::redirect_error(asio::use_awaitable, ec)) ||
-            write_timer.async_wait(asio::use_awaitable)
+            asio::async_write(socket_, buf, asio::redirect_error(asio::use_awaitable, ec)) ||
+            write_timer_.async_wait(asio::use_awaitable)
         );
 
-        // check which operation completed
+        // check if timed out
         if (result.index() == 1)
         {
             // cancel all outstanding asynchronous operations
-            this->socket.lowest_layer().cancel();
+            socket_.lowest_layer().cancel();
 
             // timer completed, indicating a timeout
-            co_return WS_ERROR(TRANSPORT_ERROR, "Write timed out", NOT_SET);
+            co_return WS_ERROR(TIMEOUT, "Write timed out", NOT_SET);
         }
 
         if (ec)
@@ -112,47 +138,46 @@ public:
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(
-        std::chrono::milliseconds timeout
-    ) noexcept
+    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept
     {
-        logger->template log<LogLevel::D>("Cancelling socket operations");
+        logger_->template log<LogLevel::D>("Cancelling socket operations");
 
         // cancel all outstanding asynchronous operations
-        this->socket.lowest_layer().cancel();
+        socket_.lowest_layer().cancel();
 
         if constexpr (std::is_same<SocketType, asio::ssl::stream<asio::ip::tcp::socket>>::value)
         {
-            logger->template log<LogLevel::D>("SSL before async_shutdown");
+            logger_->template log<LogLevel::D>("SSL before async_shutdown");
 
             // asynchronously shut down the SSL connection, but don't wait
             asio::error_code ec;
-            asio::steady_timer timer{this->socket.get_executor()};
-            timer.expires_after(timeout);
+            asio::steady_timer timer{socket_.get_executor()};
+            timer.expires_after(timeout.remaining());
             auto res = co_await (
-                this->socket.async_shutdown(asio::redirect_error(asio::use_awaitable, ec)) ||
+                socket_.async_shutdown(asio::redirect_error(asio::use_awaitable, ec)) ||
                 timer.async_wait(asio::use_awaitable)
             );
             timer.cancel();
 
+            // check if timed out
             if (res.index() == 1)
             {
-                logger->template log<LogLevel::W>("SSL async_shutdown timed out");
+                logger_->template log<LogLevel::W>("SSL async_shutdown timed out");
             }
 
             if (ec && ec != asio::error::eof)
                 co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
         }
 
-        logger->template log<LogLevel::D>("TCP before shutdown");
+        logger_->template log<LogLevel::D>("TCP before shutdown");
 
         // asynchronously shut down the (underlying) TCP connection
         asio::error_code ec;
-        this->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+        socket_.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
         if (ec && ec != asio::error::eof)
             co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
 
-        logger->template log<LogLevel::D>("TCP after shutdown");
+        logger_->template log<LogLevel::D>("TCP after shutdown");
 
         co_return expected<void, WSError>{};
     }
@@ -165,14 +190,14 @@ public:
     {
         asio::error_code ec;
 
-        logger->template log<LogLevel::D>("TCP before close");
+        logger_->template log<LogLevel::D>("TCP before close");
 
         // close the underlying socket
-        this->socket.lowest_layer().close(ec);
+        socket_.lowest_layer().close(ec);
         if (ec)
             co_return WS_ERROR(TRANSPORT_ERROR, ec.message(), NOT_SET);
 
-        logger->template log<LogLevel::I>("TCP connection closed");
+        logger_->template log<LogLevel::I>("TCP connection closed");
 
         co_return expected<void, WSError>{};
     }

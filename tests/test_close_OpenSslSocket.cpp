@@ -18,6 +18,7 @@
 #include <signal.h>
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 
 expected<void, WSError> run()
 {
@@ -62,8 +63,8 @@ expected<void, WSError> run()
         .client_no_context_takeover = true
     });
 
-    // start client
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake));
 
     // send message
     string payload = "test";
@@ -75,7 +76,7 @@ expected<void, WSError> run()
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

@@ -22,6 +22,7 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 
 asio::awaitable<expected<void, WSError>> run()
 {
@@ -61,8 +62,8 @@ asio::awaitable<expected<void, WSError>> run()
     // handshake handler
     auto handshake = Handshake(&logger, url);
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake));
 
     // send message
     string payload = "test";
@@ -74,7 +75,7 @@ asio::awaitable<expected<void, WSError>> run()
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+            co_await client.read_message(buffer, 60s);
 
         if (std::get_if<Message>(&var))
         {

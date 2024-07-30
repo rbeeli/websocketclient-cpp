@@ -9,6 +9,7 @@
 
 #include "ws_client/errors.hpp"
 #include "ws_client/Buffer.hpp"
+#include "ws_client/utils/Timeout.hpp"
 
 namespace ws_client
 {
@@ -21,25 +22,26 @@ using std::byte;
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
 template <typename T>
-concept HasSocketOperations = requires(T t, span<byte> buffer, std::chrono::milliseconds timeout) {
+concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeout) {
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
-     * Returns the number of bytes read.
+     * 
+     * @return The number of bytes read, or an error.
      */
-    { t.read_some(buffer) } -> std::same_as<expected<size_t, WSError>>;
+    { t.read_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
 
     /**
      * Writes `buffer` to underlying socket.
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
-     * Returns the number of bytes written.
+     * 
+     * @return The number of bytes written, or an error.
      */
     { t.write_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
 
     /**
      * Shuts down socket communication.
-     * This function should be called before closing the socket
-     * for a clean shutdown.
+     * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */

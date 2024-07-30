@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <string>
 #include <variant>
 
@@ -13,6 +14,7 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 using std::string;
 using std::variant;
 using std::span;
@@ -39,7 +41,8 @@ using std::byte;
     auto client = WebSocketClient(&logger, std::move(tcp));
     auto handshake = Handshake(&logger, url);
 
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake));
 
     string response;
     if (read_response)
@@ -48,7 +51,7 @@ using std::byte;
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {
@@ -102,7 +105,6 @@ using std::byte;
 
     // handshake handler
     auto handshake = Handshake(&logger, url);
-    handshake.set_timeout(std::chrono::seconds(5));
 
     // enable compression (permessage-deflate extension)
     handshake.set_permessage_deflate({
@@ -115,8 +117,8 @@ using std::byte;
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     });
 
-    // start client
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake));
 
     Buffer buffer;
     buffer.set_max_size(100 * 1024 * 1024); // 100 MB
@@ -124,7 +126,7 @@ using std::byte;
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

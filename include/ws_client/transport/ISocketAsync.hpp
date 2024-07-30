@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include "ws_client/errors_async.hpp"
+#include "ws_client/utils/Timeout.hpp"
 
 namespace ws_client
 {
@@ -36,7 +37,8 @@ public:
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] virtual TTask<expected<size_t, WSError>> read_some(span<byte> buffer
+    [[nodiscard]] virtual TTask<expected<size_t, WSError>> read_some(
+        span<byte> buffer, Timeout<>& timeout
     ) noexcept = 0;
 
     /**
@@ -45,7 +47,7 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] virtual TTask<expected<size_t, WSError>> write_some(
-        const span<byte> data, std::chrono::milliseconds timeout
+        const span<byte> data, Timeout<>& timeout
     ) noexcept = 0;
 
     /**
@@ -54,7 +56,7 @@ public:
      * for a clean shutdown of the SSL layer.
      * The return value in case of error may be ignored by the caller.
      */
-    virtual TTask<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept = 0;
+    virtual TTask<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept = 0;
 
     /**
      * Close underlying socket.

@@ -7,7 +7,6 @@ pkg_check_modules(ZLIBNG REQUIRED IMPORTED_TARGET zlib-ng)
 
 # --------------------------------------
 
-# file(GLOB_RECURSE SOURCES "../../include/*.cpp")
 add_executable(autobahn_sync_zlib_utf8_naive autobahn_sync.cpp) # ${SOURCES})
 target_link_libraries(autobahn_sync_zlib_utf8_naive PRIVATE
     OpenSSL::SSL
@@ -35,16 +34,15 @@ target_compile_definitions(autobahn_sync_zlib_ng_utf_simd PRIVATE
 
 # --------------------------------------
 
-file(GLOB_RECURSE SOURCES "../../include/*.cpp")
-add_executable(autobahn_asio autobahn_asio.cpp ${SOURCES})
-target_link_libraries(autobahn_asio PRIVATE
+add_executable(autobahn_asio_zlib_ng_utf_simd autobahn_asio.cpp ${SOURCES})
+target_link_libraries(autobahn_asio_zlib_ng_utf_simd PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     PkgConfig::ZLIBNG
     simdutf::simdutf
     asio::asio
     websocketclient)
-target_compile_definitions(autobahn_asio PRIVATE
+target_compile_definitions(autobahn_asio_zlib_ng_utf_simd PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # use zlib-ng instead of zlib
     WS_CLIENT_USE_SIMD_UTF8=1 # use simdutf for utf-8 validation
     ASIO_STANDALONE=1

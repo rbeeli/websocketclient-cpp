@@ -15,6 +15,8 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono;
+using namespace std::chrono_literals;
 
 /**
  * Quick and dirty way to extract a JSON property value.
@@ -102,8 +104,8 @@ asio::awaitable<expected<void, WSError>> run()
         .compress_buffer_size = 2 * 1024 * 1024    // 2 MB
     });
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     // subscribe
     std::string sub_msg = R"({
@@ -146,7 +148,7 @@ asio::awaitable<expected<void, WSError>> run()
     Message msg(MessageType::TEXT, sub_msg);
     WS_CO_TRYV(co_await client.send_message(msg, {.compress = false}));
 
-    std::chrono::time_point<std::chrono::system_clock> last_msg;
+    time_point<system_clock> last_msg;
     msg_stats stats;
 
     Buffer buffer;
@@ -154,14 +156,11 @@ asio::awaitable<expected<void, WSError>> run()
     {
         ++stats.counter;
 
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      std::chrono::system_clock::now().time_since_epoch()
-        )
-                      .count();
+        auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+            co_await client.read_message(buffer, 5000ms); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {
@@ -171,8 +170,8 @@ asio::awaitable<expected<void, WSError>> run()
             auto latency = ms - E;
             stats.avg_latency += static_cast<double>(latency);
 
-            auto t = std::chrono::system_clock::now();
-            if (t - last_msg > std::chrono::seconds(1))
+            auto t = system_clock::now();
+            if (t - last_msg > 1s)
             {
                 stats.avg_latency /= static_cast<double>(stats.counter);
 

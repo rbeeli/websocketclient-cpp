@@ -11,6 +11,7 @@
 #include "ws_client/transport/builtin/DnsResolver.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 using namespace NNet;
 using Loop = NNet::TLoop<NNet::TEPoll>;
 
@@ -109,8 +110,8 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
         .compress_buffer_size = 2 * 1024 * 1024    // 2 MB
     });
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     // subscribe
     std::string sub_msg = R"({
@@ -168,7 +169,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer);
+            co_await client.read_message(buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

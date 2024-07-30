@@ -71,8 +71,8 @@ awaitable<expected<void, WSError>> run()
         .compress_buffer_size = 2 * 1024 * 1024    // 2 MB
     });
 
-    // start client
-    WS_CO_TRYV(co_await client.init(handshake));
+    // perform handshake
+    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     // subscribe
     // we don't subscribe so it looks like we are not receiving any messages
@@ -87,20 +87,10 @@ awaitable<expected<void, WSError>> run()
     Buffer buffer;
     while (client.is_open())
     {
-        // timeout after 5 seconds
-        // https://cppalliance.org/asio/2023/01/02/Asio201Timeouts.html
-        asio::steady_timer to{executor, 5s};
-        auto res = co_await (to.async_wait(asio::use_awaitable) || client.read_message(buffer));
-        if (res.index() == 0)
-        {
-            std::cout << "read_message timed out\n";
-            break;
-        }
-
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            std::get<1>(res);
-
+        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+            co_await client.read_message(buffer, 5000ms); // 5 sec timeout
+        
         if (auto msg = std::get_if<Message>(&var))
         {
             std::cout << msg->to_string() << std::endl;
@@ -129,6 +119,12 @@ awaitable<expected<void, WSError>> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
+            if (err->code == WSErrorCode::TIMEOUT)
+            {
+                std::cout << "read_message timed out\n";
+                break;
+            }
+
             // error occurred - must close connection
             logger.log<LogLevel::E>("Error: " + err->message);
             WS_CO_TRYV(co_await client.close(err->close_with_code));

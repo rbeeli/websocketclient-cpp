@@ -3,6 +3,7 @@
 #include <variant>
 #include <expected>
 #include <thread>
+#include <chrono>
 #include <source_location>
 
 #include "ws_client/ws_client.hpp"
@@ -11,7 +12,12 @@
 #include "ws_client/transport/builtin/DnsResolver.hpp"
 
 using namespace ws_client;
+using namespace std::chrono_literals;
 
+/**
+ * Custom logger implementation.
+ * Logs all messages to `std::cout`.
+ */
 struct CustomLogger
 {
     /**
@@ -51,10 +57,10 @@ expected<void, WSError> run()
     WS_TRY(dns_res, dns.resolve(url.host(), url.port_str(), AddrType::IPv4));
     AddressInfo& addr = (*dns_res)[0];
 
-    // create socket
+    // create TCP socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
-    WS_TRYV(tcp.connect());
+    WS_TRYV(tcp.connect(2000ms)); // 2 sec connect timeout
 
     // SSL socket wrapper
     OpenSslContext ctx(&logger);
@@ -62,7 +68,7 @@ expected<void, WSError> run()
     WS_TRYV(ctx.set_default_verify_paths());
     auto ssl = OpenSslSocket(&logger, tcp.get_fd(), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect());
+    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
 
     // websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
@@ -70,15 +76,15 @@ expected<void, WSError> run()
     // handshake handler
     auto handshake = Handshake(&logger, url);
 
-    // start client
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     Buffer buffer;
     for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 60s); // 60 sec timeout
 
         if (std::get_if<Message>(&var))
         {

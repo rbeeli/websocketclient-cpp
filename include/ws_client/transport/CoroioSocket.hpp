@@ -9,6 +9,7 @@
 
 #include "ws_client/errors_async.hpp"
 #include "ws_client/log.hpp"
+#include "ws_client/utils/Timeout.hpp"
 #include "ws_client/transport/ISocketAsync.hpp"
 
 namespace ws_client
@@ -20,12 +21,13 @@ using NNet::TValueTask;
 template <typename TLogger, typename SocketType>
 class CoroioSocket final : public ISocketAsync<TValueTask>
 {
-    TLogger* logger;
-    SocketType socket;
+private:
+    TLogger* logger_;
+    SocketType socket_;
 
 public:
     explicit CoroioSocket(TLogger* logger, SocketType&& socket) noexcept
-        : ISocketAsync<TValueTask>(), logger(logger), socket(std::move(socket))
+        : ISocketAsync<TValueTask>(), logger_(logger), socket_(std::move(socket))
     {
     }
 
@@ -39,21 +41,22 @@ public:
 
     inline SocketType& underlying() noexcept
     {
-        return this->socket;
+        return socket_;
     }
 
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
-     * Returns the number of bytes read.
+     * 
+     * @return The number of bytes read, or an error.
      */
-    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> read_some( //
-        span<byte> buffer
+    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> read_some(
+        span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         try
         {
-            int n = co_await this->socket.ReadSome(buffer.data(), buffer.size());
+            int n = co_await socket_.ReadSome(buffer.data(), buffer.size());
             if (n == 0)
                 co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer", NOT_SET);
             else if (n == -1)
@@ -69,17 +72,17 @@ public:
     /**
      * Writes `buffer` to underlying socket.
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
-     * Returns the number of bytes written.
+     * 
+     * @return The number of bytes written, or an error.
      */
-    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> write_some( //
-        const span<byte> buffer,
-        std::chrono::milliseconds timeout
+    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> write_some(
+        const span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         // TODO: Implement timeout
         try
         {
-            int n = co_await this->socket.WriteSome(buffer.data(), buffer.size());
+            int n = co_await socket_.WriteSome(buffer.data(), buffer.size());
             if (n == 0)
                 co_return WS_ERROR(TRANSPORT_ERROR, "Connection closed by peer", NOT_SET);
             else if (n == -1)
@@ -99,7 +102,7 @@ public:
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(std::chrono::milliseconds timeout) noexcept
+    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept
     {
         // TODO: Not implemented in coroio
         co_return expected<void, WSError>{};
@@ -113,7 +116,7 @@ public:
     {
         try
         {
-            co_await this->socket.Close();
+            co_await socket_.Close();
         }
         catch (const std::exception& e)
         {

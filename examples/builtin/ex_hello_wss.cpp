@@ -30,20 +30,20 @@ expected<void, WSError> run()
     WS_TRY(dns_res, dns.resolve(url.host(), url.port_str(), AddrType::IPv4));
     AddressInfo& addr = (*dns_res)[0];
 
-    // create socket
+    // create TCP socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
-    WS_TRYV(tcp.connect());
+    WS_TRYV(tcp.connect(2000ms)); // 2 sec connect timeout
 
     // SSL socket wrapper
     OpenSslContext ctx(&logger);
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
-    WS_TRYV(ctx.load_verify_file("cert.pem"));
+    WS_TRYV(ctx.load_verify_file("../cert.pem"));
     WS_TRYV(ctx.set_session_cache_mode_client());
     auto ssl = OpenSslSocket(&logger, tcp.get_fd(), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect());
+    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
 
     // create websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
@@ -60,19 +60,19 @@ expected<void, WSError> run()
         .client_no_context_takeover = true
     });
 
-    // start client
-    WS_TRYV(client.init(handshake));
+    // perform handshake
+    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
 
     Buffer buffer;
     while (true)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer);
+            client.read_message(buffer, 30'000ms); // 30 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {
-            WS_TRYV(client.send_message(*msg));
+            WS_TRYV(client.send_message(*msg, {.timeout = 5000ms})); // 5 sec timeout
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {

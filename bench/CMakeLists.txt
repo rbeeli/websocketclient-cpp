@@ -4,6 +4,7 @@ add_executable(bench_mask_frame mask_frame.cpp)
 add_executable(bench_variant variant.cpp)
 add_executable(bench_timeofday timeofday.cpp)
 add_executable(bench_random random.cpp)
+add_executable(bench_measure_elapsed measure_elapsed.cpp)
 
 target_link_libraries(bench_mask_frame PRIVATE
     benchmark::benchmark
@@ -24,3 +25,7 @@ target_link_libraries(bench_random PRIVATE
     benchmark::benchmark
     benchmark::benchmark_main
     websocketclient)
+
+target_link_libraries(bench_measure_elapsed PRIVATE
+    benchmark::benchmark
+    benchmark::benchmark_main)

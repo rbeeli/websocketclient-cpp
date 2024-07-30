@@ -25,30 +25,30 @@ template <typename T>
 class CircularBuffer
 {
 private:
-    T* buffer;
-    size_t head;
-    size_t tail;
+    T* buffer_;
+    size_t head_;
+    size_t tail_;
     bool full_;
     size_t capacity_;
 
 public:
     explicit CircularBuffer(const size_t capacity) noexcept
-        : head(0), tail(0), full_(false), capacity_(capacity)
+        : head_(0), tail_(0), full_(false), capacity_(capacity)
     {
         // ensure power-of-two capacity
         assert((capacity & (capacity - 1)) == 0 && "Capacity must be a power of two");
 
         // allocate buffer
-        buffer = reinterpret_cast<T*>(std::malloc(capacity * sizeof(T)));
-        assert(buffer != nullptr && "Failed to allocate CircularBuffer buffer");
+        buffer_ = reinterpret_cast<T*>(std::malloc(capacity * sizeof(T)));
+        assert(buffer_ != nullptr && "Failed to allocate CircularBuffer buffer");
     }
 
     ~CircularBuffer() noexcept
     {
-        if (buffer != nullptr)
+        if (buffer_ != nullptr)
         {
-            std::free(buffer);
-            buffer = nullptr;
+            std::free(buffer_);
+            buffer_ = nullptr;
         }
     }
 
@@ -58,35 +58,35 @@ public:
 
     // enable move
     CircularBuffer(CircularBuffer&& other) noexcept
-        : buffer(other.buffer),
-          head(other.head),
-          tail(other.tail),
+        : buffer_(other.buffer_),
+          head_(other.head_),
+          tail_(other.tail_),
           full_(other.full_),
           capacity_(other.capacity_)
     {
-        other.buffer = nullptr;
+        other.buffer_ = nullptr;
         other.capacity_ = 0;
-        other.head = 0;
-        other.tail = 0;
+        other.head_ = 0;
+        other.tail_ = 0;
         other.full_ = false;
     }
     CircularBuffer& operator=(CircularBuffer&& other) noexcept
     {
         if (this != &other)
         {
-            if (buffer != nullptr)
-                std::free(buffer);
+            if (buffer_ != nullptr)
+                std::free(buffer_);
 
-            buffer = other.buffer;
+            buffer_ = other.buffer_;
             capacity_ = other.capacity_;
-            head = other.head;
-            tail = other.tail;
+            head_ = other.head_;
+            tail_ = other.tail_;
             full_ = other.full_;
 
-            other.buffer = nullptr;
+            other.buffer_ = nullptr;
             other.capacity_ = 0;
-            other.head = 0;
-            other.tail = 0;
+            other.head_ = 0;
+            other.tail_ = 0;
             other.full_ = false;
         }
         return *this;
@@ -100,14 +100,14 @@ public:
         // check space left in buffer
         assert(!full() && "Buffer is full");
 
-        buffer[head] = data;
-        ++head;
+        buffer_[head_] = data;
+        ++head_;
 
         // wrap around if we reached the end of the buffer
-        head &= capacity_ - 1;
+        head_ &= capacity_ - 1;
 
         // check if buffer is full after the push
-        full_ = head == tail;
+        full_ = head_ == tail_;
     }
 
     /**
@@ -120,25 +120,25 @@ public:
         assert(len <= available() && "Buffer is full");
 
         // perform the copy in two steps if necessary due to wrap-around
-        size_t first_copy_n = std::min(len, capacity_ - head);
-        std::copy(src, src + first_copy_n, buffer + head);
+        size_t first_copy_n = std::min(len, capacity_ - head_);
+        std::copy(src, src + first_copy_n, buffer_ + head_);
         len -= first_copy_n;
-        head += first_copy_n;
+        head_ += first_copy_n;
 
         if (len > 0)
         {
             // wrap around and copy rest
-            std::copy(src + first_copy_n, src + first_copy_n + len, buffer);
-            head = len;
+            std::copy(src + first_copy_n, src + first_copy_n + len, buffer_);
+            head_ = len;
         }
         else
         {
             // wrap around if we reached the end of the buffer
-            head &= capacity_ - 1;
+            head_ &= capacity_ - 1;
         }
 
         // check if buffer is full after the push
-        full_ = head == tail;
+        full_ = head_ == tail_;
     }
 
     /**
@@ -158,11 +158,11 @@ public:
         if (empty())
             return false;
 
-        data = buffer[tail];
-        tail++;
+        data = buffer_[tail_];
+        tail_++;
 
         // wrap around if we reached the end of the buffer
-        tail &= capacity_ - 1;
+        tail_ &= capacity_ - 1;
 
         full_ = false;
 
@@ -183,20 +183,20 @@ public:
         assert(len <= size() && "Buffer does not contain enough data");
 
         // copy the first part
-        size_t first_copy_n = std::min(len, capacity_ - tail);
+        size_t first_copy_n = std::min(len, capacity_ - tail_);
 
-        std::copy(buffer + tail, buffer + tail + first_copy_n, dest);
-        tail += first_copy_n;
+        std::copy(buffer_ + tail_, buffer_ + tail_ + first_copy_n, dest);
+        tail_ += first_copy_n;
         len -= first_copy_n;
 
         // wrap around if reached the end of the buffer
-        tail &= capacity_ - 1;
+        tail_ &= capacity_ - 1;
 
         // check if there's more to copy due to wrap-around
         if (len > 0)
         {
-            std::copy(buffer, buffer + len, dest + first_copy_n);
-            tail = len;
+            std::copy(buffer_, buffer_ + len, dest + first_copy_n);
+            tail_ = len;
         }
 
         full_ = false;
@@ -215,7 +215,7 @@ public:
      */
     [[nodiscard]] inline bool empty() const noexcept
     {
-        return head == tail && !full_;
+        return head_ == tail_ && !full_;
     }
 
     /**
@@ -231,8 +231,8 @@ public:
      */
     inline void clear() noexcept
     {
-        head = 0;
-        tail = 0;
+        head_ = 0;
+        tail_ = 0;
         full_ = false;
     }
 
@@ -243,9 +243,9 @@ public:
     {
         if (!full_)
         {
-            if (head < tail)
-                return capacity_ + head - tail;
-            return head - tail;
+            if (head_ < tail_)
+                return capacity_ + head_ - tail_;
+            return head_ - tail_;
         }
         return capacity_;
     }
@@ -268,9 +268,9 @@ public:
      */
     [[nodiscard]] inline span<T> available_as_contiguous_span() noexcept
     {
-        if (head >= tail)
-            return span<T>(buffer + head, capacity_ - head);
-        return span<T>(buffer + head, tail - head);
+        if (head_ >= tail_)
+            return span<T>(buffer_ + head_, capacity_ - head_);
+        return span<T>(buffer_ + head_, tail_ - head_);
     }
 
     /**
@@ -283,9 +283,9 @@ public:
     */
     [[nodiscard]] inline span<T> used_as_contiguous_span() noexcept
     {
-        if (head >= tail)
-            return span<T>(buffer + tail, head - tail);
-        return span<T>(buffer + tail, capacity_ - tail);
+        if (head_ >= tail_)
+            return span<T>(buffer_ + tail_, head_ - tail_);
+        return span<T>(buffer_ + tail_, capacity_ - tail_);
     }
 
     /**
@@ -297,9 +297,9 @@ public:
     {
         // check space left in buffer
         assert(len <= available() && "Cannot move head, buffer (almost) full");
-        head += len;
-        head &= capacity_ - 1;
-        full_ = head == tail;
+        head_ += len;
+        head_ &= capacity_ - 1;
+        full_ = head_ == tail_;
     }
 
     /**
@@ -311,8 +311,8 @@ public:
     {
         // check not reading more than available
         assert(len <= size() && "Buffer does not contain enough data to move tail");
-        tail += len;
-        tail &= capacity_ - 1;
+        tail_ += len;
+        tail_ &= capacity_ - 1;
         full_ = false;
     }
 
@@ -327,7 +327,7 @@ public:
         bool data_updated = false;
         if (!empty())
         {
-            data = buffer[tail];
+            data = buffer_[tail_];
             data_updated = true;
         }
         return data_updated;
@@ -342,9 +342,9 @@ public:
     [[nodiscard]] inline T& operator[](size_t index)
     {
         assert(index < size() && "Index out of bounds");
-        size_t ix = tail + index;
+        size_t ix = tail_ + index;
         ix &= capacity_ - 1;
-        return buffer[ix];
+        return buffer_[ix];
     }
 
     /**
@@ -356,9 +356,9 @@ public:
     [[nodiscard]] inline const T& operator[](size_t index) const
     {
         assert(index < size() && "Index out of bounds");
-        size_t ix = tail + index;
+        size_t ix = tail_ + index;
         ix &= capacity_ - 1;
-        return buffer[ix];
+        return buffer_[ix];
     }
 
     /**
