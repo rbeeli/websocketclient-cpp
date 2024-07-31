@@ -40,7 +40,7 @@ class OpenSslSocket final : public ISocket
 {
 private:
     TLogger* logger_;
-    int fd_;
+    TcpSocket<TLogger> socket_;
     OpenSslContext<TLogger>* ctx_;
     SSL* ssl_;
     string hostname_;
@@ -55,12 +55,13 @@ public:
      * @param hostname      The hostname to connect to.
      */
     explicit OpenSslSocket(
-        TLogger* logger, int fd, OpenSslContext<TLogger>* ctx, string hostname, bool verify
+        TLogger* logger, TcpSocket<TLogger>&& socket, OpenSslContext<TLogger>* ctx, string hostname, bool verify
     ) noexcept
         : ISocket(),
           logger_(logger),
-          fd_(fd),
+          socket_(std::move(socket)),
           ctx_(ctx),
+          ssl_(nullptr),
           hostname_(std::move(hostname)),
           verify_(verify)
     {
@@ -80,13 +81,12 @@ public:
     OpenSslSocket(OpenSslSocket&& other) noexcept
         : ISocket(std::move(other)),
           logger_(other.logger_),
-          fd_(other.fd_),
+          socket_(std::move(other.socket_)),
           ctx_(other.ctx_),
           ssl_(other.ssl_),
           hostname_(std::move(other.hostname_)),
           verify_(other.verify_)
     {
-        other.fd_ = -1;
         other.ctx_ = nullptr;
         other.ssl_ = nullptr;
         other.logger_ = nullptr;
@@ -100,12 +100,11 @@ public:
         {
             this->close();
             logger_ = other.logger_;
-            fd_ = other.fd_;
+            socket_ = std::move(other.socket_);
             ctx_ = other.ctx_;
             ssl_ = other.ssl_;
             hostname_ = std::move(other.hostname_);
             verify_ = other.verify_;
-            other.fd_ = -1;
             other.ctx_ = nullptr;
             other.ssl_ = nullptr;
             other.logger_ = nullptr;
@@ -117,19 +116,19 @@ public:
     }
 
     /**
-     * Get the file descriptor of the underlying socket.
+     * Returns the underlying TCP socket.
      */
-    [[nodiscard]] int get_fd() const noexcept
+    [[nodiscard]] TcpSocket<TLogger>& underlying() const noexcept
     {
-        return fd_;
+        return socket_;
     }
 
-    inline SSL* get_ssl() const noexcept
+    inline SSL* ssl() const noexcept
     {
         return ssl_;
     }
 
-    inline OpenSslContext<TLogger>* get_ctx() const noexcept
+    inline OpenSslContext<TLogger>* ctx() const noexcept
     {
         return ctx_;
     }
@@ -140,6 +139,9 @@ public:
      */
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
+        if (ssl_)
+            return WS_ERROR(LOGIC_ERROR, "OpenSslSocket already initialized", NOT_SET);
+        
         // create SSL structure
         ssl_ = SSL_new(ctx_->ssl_ctx());
         if (!ssl_)
@@ -161,11 +163,11 @@ public:
         WS_TRYV(this->set_verify_peer(verify_));
 
         // wrap the SSL structure around the socket
-        if (SSL_set_fd(ssl_, fd_) != 1)
+        if (SSL_set_fd(ssl_, socket_.fd()) != 1)
             return make_error("Unable to wrap SSL structure around socket");
 
         logger_->template log<LogLevel::D>(
-            "OpenSslSocket created (fd=" + std::to_string(fd_) + ")"
+            "OpenSslSocket created (fd=" + std::to_string(socket_.fd()) + ")"
         );
 
         return {};
@@ -178,8 +180,15 @@ public:
         std::chrono::milliseconds timeout_ms = 5000ms
     ) noexcept
     {
+        if (!ssl_)
+            return WS_ERROR(LOGIC_ERROR, "OpenSslSocket not initialized, call init() first.", NOT_SET);
+
         Timeout timeout(timeout_ms);
 
+        // connect underlying TCP socket first
+        WS_TRYV(socket_.connect(timeout_ms));
+
+        // perform SSL handshake
         int result;
         int ssl_error;
         do
@@ -194,12 +203,12 @@ public:
                 // use select() to wait for the socket to become ready for the SSL operation
                 fd_set fds;
                 FD_ZERO(&fds);
-                FD_SET(fd_, &fds);
+                FD_SET(socket_.fd(), &fds);
 
                 // set the timeout for select
                 auto remaining = timeout.remaining_timeval();
                 int select_ret = ::select(
-                    fd_ + 1,
+                    socket_.fd() + 1,
                     (ssl_error == SSL_ERROR_WANT_READ) ? &fds : nullptr,
                     (ssl_error == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                     nullptr,
@@ -357,11 +366,11 @@ public:
                     // use select to wait for the socket to be ready
                     fd_set fds;
                     FD_ZERO(&fds);
-                    FD_SET(fd_, &fds);
+                    FD_SET(socket_.fd(), &fds);
 
                     timeval remaining = timeout.remaining_timeval();
                     int select_ret = ::select(
-                        fd_ + 1,
+                        socket_.fd() + 1,
                         (err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
                         (err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                         nullptr,
@@ -423,11 +432,11 @@ public:
                     // use select to wait for the socket to be ready
                     fd_set fds;
                     FD_ZERO(&fds);
-                    FD_SET(fd_, &fds);
+                    FD_SET(socket_.fd(), &fds);
 
                     timeval remaining = timeout.remaining_timeval();
                     int select_ret = ::select(
-                        fd_ + 1,
+                        socket_.fd() + 1,
                         (err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
                         (err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                         nullptr,
@@ -467,6 +476,7 @@ public:
      */
     virtual expected<void, WSError> shutdown(Timeout<>& timeout) noexcept override
     {
+        // shutdown the SSL layer
         // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
         if (ssl_)
         {
@@ -486,19 +496,8 @@ public:
             }
         }
 
-        if (fd_ != -1)
-        {
-            logger_->template log<LogLevel::D>(
-                "Shutting down socket (fd=" + std::to_string(fd_) + ")"
-            );
-            int res = ::shutdown(fd_, SHUT_RDWR);
-            if (res != 0)
-            {
-                auto err = make_error("Unable to shut down underlying socket");
-                logger_->template log<LogLevel::W>(err.error().message);
-                return err;
-            }
-        }
+        // shutdown the underlying TCP socket
+        socket_.shutdown(timeout);
 
         return {};
     }
@@ -509,6 +508,7 @@ public:
      */
     virtual expected<void, WSError> close() noexcept override
     {
+        // free the SSL structure
         if (ssl_)
         {
             SSL_free(ssl_);
@@ -516,18 +516,8 @@ public:
             logger_->template log<LogLevel::D>("SSL freed");
         }
 
-        if (fd_ != -1)
-        {
-            logger_->template log<LogLevel::D>("Closing socket (fd=" + std::to_string(fd_) + ")");
-            int res = ::close(fd_);
-            if (res != 0)
-            {
-                auto err = make_error("Unable to close socket");
-                logger_->template log<LogLevel::W>(err.error().message);
-                return err;
-            }
-            fd_ = -1;
-        }
+        // close the underlying TCP socket
+        socket_.close();
 
         return {};
     }

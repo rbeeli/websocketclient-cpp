@@ -25,7 +25,8 @@ private:
 
 
 public:
-    explicit OpenSslContext(TLogger* logger) noexcept : logger(logger), ctx(nullptr)
+    explicit OpenSslContext(TLogger* logger) noexcept //
+        : logger(logger), ctx(nullptr)
     {
     }
 

@@ -73,8 +73,7 @@ public:
     {
         if (this != &other)
         {
-            if (fd_ != -1)
-                this->close();
+            this->close();
             logger_ = other.logger_;
             fd_ = other.fd_;
             address_ = std::move(other.address_);
@@ -87,7 +86,7 @@ public:
     /**
      * Get the file descriptor of the socket.
      */
-    [[nodiscard]] int get_fd() const noexcept
+    [[nodiscard]] int fd() const noexcept
     {
         return fd_;
     }
@@ -98,6 +97,9 @@ public:
      */
     [[nodiscard]] expected<void, WSError> init()
     {
+        if (fd_ != -1)
+            return WS_ERROR(LOGIC_ERROR, "TCP socket already initialized", NOT_SET);
+        
         // create a socket based on family (IPv4 or IPv6)
         logger_->template log<LogLevel::D>(
             "Creating socket (family=" + std::to_string(address_.family()) + ")"
@@ -133,14 +135,11 @@ public:
      */
     [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5000ms)
     {
-        if (connected_)
-        {
-            logger_->template log<LogLevel::D>("Connection already established");
-            return {};
-        }
-
         if (fd_ == -1)
-            return WS_ERROR(LOGIC_ERROR, "Socket not created. Call init() first.", NOT_SET);
+            return WS_ERROR(LOGIC_ERROR, "TcpSocket not initialized, call init() first.", NOT_SET);
+
+        if (connected_)
+            return WS_ERROR(LOGIC_ERROR, "Connection already established", NOT_SET);
 
         Timeout timeout(timeout_ms);
 

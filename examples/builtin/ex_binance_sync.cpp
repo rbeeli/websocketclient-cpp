@@ -65,16 +65,13 @@ expected<void, WSError> run()
     // create TCP socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
-    WS_TRYV(tcp.set_TCP_NODELAY(true));
-    WS_TRYV(tcp.set_TCP_QUICKACK(true));
     WS_TRYV(tcp.set_SO_RCVBUF(1 * 1024 * 1024)); // 1 MB
-    WS_TRYV(tcp.connect(2000ms));                // 2 sec connect timeout
 
     // SSL socket wrapper
     OpenSslContext ctx(&logger);
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
-    auto ssl = OpenSslSocket(&logger, tcp.get_fd(), &ctx, url.host(), true);
+    auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
     WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
 

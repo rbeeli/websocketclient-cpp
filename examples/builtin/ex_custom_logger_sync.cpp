@@ -1,39 +1,63 @@
 #include <iostream>
 #include <string>
-#include <chrono>
-#include <algorithm>
-#include <iomanip>
+#include <variant>
+#include <expected>
 #include <thread>
-
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 1
-#define WS_CLIENT_LOG_MSG_SIZES 1
-#define WS_CLIENT_LOG_FRAMES 1
-#define WS_CLIENT_LOG_COMPRESSION 0
+#include <chrono>
+#include <source_location>
 
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
 #include "ws_client/transport/builtin/OpenSslSocket.hpp"
-#include "ws_client/PermessageDeflate.hpp"
-#include <signal.h>
+#include "ws_client/transport/builtin/DnsResolver.hpp"
 
 using namespace ws_client;
 using namespace std::chrono_literals;
 
+/**
+ * Custom logger implementation.
+ * Logs all messages to `std::cout`.
+ */
+struct CustomLogger
+{
+    /**
+     * Check if the logger is enabled for the given log level.
+     */
+    template <LogLevel level>
+    constexpr bool is_enabled() const noexcept
+    {
+        return true;
+    }
+
+    /**
+     * Log a message with the given log level.
+     */
+    template <LogLevel level>
+    constexpr void log(
+        std::string_view message, const std::source_location loc = std::source_location::current()
+    ) noexcept
+    {
+        std::cout << "CustomLogger: " << loc.file_name() << ":" << loc.line() << " " << message
+                  << std::endl;
+    }
+};
+
+
 expected<void, WSError> run()
 {
-    WS_TRY(url_res, URL::parse("wss://localhost:9443"));
+    // parse URL
+    WS_TRY(url_res, URL::parse("wss://echo.websocket.org/"));
     URL& url = *url_res;
 
-    // websocketclient logger
-    ConsoleLogger<LogLevel::D> logger;
+    // custom logger
+    CustomLogger logger;
 
     // resolve hostname
     DnsResolver dns(&logger);
     WS_TRY(dns_res, dns.resolve(url.host(), url.port_str(), AddrType::IPv4));
     AddressInfo& addr = (*dns_res)[0];
 
-    // create socket
+    // create TCP socket
     auto tcp = TcpSocket(&logger, std::move(addr));
     WS_TRYV(tcp.init());
 
@@ -41,45 +65,32 @@ expected<void, WSError> run()
     OpenSslContext ctx(&logger);
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
-    WS_TRYV(ctx.load_verify_file("cert.pem"));
-    WS_TRYV(ctx.set_session_cache_mode_client());
     auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect());
+    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
 
-    // create websocket client
+    // websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
-    
+
     // handshake handler
     auto handshake = Handshake(&logger, url);
 
-    // enable compression (permessage-deflate extension)
-    handshake.set_permessage_deflate({
-        .logger = &logger,
-        .server_max_window_bits = 15,
-        .client_max_window_bits = 15,
-        .server_no_context_takeover = true,
-        .client_no_context_takeover = true
-    });
-
     // perform handshake
-    WS_TRYV(client.handshake(handshake));
+    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
 
-    // send message
-    string payload = "test";
-    Message msg(MessageType::TEXT, payload);
-    WS_TRYV(client.send_message(msg));
-    
     Buffer buffer;
-    while (true)
+    for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 60s);
+            client.read_message(buffer, 60s); // 60 sec timeout
 
-        if (auto msg = std::get_if<Message>(&var))
+        if (std::get_if<Message>(&var))
         {
-            WS_TRYV(client.send_message(*msg));
+            // write message back to server
+            string text = "This is the " + std::to_string(i) + "th message";
+            Message msg2(MessageType::TEXT, text);
+            WS_TRYV(client.send_message(msg2));
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
@@ -112,9 +123,6 @@ expected<void, WSError> run()
         }
     }
 
-    // wait for server to close connection
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
     WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
 
     return {};
@@ -123,14 +131,17 @@ expected<void, WSError> run()
 
 int main()
 {
-    // ignore SIGPIPE (Broken pipe) signal (causes process to terminate)
-    signal(SIGPIPE, SIG_IGN);
-    
-    auto res = run();
-    if (!res.has_value())
+    // run loop, reconnects on error
+    while (true)
     {
-        std::cerr << "Error: " << res.error().message << std::endl;
-        return 2;
+        auto res = run();
+        if (!res.has_value())
+        {
+            std::cerr << "Error: " << res.error().message << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::clog << "Reconnecting..." << std::endl;
+        }
     }
+
     return 0;
 };

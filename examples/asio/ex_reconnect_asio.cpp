@@ -74,7 +74,6 @@ awaitable<expected<void, WSError>> run()
     // perform handshake
     WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
 
-    // subscribe
     // we don't subscribe so it looks like we are not receiving any messages
     // std::string sub_msg = R"({
     //     "method": "SUBSCRIBE",
