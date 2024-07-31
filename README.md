@@ -15,6 +15,8 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
 - No hidden networking control flow
   - User decides when and what to write as response to ping/close frames
   - No hidden synchronization needed
+- No dynamic memory allocation for message payloads
+- Timeout parameter for all network operations
 - Few dependencies (STL, [OpenSSL](https://github.com/openssl/openssl), [zlib](https://github.com/madler/zlib) or [zlib-ng](https://github.com/zlib-ng/zlib-ng), [simdutf](https://github.com/simdutf/simdutf))
 - Pluggable transport layers
   - Blocking I/O support (built-in based on POSIX)
