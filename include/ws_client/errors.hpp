@@ -81,10 +81,10 @@ inline std::ostream& operator<<(std::ostream& os, const WSError& error)
 #define WS_UNEXPECTED(EXPRESSION) unexpected(EXPRESSION)
 
 #define WS_ERROR(CODE, MESSAGE, CLOSE_CODE)                                                        \
-    WS_UNEXPECTED(WSError(WSErrorCode::CODE, MESSAGE, close_code::CLOSE_CODE))
+    WS_UNEXPECTED(WSError(WSErrorCode::CODE, MESSAGE, CLOSE_CODE))
 
 #define WS_ERROR_RAW(CODE, MESSAGE, CLOSE_CODE)                                                    \
-    WSError(WSErrorCode::CODE, MESSAGE, close_code::CLOSE_CODE)
+    WSError(WSErrorCode::CODE, MESSAGE, CLOSE_CODE)
 
 /**
  * Checks if the expression returns an `expected` with an error.

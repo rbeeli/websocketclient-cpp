@@ -165,7 +165,7 @@ public:
             auto ret = *ret_res;
 
             if (ret == 0) [[unlikely]]
-                co_return WS_ERROR(transport_error, "Socket closed by peer", not_set);
+                co_return WS_ERROR(transport_error, "Socket closed by peer", close_code::not_set);
 
             if (ret < 0) [[unlikely]]
                 continue; // retry on interrupt signal or socket not ready for write

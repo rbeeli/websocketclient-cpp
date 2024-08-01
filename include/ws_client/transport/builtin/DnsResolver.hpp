@@ -91,7 +91,7 @@ public:
             // Use gai_strerror to get a human-readable error message
             string error_message = "Failed to resolve hostname: ";
             error_message += gai_strerror(ret);
-            return WS_ERROR(url_error, error_message, not_set);
+            return WS_ERROR(url_error, error_message, close_code::not_set);
         }
 
         if (logger->template is_enabled<LogLevel::I>())
@@ -137,7 +137,7 @@ public:
                         "Failed to convert IPv4 address to string: " +
                             std::string(std::strerror(error_code)) + " (" +
                             std::to_string(error_code) + ")",
-                        not_set
+                        close_code::not_set
                     );
                 }
             }
@@ -169,7 +169,7 @@ public:
                         "Failed to convert IPv6 address to string: " +
                             std::string(std::strerror(error_code)) + " (" +
                             std::to_string(error_code) + ")",
-                        not_set
+                        close_code::not_set
                     );
                 }
             }
@@ -187,7 +187,7 @@ public:
         ::freeaddrinfo(getaddrinfo_res);
 
         if (result.empty())
-            return WS_ERROR(url_error, "No address found for hostname", not_set);
+            return WS_ERROR(url_error, "No address found for hostname", close_code::not_set);
 
         return result;
     }

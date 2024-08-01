@@ -136,7 +136,11 @@ public:
             std::transform(protocol.begin(), protocol.end(), protocol.begin(), ::tolower);
         }
         else
-            return WS_ERROR(url_error, "Invalid URL, protocol not found: " + url, not_set);
+        {
+            return WS_ERROR(
+                url_error, "Invalid URL, protocol not found: " + url, close_code::not_set
+            );
+        }
 
         // set default port for known protocols
         WS_TRY(res, get_default_port(protocol));
@@ -155,7 +159,7 @@ public:
                 return WS_ERROR(
                     url_error,
                     "Invalid URL, closing bracket for IPv6 address not found: " + url,
-                    not_set
+                    close_code::not_set
                 );
             }
 
@@ -224,8 +228,10 @@ public:
         auto it = protocol_port_map.find(protocol);
         if (it != protocol_port_map.end())
             return it->second;
-        else
-            return WS_ERROR(url_error, "Invalid URL, unknown protocol: " + protocol, not_set);
+
+        return WS_ERROR(
+            url_error, "Invalid URL, unknown protocol: " + protocol, close_code::not_set
+        );
     }
 
     [[nodiscard]] static inline expected<int, WSError> parse_port(const string& input)
@@ -234,7 +240,11 @@ public:
         auto const res = std::from_chars(input.data(), input.data() + input.size(), port);
 
         if (res.ec != std::errc{})
-            return WS_ERROR(url_error, "Failed to parse port number form URL: " + input, not_set);
+        {
+            return WS_ERROR(
+                url_error, "Failed to parse port number form URL: " + input, close_code::not_set
+            );
+        }
 
         return port;
     }

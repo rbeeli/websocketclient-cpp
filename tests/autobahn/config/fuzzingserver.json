@@ -1,10 +1,10 @@
 {
   "url": "ws://0.0.0.0:9001",
   "outdir": "./reports/clients",
-  "cases": [
+  "cases_1": [
     "*"
   ],
-  "cases_1": [
+  "cases": [
     "1.*",
     "2.*",
     "3.*",

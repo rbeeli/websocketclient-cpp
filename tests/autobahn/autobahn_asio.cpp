@@ -40,7 +40,7 @@ using asio::ip::tcp;
             uncategorized,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
                 std::to_string(errno_) + ")",
-            not_set
+            close_code::not_set
         );
     }
     return {};

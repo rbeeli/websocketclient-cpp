@@ -55,7 +55,11 @@ public:
      * @param hostname      The hostname to connect to.
      */
     explicit OpenSslSocket(
-        TLogger* logger, TcpSocket<TLogger>&& socket, OpenSslContext<TLogger>* ctx, string hostname, bool verify
+        TLogger* logger,
+        TcpSocket<TLogger>&& socket,
+        OpenSslContext<TLogger>* ctx,
+        string hostname,
+        bool verify
     ) noexcept
         : ISocket(),
           logger_(logger),
@@ -140,8 +144,8 @@ public:
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
         if (ssl_)
-            return WS_ERROR(logic_error, "OpenSslSocket already initialized", not_set);
-        
+            return WS_ERROR(logic_error, "OpenSslSocket already initialized", close_code::not_set);
+
         // create SSL structure
         ssl_ = SSL_new(ctx_->ssl_ctx());
         if (!ssl_)
@@ -181,7 +185,13 @@ public:
     ) noexcept
     {
         if (!ssl_)
-            return WS_ERROR(logic_error, "OpenSslSocket not initialized, call init() first.", not_set);
+        {
+            return WS_ERROR(
+                logic_error,
+                "OpenSslSocket not initialized, call init() first.",
+                close_code::not_set
+            );
+        }
 
         Timeout timeout(timeout_ms);
 
@@ -243,9 +253,7 @@ public:
         X509* cert = SSL_get_peer_certificate(ssl_);
         if (cert)
         {
-            if (X509_check_host(
-                    cert, hostname_.c_str(), hostname_.size(), 0, nullptr
-                ) != 1)
+            if (X509_check_host(cert, hostname_.c_str(), hostname_.size(), 0, nullptr) != 1)
             {
                 X509_free(cert);
                 return make_error(
@@ -355,7 +363,7 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    transport_error, "SSL connection closed on transport layer", not_set
+                    transport_error, "SSL connection closed on transport layer", close_code::not_set
                 );
             }
             else
@@ -384,7 +392,11 @@ public:
                         return make_error("read_some failed due to system error");
                     }
                     if (select_ret == 0)
-                        return WS_ERROR(timeout, "read_some operation timed out", not_set);
+                    {
+                        return WS_ERROR(
+                            timeout, "read_some operation timed out", close_code::not_set
+                        );
+                    }
 
                     // socket is ready, continue to retry SSL_read
                     continue;
@@ -398,7 +410,7 @@ public:
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(timeout, "read_some operation timed out", not_set);
+        return WS_ERROR(timeout, "read_some operation timed out", close_code::not_set);
     }
 
     /**
@@ -421,7 +433,7 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    transport_error, "SSL connection closed on transport layer", not_set
+                    transport_error, "SSL connection closed on transport layer", close_code::not_set
                 );
             }
             else
@@ -443,14 +455,18 @@ public:
                         &remaining
                     );
 
-                    if (select_ret == -1)
+                    if (select_ret == -1) [[unlikely]]
                     {
                         if (errno == EINTR)
                             continue; // interrupted, retry
                         return make_error("write_some failed due to system error");
                     }
-                    if (select_ret == 0)
-                        return WS_ERROR(timeout, "write_some operation timed out", not_set);
+                    if (select_ret == 0) [[unlikely]]
+                    {
+                        return WS_ERROR(
+                            timeout, "write_some operation timed out", close_code::not_set
+                        );
+                    }
 
                     // socket is ready, continue to retry SSL_write
                     continue;
@@ -464,7 +480,7 @@ public:
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(timeout, "write_some operation timed out", not_set);
+        return WS_ERROR(timeout, "write_some operation timed out", close_code::not_set);
     }
 
     /**

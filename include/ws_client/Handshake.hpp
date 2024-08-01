@@ -139,8 +139,7 @@ public:
         fields.set("Sec-WebSocket-Key", request_SecWebSocketKey_);
 
         // permessage-deflate extension for compression, optional
-        if (permessage_deflate_.has_value() &&
-            !fields.contains_key("Sec-WebSocket-Extensions"))
+        if (permessage_deflate_.has_value() && !fields.contains_key("Sec-WebSocket-Extensions"))
         {
             fields.set(
                 "Sec-WebSocket-Extensions",
@@ -191,7 +190,7 @@ public:
                 protocol_error,
                 "HTTP error during WebSocket handshake response processing: " +
                     std::to_string(status_line.status_code) + " " + status_line.reason,
-                not_set
+                close_code::not_set
             );
         }
 
@@ -227,7 +226,7 @@ protected:
         if (!h_con.has_value())
         {
             return WS_ERROR(
-                protocol_error, "HTTP response is missing 'Connection' header", not_set
+                protocol_error, "HTTP response is missing 'Connection' header", close_code::not_set
             );
         }
 
@@ -236,7 +235,7 @@ protected:
             return WS_ERROR(
                 protocol_error,
                 "Invalid 'Connection' header, expected: 'Upgrade', got: " + *h_con,
-                not_set
+                close_code::not_set
             );
         }
 
@@ -254,7 +253,7 @@ protected:
             return WS_ERROR(
                 protocol_error,
                 "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: " + *h_ext,
-                not_set
+                close_code::not_set
             );
         }
 
@@ -267,7 +266,9 @@ protected:
         if (!h_ext.has_value())
         {
             return WS_ERROR(
-                protocol_error, "HTTP response is missing 'Sec-WebSocket-Accept' header", not_set
+                protocol_error,
+                "HTTP response is missing 'Sec-WebSocket-Accept' header",
+                close_code::not_set
             );
         }
 
@@ -283,7 +284,7 @@ protected:
                 protocol_error,
                 "Invalid 'Sec-WebSocket-Accept' header, expected: " + expected_accept +
                     ", got: " + *h_ext,
-                not_set
+                close_code::not_set
             );
         }
 

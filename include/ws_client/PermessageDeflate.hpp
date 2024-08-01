@@ -302,7 +302,7 @@ struct PermessageDeflate
                         protocol_error,
                         "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
                             std::to_string(res_value),
-                        not_set
+                        close_code::not_set
                     );
                 }
 
@@ -313,7 +313,7 @@ struct PermessageDeflate
                         "Received server_max_window_bits " + std::to_string(res_value) +
                             " greater than requested value of " +
                             std::to_string(this->server_max_window_bits),
-                        not_set
+                        close_code::not_set
                     );
                 }
 
@@ -344,7 +344,7 @@ struct PermessageDeflate
                     protocol_error,
                     "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
                         std::to_string(res_value),
-                    not_set
+                    close_code::not_set
                 );
             }
 
@@ -419,7 +419,7 @@ struct PermessageDeflate
                         protocol_error,
                         "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
                             std::to_string(res_value),
-                        not_set
+                        close_code::not_set
                     );
                 }
 
@@ -430,7 +430,7 @@ struct PermessageDeflate
                         "Received client_max_window_bits " + std::to_string(res_value) +
                             " greater than requested value of " +
                             std::to_string(this->client_max_window_bits),
-                        not_set
+                        close_code::not_set
                     );
                 }
 
@@ -467,7 +467,7 @@ struct PermessageDeflate
                     protocol_error,
                     "Failed to parse client_max_window_bits from server: " +
                         client_max_window_bits_str,
-                    not_set
+                    close_code::not_set
                 );
             }
 
@@ -477,7 +477,7 @@ struct PermessageDeflate
                     protocol_error,
                     "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
                         std::to_string(client_max_window_bits_parsed),
-                    not_set
+                    close_code::not_set
                 );
             }
 
@@ -559,7 +559,7 @@ struct PermessageDeflate
             return WS_ERROR(
                 protocol_error,
                 "Invalid window bits value received. Expected: 8-15, got: " + bits_string,
-                not_set
+                close_code::not_set
             );
         }
         return static_cast<uint8_t>(result);
@@ -710,8 +710,7 @@ public:
             if (Z_OK != inflateEnd(istate_))
                 return make_error("inflateEnd", istate_->msg);
 
-            if (Z_OK !=
-                inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits))
+            if (Z_OK != inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits))
                 return make_error("inflateInit2", istate_->msg);
         }
         else
@@ -792,7 +791,7 @@ public:
     {
         std::ostringstream os;
         os << "zlib [" << desc << "] failed: " << (msg != NULL ? string(msg) : "N/A");
-        return WS_ERROR(compression_error, os.str(), not_set);
+        return WS_ERROR(compression_error, os.str(), close_code::not_set);
     }
 };
 } // namespace ws_client

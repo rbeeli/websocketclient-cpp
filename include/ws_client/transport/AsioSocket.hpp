@@ -81,11 +81,11 @@ public:
         if (result.index() == 1)
         {
             // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout, "Read timed out", not_set);
+            co_return WS_ERROR(timeout, "Read timed out", close_code::not_set);
         }
 
         if (ec)
-            co_return WS_ERROR(transport_error, ec.message(), not_set);
+            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
         // return the number of bytes read
         co_return std::get<0>(result);
@@ -116,11 +116,11 @@ public:
         if (result.index() == 1)
         {
             // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout, "Write timed out", not_set);
+            co_return WS_ERROR(timeout, "Write timed out", close_code::not_set);
         }
 
         if (ec)
-            co_return WS_ERROR(transport_error, ec.message(), not_set);
+            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
         // return the number of bytes written
         co_return std::get<0>(result);
@@ -160,7 +160,7 @@ public:
             }
 
             if (ec && ec != asio::error::eof)
-                co_return WS_ERROR(transport_error, ec.message(), not_set);
+                co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
         }
 
         logger_->template log<LogLevel::D>("TCP before shutdown");
@@ -169,7 +169,7 @@ public:
         asio::error_code ec;
         socket_.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
         if (ec && ec != asio::error::eof)
-            co_return WS_ERROR(transport_error, ec.message(), not_set);
+            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
         logger_->template log<LogLevel::D>("TCP after shutdown");
 
@@ -189,7 +189,7 @@ public:
         // close the underlying socket
         socket_.lowest_layer().close(ec);
         if (ec)
-            co_return WS_ERROR(transport_error, ec.message(), not_set);
+            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
         logger_->template log<LogLevel::I>("TCP connection closed");
 
