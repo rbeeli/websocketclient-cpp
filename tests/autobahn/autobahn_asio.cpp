@@ -37,10 +37,10 @@ using asio::ip::tcp;
     {
         int errno_ = errno;
         return WS_ERROR(
-            UNCATEGORIZED,
+            uncategorized,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
                 std::to_string(errno_) + ")",
-            NOT_SET
+            not_set
         );
     }
     return {};
@@ -100,7 +100,7 @@ using asio::ip::tcp;
             throw std::runtime_error("Unexpected message type");
     }
 
-    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
+    WS_CO_TRYV(co_await client.close(close_code::normal_closure));
 
     co_return response;
 }
@@ -176,7 +176,7 @@ using asio::ip::tcp;
             throw std::runtime_error("Unexpected message type");
     }
 
-    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
+    WS_CO_TRYV(co_await client.close(close_code::normal_closure));
 
     co_return expected<void, WSError>{};
 }

@@ -89,7 +89,7 @@ expected<void, WSError> run()
         {
             // write message back to server
             string text = "This is the " + std::to_string(i) + "th message";
-            Message msg2(MessageType::TEXT, text);
+            Message msg2(MessageType::text, text);
             WS_TRYV(client.send_message(msg2));
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
@@ -123,7 +123,7 @@ expected<void, WSError> run()
         }
     }
 
-    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
+    WS_TRYV(client.close(close_code::normal_closure));
 
     return {};
 };

@@ -36,7 +36,7 @@ public:
 
         if (!(stream >> result.protocol_version >> temp_status_code))
             return WS_ERROR(
-                PROTOCOL_ERROR, "Error parsing HTTP protocol version / status code.", NOT_SET
+                protocol_error, "Error parsing HTTP protocol version / status code.", not_set
             );
 
         // parse status code as integer
@@ -46,7 +46,7 @@ public:
             result.status_code
         );
         if (ec != std::errc())
-            return WS_ERROR(PROTOCOL_ERROR, "Status code is not a valid integer.", NOT_SET);
+            return WS_ERROR(protocol_error, "Status code is not a valid integer.", not_set);
 
         // read the remaining part as the reason text, if present
         std::getline(stream, result.reason, '\n');
@@ -78,7 +78,7 @@ public:
 
             auto colon_pos = line.find(':');
             if (colon_pos == std::string::npos)
-                return WS_ERROR(PROTOCOL_ERROR, "Malformed HTTP header line: " + line, NOT_SET);
+                return WS_ERROR(protocol_error, "Malformed HTTP header line: " + line, not_set);
 
             string header_name = line.substr(0, colon_pos);
             string header_value = colon_pos < line.size() - 1 ? line.substr(colon_pos + 1) : "";
@@ -87,7 +87,7 @@ public:
             trim(header_value);
 
             if (header_name.empty())
-                return WS_ERROR(PROTOCOL_ERROR, "Malformed HTTP header line: " + line, NOT_SET);
+                return WS_ERROR(protocol_error, "Malformed HTTP header line: " + line, not_set);
 
             result.add(header_name, header_value);
         }

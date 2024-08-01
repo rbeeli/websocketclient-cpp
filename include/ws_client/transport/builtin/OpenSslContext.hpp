@@ -158,7 +158,7 @@ private:
     [[nodiscard]] static unexpected<WSError> make_error(const string& msg) noexcept
     {
         auto errors = get_errors_as_string();
-        return WS_UNEXPECTED(WSError(WSErrorCode::TRANSPORT_ERROR, msg + ": " + errors));
+        return WS_UNEXPECTED(WSError(WSErrorCode::transport_error, msg + ": " + errors));
     }
 };
 } // namespace ws_client

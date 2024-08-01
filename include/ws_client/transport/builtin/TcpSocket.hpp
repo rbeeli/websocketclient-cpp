@@ -98,7 +98,7 @@ public:
     [[nodiscard]] expected<void, WSError> init()
     {
         if (fd_ != -1)
-            return WS_ERROR(LOGIC_ERROR, "TCP socket already initialized", NOT_SET);
+            return WS_ERROR(logic_error, "TCP socket already initialized", not_set);
         
         // create a socket based on family (IPv4 or IPv6)
         logger_->template log<LogLevel::D>(
@@ -109,10 +109,10 @@ public:
         {
             int error_code = errno;
             return WS_ERROR(
-                TRANSPORT_ERROR,
+                transport_error,
                 "Error creating TCP socket: " + std::string(std::strerror(error_code)) + " (" +
                     std::to_string(error_code) + ")",
-                NOT_SET
+                not_set
             );
         }
 
@@ -136,10 +136,10 @@ public:
     [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5000ms)
     {
         if (fd_ == -1)
-            return WS_ERROR(LOGIC_ERROR, "TcpSocket not initialized, call init() first.", NOT_SET);
+            return WS_ERROR(logic_error, "TcpSocket not initialized, call init() first.", not_set);
 
         if (connected_)
-            return WS_ERROR(LOGIC_ERROR, "Connection already established", NOT_SET);
+            return WS_ERROR(logic_error, "Connection already established", not_set);
 
         Timeout timeout(timeout_ms);
 
@@ -169,7 +169,7 @@ public:
         } while (select_ret == -1 && errno == EINTR);
 
         if (select_ret == 0) [[unlikely]]
-            return WS_ERROR(TIMEOUT, "Connect timeout", NOT_SET);
+            return WS_ERROR(timeout, "Connect timeout", not_set);
 
         WS_TRYV(this->check_errno(select_ret, "connect"));
 
@@ -185,7 +185,7 @@ public:
             ss << "Connect failed to " << address_.hostname() << ":" << address_.port()
                << " (" << address_.ip() << "): " << error_message << " (error code: " << error
                << ")";
-            return WS_ERROR(TRANSPORT_ERROR, ss.str(), NOT_SET);
+            return WS_ERROR(transport_error, ss.str(), not_set);
         }
 
         connected_ = true;
@@ -222,7 +222,7 @@ public:
     {
         int flags = fcntl(fd_, F_GETFL, 0);
         if (flags == -1)
-            return WS_ERROR(TRANSPORT_ERROR, "Failed to get socket flags", NOT_SET);
+            return WS_ERROR(transport_error, "Failed to get socket flags", not_set);
 
         if (value)
             flags |= O_NONBLOCK;
@@ -230,7 +230,7 @@ public:
             flags &= ~O_NONBLOCK;
 
         if (fcntl(fd_, F_SETFL, flags) == -1)
-            return WS_ERROR(TRANSPORT_ERROR, "Failed to set socket to non-blocking", NOT_SET);
+            return WS_ERROR(transport_error, "Failed to set socket to non-blocking", not_set);
 
         logger_->template log<LogLevel::D>("O_NONBLOCK=" + std::to_string(value));
         return {};
@@ -307,7 +307,7 @@ public:
             } while (select_ret == -1 && errno == EINTR);
 
             if (select_ret == 0) [[unlikely]]
-                return WS_ERROR(TIMEOUT, "Read timeout", NOT_SET);
+                return WS_ERROR(timeout, "Read timeout", not_set);
 
             WS_TRYV(this->check_errno(select_ret, "read_some (select)"));
 
@@ -319,7 +319,7 @@ public:
             } while (ret == -1 && errno == EINTR);
 
             if (ret == 0) [[unlikely]]
-                return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+                return WS_ERROR(transport_error, "Connection closed on transport layer", not_set);
 
             // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
         } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
@@ -356,7 +356,7 @@ public:
             } while (select_ret == -1 && errno == EINTR);
 
             if (select_ret == 0) [[unlikely]]
-                return WS_ERROR(TIMEOUT, "Write timeout", NOT_SET);
+                return WS_ERROR(timeout, "Write timeout", not_set);
 
             WS_TRYV(this->check_errno(select_ret, "write_some (select)"));
 
@@ -368,7 +368,7 @@ public:
             } while (ret == -1 && errno == EINTR);
 
             if (ret == 0) [[unlikely]]
-                return WS_ERROR(TRANSPORT_ERROR, "Connection closed on transport layer", NOT_SET);
+                return WS_ERROR(transport_error, "Connection closed on transport layer", not_set);
 
             // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
         } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
@@ -435,10 +435,10 @@ private:
 
         int errno_ = errno;
         return WS_ERROR(
-            TRANSPORT_ERROR,
+            transport_error,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
                 std::to_string(errno_) + ")",
-            NOT_SET
+            not_set
         );
     }
 };

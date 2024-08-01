@@ -188,10 +188,10 @@ public:
         if (status_line.status_code != 101)
         {
             return WS_ERROR(
-                PROTOCOL_ERROR,
+                protocol_error,
                 "HTTP error during WebSocket handshake response processing: " +
                     std::to_string(status_line.status_code) + " " + status_line.reason,
-                NOT_SET
+                not_set
             );
         }
 
@@ -227,16 +227,16 @@ protected:
         if (!h_con.has_value())
         {
             return WS_ERROR(
-                PROTOCOL_ERROR, "HTTP response is missing 'Connection' header", NOT_SET
+                protocol_error, "HTTP response is missing 'Connection' header", not_set
             );
         }
 
         if (!equals_ci(*h_con, "Upgrade"))
         {
             return WS_ERROR(
-                PROTOCOL_ERROR,
+                protocol_error,
                 "Invalid 'Connection' header, expected: 'Upgrade', got: " + *h_con,
-                NOT_SET
+                not_set
             );
         }
 
@@ -252,9 +252,9 @@ protected:
         if (*h_ext != "13")
         {
             return WS_ERROR(
-                PROTOCOL_ERROR,
+                protocol_error,
                 "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: " + *h_ext,
-                NOT_SET
+                not_set
             );
         }
 
@@ -267,7 +267,7 @@ protected:
         if (!h_ext.has_value())
         {
             return WS_ERROR(
-                PROTOCOL_ERROR, "HTTP response is missing 'Sec-WebSocket-Accept' header", NOT_SET
+                protocol_error, "HTTP response is missing 'Sec-WebSocket-Accept' header", not_set
             );
         }
 
@@ -280,10 +280,10 @@ protected:
         if (*h_ext != expected_accept)
         {
             return WS_ERROR(
-                PROTOCOL_ERROR,
+                protocol_error,
                 "Invalid 'Sec-WebSocket-Accept' header, expected: " + expected_accept +
                     ", got: " + *h_ext,
-                NOT_SET
+                not_set
             );
         }
 

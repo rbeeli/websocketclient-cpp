@@ -79,7 +79,7 @@ asio::awaitable<expected<void, WSError>> run()
         {
             // write message back to server
             string text = "This is the " + std::to_string(i) + "th message";
-            Message msg2(MessageType::TEXT, text);
+            Message msg2(MessageType::text, text);
             WS_CO_TRYV(co_await client.send_message(msg2));
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
@@ -115,7 +115,7 @@ asio::awaitable<expected<void, WSError>> run()
         }
     }
 
-    WS_CO_TRYV(co_await client.close(close_code::NORMAL_CLOSURE));
+    WS_CO_TRYV(co_await client.close(close_code::normal_closure));
 
     co_return expected<void, WSError>{};
 };

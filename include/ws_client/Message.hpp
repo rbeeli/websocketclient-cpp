@@ -17,18 +17,18 @@ using std::span;
 
 enum class MessageType : uint8_t
 {
-    TEXT = static_cast<uint8_t>(opcode::TEXT),
-    BINARY = static_cast<uint8_t>(opcode::BINARY)
+    text = static_cast<uint8_t>(opcode::text),
+    binary = static_cast<uint8_t>(opcode::binary)
 };
 
 static constexpr string to_string(MessageType v)
 {
     switch (v)
     {
-        case MessageType::TEXT:
-            return "TEXT";
-        case MessageType::BINARY:
-            return "BINARY";
+        case MessageType::text:
+            return "text";
+        case MessageType::binary:
+            return "binary";
         default:
             return "UNKNOWN (" + std::to_string(static_cast<uint8_t>(v)) + ")";
     }
@@ -38,13 +38,13 @@ struct MessageReadState
 {
     bool is_compressed = false;
     bool is_first = true;
-    opcode op_code = opcode::NOT_SET;
+    opcode op_code = opcode::not_set;
 
     void reset() noexcept
     {
         is_compressed = false;
         is_first = true;
-        op_code = opcode::NOT_SET;
+        op_code = opcode::not_set;
     }
 };
 

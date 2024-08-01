@@ -15,41 +15,41 @@ using std::string_view;
 
 enum class WSErrorCode : uint8_t
 {
-    CONNECTION_CLOSED = 1,
-    TRANSPORT_ERROR = 3,
-    PROTOCOL_ERROR = 4,
-    URL_ERROR = 5,
-    BUFFER_ERROR = 6,
-    UNCATEGORIZED = 7,
-    COMPRESSION_ERROR = 8,
-    TIMEOUT = 9,
-    LOGIC_ERROR = 10,
+    connection_closed = 1,
+    transport_error = 3,
+    protocol_error = 4,
+    url_error = 5,
+    buffer_error = 6,
+    uncategorized = 7,
+    compression_error = 8,
+    timeout = 9,
+    logic_error = 10,
 };
 
 static constexpr string_view to_string(const WSErrorCode& error)
 {
     switch (error)
     {
-        case WSErrorCode::CONNECTION_CLOSED:
-            return "CONNECTION_CLOSED";
-        case WSErrorCode::TRANSPORT_ERROR:
-            return "TRANSPORT_ERROR";
-        case WSErrorCode::PROTOCOL_ERROR:
-            return "PROTOCOL_ERROR";
-        case WSErrorCode::URL_ERROR:
-            return "URL_ERROR";
-        case WSErrorCode::BUFFER_ERROR:
-            return "BUFFER_ERROR";
-        case WSErrorCode::UNCATEGORIZED:
-            return "UNCATEGORIZED";
-        case WSErrorCode::COMPRESSION_ERROR:
-            return "COMPRESSION_ERROR";
-        case WSErrorCode::TIMEOUT:
-            return "TIMEOUT";
-        case WSErrorCode::LOGIC_ERROR:
-            return "LOGIC_ERROR";
+        case WSErrorCode::connection_closed:
+            return "connection_closed";
+        case WSErrorCode::transport_error:
+            return "transport_error";
+        case WSErrorCode::protocol_error:
+            return "protocol_error";
+        case WSErrorCode::url_error:
+            return "url_error";
+        case WSErrorCode::buffer_error:
+            return "buffer_error";
+        case WSErrorCode::uncategorized:
+            return "uncategorized";
+        case WSErrorCode::compression_error:
+            return "compression_error";
+        case WSErrorCode::timeout:
+            return "timeout";
+        case WSErrorCode::logic_error:
+            return "logic_error";
         default:
-            return "UNKNOWN_ERROR";
+            return "unknown";
     }
 }
 
@@ -60,7 +60,7 @@ struct WSError
     close_code close_with_code;
 
     WSError(WSErrorCode code, string message)
-        : code(code), message(message), close_with_code(close_code::NOT_SET)
+        : code(code), message(message), close_with_code(close_code::not_set)
     {
     }
 

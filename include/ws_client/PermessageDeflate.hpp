@@ -299,21 +299,21 @@ struct PermessageDeflate
                 if (res_value < 8 || res_value > 15)
                 {
                     return WS_ERROR(
-                        PROTOCOL_ERROR,
+                        protocol_error,
                         "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
                             std::to_string(res_value),
-                        NOT_SET
+                        not_set
                     );
                 }
 
                 if (res_value > this->server_max_window_bits)
                 {
                     return WS_ERROR(
-                        PROTOCOL_ERROR,
+                        protocol_error,
                         "Received server_max_window_bits " + std::to_string(res_value) +
                             " greater than requested value of " +
                             std::to_string(this->server_max_window_bits),
-                        NOT_SET
+                        not_set
                     );
                 }
 
@@ -341,10 +341,10 @@ struct PermessageDeflate
             if (res_value < 8 || res_value > 15)
             {
                 return WS_ERROR(
-                    PROTOCOL_ERROR,
+                    protocol_error,
                     "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
                         std::to_string(res_value),
-                    NOT_SET
+                    not_set
                 );
             }
 
@@ -416,21 +416,21 @@ struct PermessageDeflate
                 if (res_value < 8 || res_value > 15)
                 {
                     return WS_ERROR(
-                        PROTOCOL_ERROR,
+                        protocol_error,
                         "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
                             std::to_string(res_value),
-                        NOT_SET
+                        not_set
                     );
                 }
 
                 if (res_value > this->client_max_window_bits)
                 {
                     return WS_ERROR(
-                        PROTOCOL_ERROR,
+                        protocol_error,
                         "Received client_max_window_bits " + std::to_string(res_value) +
                             " greater than requested value of " +
                             std::to_string(this->client_max_window_bits),
-                        NOT_SET
+                        not_set
                     );
                 }
 
@@ -464,20 +464,20 @@ struct PermessageDeflate
             if (res.ec != std::errc{})
             {
                 return WS_ERROR(
-                    PROTOCOL_ERROR,
+                    protocol_error,
                     "Failed to parse client_max_window_bits from server: " +
                         client_max_window_bits_str,
-                    NOT_SET
+                    not_set
                 );
             }
 
             if (client_max_window_bits_parsed < 8 || client_max_window_bits_parsed > 15)
             {
                 return WS_ERROR(
-                    PROTOCOL_ERROR,
+                    protocol_error,
                     "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
                         std::to_string(client_max_window_bits_parsed),
-                    NOT_SET
+                    not_set
                 );
             }
 
@@ -557,9 +557,9 @@ struct PermessageDeflate
         if (res.ec != std::errc{})
         {
             return WS_ERROR(
-                PROTOCOL_ERROR,
+                protocol_error,
                 "Invalid window bits value received. Expected: 8-15, got: " + bits_string,
-                NOT_SET
+                not_set
             );
         }
         return static_cast<uint8_t>(result);
@@ -792,7 +792,7 @@ public:
     {
         std::ostringstream os;
         os << "zlib [" << desc << "] failed: " << (msg != NULL ? string(msg) : "N/A");
-        return WS_ERROR(COMPRESSION_ERROR, os.str(), NOT_SET);
+        return WS_ERROR(compression_error, os.str(), not_set);
     }
 };
 } // namespace ws_client

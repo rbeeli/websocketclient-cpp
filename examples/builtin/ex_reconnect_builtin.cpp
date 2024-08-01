@@ -67,7 +67,7 @@ expected<void, WSError> run()
     //     "params": ["btcusdt@aggTrade"],
     //     "id": 1
     // })";
-    // Message msg(MessageType::TEXT, sub_msg);
+    // Message msg(MessageType::text, sub_msg);
     // WS_TRYV(client.send_message(msg, {.compress = false}));
 
     Buffer buffer;
@@ -104,7 +104,7 @@ expected<void, WSError> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            if (err->code == WSErrorCode::TIMEOUT)
+            if (err->code == WSErrorCode::timeout)
             {
                 std::cout << "read_message timed out\n";
                 break;

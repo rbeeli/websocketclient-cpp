@@ -140,7 +140,7 @@ public:
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
         if (ssl_)
-            return WS_ERROR(LOGIC_ERROR, "OpenSslSocket already initialized", NOT_SET);
+            return WS_ERROR(logic_error, "OpenSslSocket already initialized", not_set);
         
         // create SSL structure
         ssl_ = SSL_new(ctx_->ssl_ctx());
@@ -181,7 +181,7 @@ public:
     ) noexcept
     {
         if (!ssl_)
-            return WS_ERROR(LOGIC_ERROR, "OpenSslSocket not initialized, call init() first.", NOT_SET);
+            return WS_ERROR(logic_error, "OpenSslSocket not initialized, call init() first.", not_set);
 
         Timeout timeout(timeout_ms);
 
@@ -355,7 +355,7 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    TRANSPORT_ERROR, "SSL connection closed on transport layer", NOT_SET
+                    transport_error, "SSL connection closed on transport layer", not_set
                 );
             }
             else
@@ -384,7 +384,7 @@ public:
                         return make_error("read_some failed due to system error");
                     }
                     if (select_ret == 0)
-                        return WS_ERROR(TIMEOUT, "read_some operation timed out", NOT_SET);
+                        return WS_ERROR(timeout, "read_some operation timed out", not_set);
 
                     // socket is ready, continue to retry SSL_read
                     continue;
@@ -398,7 +398,7 @@ public:
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(TIMEOUT, "read_some operation timed out", NOT_SET);
+        return WS_ERROR(timeout, "read_some operation timed out", not_set);
     }
 
     /**
@@ -421,7 +421,7 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    TRANSPORT_ERROR, "SSL connection closed on transport layer", NOT_SET
+                    transport_error, "SSL connection closed on transport layer", not_set
                 );
             }
             else
@@ -450,7 +450,7 @@ public:
                         return make_error("write_some failed due to system error");
                     }
                     if (select_ret == 0)
-                        return WS_ERROR(TIMEOUT, "write_some operation timed out", NOT_SET);
+                        return WS_ERROR(timeout, "write_some operation timed out", not_set);
 
                     // socket is ready, continue to retry SSL_write
                     continue;
@@ -464,7 +464,7 @@ public:
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(TIMEOUT, "write_some operation timed out", NOT_SET);
+        return WS_ERROR(timeout, "write_some operation timed out", not_set);
     }
 
     /**
@@ -703,7 +703,7 @@ private:
     [[nodiscard]] static unexpected<WSError> make_error(const string& msg) noexcept
     {
         auto errors = get_errors_as_string();
-        return WS_UNEXPECTED(WSError(WSErrorCode::TRANSPORT_ERROR, msg + ": " + errors));
+        return WS_UNEXPECTED(WSError(WSErrorCode::transport_error, msg + ": " + errors));
     }
 };
 

@@ -67,7 +67,7 @@ asio::awaitable<expected<void, WSError>> run()
 
     // send message
     string payload = "test";
-    Message msg(MessageType::TEXT, payload);
+    Message msg(MessageType::text, payload);
     WS_CO_TRYV(co_await client.send_message(msg));
 
     Buffer buffer;
@@ -81,7 +81,7 @@ asio::awaitable<expected<void, WSError>> run()
         {
             // write message back to server
             string text = "This is the " + std::to_string(i) + "th message";
-            Message msg2(MessageType::TEXT, text);
+            Message msg2(MessageType::text, text);
 
             // // wait for server to close connection
             // asio::steady_timer timer(executor, std::chrono::seconds(1));
@@ -144,7 +144,7 @@ asio::awaitable<expected<void, WSError>> run()
                 {
                     logger.log<LogLevel::D>("Sending ping ...");
                     string ping_msg = R"({"op":"ping"})";
-                    Message msg = Message(MessageType::TEXT, ping_msg);
+                    Message msg = Message(MessageType::text, ping_msg);
                     auto res = co_await client.send_message(msg, {.compress = false});
                     if (!res.has_value())
                         logger.log<LogLevel::E>("WSError: " + err->message);
@@ -171,13 +171,13 @@ asio::awaitable<expected<void, WSError>> run()
     // asio::steady_timer timer(executor, std::chrono::seconds(1));
     // co_await timer.async_wait(asio::use_awaitable);
 
-    // co_await client.close(close_code::NORMAL_CLOSURE);
+    // co_await client.close(close_code::normal_closure);
 
     co_await asio::co_spawn(
         write_strand,
         [&]() -> awaitable<void>
         {
-            auto res = co_await client.close(close_code::NORMAL_CLOSURE);
+            auto res = co_await client.close(close_code::normal_closure);
             if (!res.has_value())
                 logger.log<LogLevel::E>("Error closing websocket client: " + res.error().message);
         },

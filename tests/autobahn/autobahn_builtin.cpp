@@ -75,7 +75,7 @@ using std::byte;
             throw std::runtime_error("Unexpected message type");
     }
 
-    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
+    WS_TRYV(client.close(close_code::normal_closure));
 
     return response;
 }
@@ -154,7 +154,7 @@ using std::byte;
             throw std::runtime_error("Unexpected message type");
     }
 
-    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
+    WS_TRYV(client.close(close_code::normal_closure));
 
     return {};
 }

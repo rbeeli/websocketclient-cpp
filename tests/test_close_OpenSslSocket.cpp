@@ -67,7 +67,7 @@ expected<void, WSError> run()
 
     // send message
     string payload = "test";
-    Message msg(MessageType::TEXT, payload);
+    Message msg(MessageType::text, payload);
     WS_TRYV(client.send_message(msg));
     
     Buffer buffer;
@@ -115,7 +115,7 @@ expected<void, WSError> run()
     // wait for server to close connection
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
+    WS_TRYV(client.close(close_code::normal_closure));
 
     return {};
 };

@@ -133,7 +133,7 @@ expected<void, WSError> run()
         ],
         "id": 1
     })";
-    Message msg(MessageType::TEXT, sub_msg);
+    Message msg(MessageType::text, sub_msg);
     WS_TRYV(client.send_message(msg, {.compress = false}));
 
     time_point<system_clock> last_msg;

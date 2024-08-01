@@ -85,7 +85,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     co_await underlying.Connect();
     TSslSocket ssl_socket(std::move(underlying), ctx);
     // if (!SSL_set_tlsext_host_name(ssl_socket.GetSsl(), url.host().c_str()))
-    //     co_return WS_ERROR(TRANSPORT_ERROR, "SSL_set_tlsext_host_name failed");
+    //     co_return WS_ERROR(transport_error, "SSL_set_tlsext_host_name failed");
     // SSL_set_verify(ssl_socket.GetSsl(), SSL_VERIFY_NONE, nullptr);
     co_await ssl_socket.Connect();
 
@@ -151,7 +151,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
         ],
         "id": 1
     })";
-    Message msg(MessageType::TEXT, sub_msg);
+    Message msg(MessageType::text, sub_msg);
     WS_CO_TRYV(co_await client.send_message(msg));
 
     std::chrono::time_point<std::chrono::system_clock> last_msg;

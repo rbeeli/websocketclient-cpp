@@ -104,7 +104,7 @@ expected<void, WSError> run()
         }
     }
 
-    WS_TRYV(client.close(close_code::NORMAL_CLOSURE));
+    WS_TRYV(client.close(close_code::normal_closure));
 
     return {};
 };

@@ -2,9 +2,9 @@
 
 #ifndef WS_CLIENT_VALIDATE_UTF8
 /**
- * Enables UTF-8 validation of TEXT messages, see RFC 6455, section 5.6.
+ * Enables UTF-8 validation of text messages, see RFC 6455, section 5.6.
  * 
- * If disabled, does not validate TEXT message payloads and CLOSE error messages.
+ * If disabled, does not validate text message payloads and close error messages.
  * Disable for improved performance and lower CPU load.
  * Recommended to enable during development and debugging.
  * 

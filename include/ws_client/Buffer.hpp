@@ -320,11 +320,11 @@ private:
         if (size > max_size_)
         {
             return WS_ERROR(
-                BUFFER_ERROR,
+                buffer_error,
                 "Requested buffer size " + std::to_string(size) +
                     " exceeds maximum allowed size of " + std::to_string(max_size_) +
                     " bytes",
-                NOT_SET
+                not_set
             );
         }
 
@@ -335,7 +335,7 @@ private:
         if (newbuf == nullptr)
         {
             return WS_ERROR(
-                BUFFER_ERROR, "Failed to allocate buffer of size " + std::to_string(size), NOT_SET
+                buffer_error, "Failed to allocate buffer of size " + std::to_string(size), not_set
             );
         }
 

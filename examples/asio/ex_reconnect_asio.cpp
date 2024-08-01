@@ -80,7 +80,7 @@ awaitable<expected<void, WSError>> run()
     //     "params": ["btcusdt@aggTrade"],
     //     "id": 1
     // })";
-    // Message msg(MessageType::TEXT, sub_msg);
+    // Message msg(MessageType::text, sub_msg);
     // WS_CO_TRYV(co_await client.send_message(msg, {.compress = false}));
 
     Buffer buffer;
@@ -118,7 +118,7 @@ awaitable<expected<void, WSError>> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            if (err->code == WSErrorCode::TIMEOUT)
+            if (err->code == WSErrorCode::timeout)
             {
                 std::cout << "read_message timed out\n";
                 break;
@@ -131,7 +131,7 @@ awaitable<expected<void, WSError>> run()
         }
     }
 
-    co_await client.close(close_code::NORMAL_CLOSURE);
+    co_await client.close(close_code::normal_closure);
 
     co_return expected<void, WSError>{};
 };
