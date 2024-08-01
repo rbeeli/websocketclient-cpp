@@ -88,10 +88,10 @@ private:
 
     // buffers for header data and control frame payloads
     alignas(64) array<byte, 128> write_buffer_storage_;
-    span<byte> write_buffer = span(write_buffer_storage_);
+    span<byte> write_buffer_ = span(write_buffer_storage_);
 
     alignas(64) array<byte, 128> read_buffer_storage_;
-    span<byte> read_buffer = span(read_buffer_storage_);
+    span<byte> read_buffer_ = span(read_buffer_storage_);
 
     // maintain state for reading messages (might get interrupted with control frames, which require immediate handling)
     MessageReadState read_state_;
@@ -133,9 +133,9 @@ public:
           compress_buffer_(std::move(other.compress_buffer_))
     {
         this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
-        this->write_buffer = span(this->write_buffer_storage_);
+        this->write_buffer_ = span(this->write_buffer_storage_);
         this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
-        this->read_buffer = span(this->read_buffer_storage_);
+        this->read_buffer_ = span(this->read_buffer_storage_);
     }
     WebSocketClient& operator=(WebSocketClient&& other) noexcept
     {
@@ -147,9 +147,9 @@ public:
             this->mask_key_gen_ = std::move(other.mask_key_gen_);
             this->permessage_deflate_ctx_ = std::move(other.permessage_deflate_ctx_);
             this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
-            this->write_buffer = span(this->write_buffer_storage_);
+            this->write_buffer_ = span(this->write_buffer_storage_);
             this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
-            this->read_buffer = span(this->read_buffer_storage_);
+            this->read_buffer_ = span(this->read_buffer_storage_);
             this->read_state_ = other.read_state_;
             this->decompress_buffer_ = std::move(other.decompress_buffer_);
             this->compress_buffer_ = std::move(other.compress_buffer_);
@@ -735,22 +735,22 @@ private:
         }
 
         size_t offset = 0;
-        write_buffer[0] = frame.header.b0;
-        write_buffer[1] = frame.header.b1;
+        write_buffer_[0] = frame.header.b0;
+        write_buffer_[1] = frame.header.b1;
         offset += 2;
 
         if (frame.payload_size > 125 && frame.payload_size <= UINT16_MAX) [[likely]]
         {
             // 16 bit payload length
             uint16_t nlen = host_to_network(static_cast<uint16_t>(frame.payload_size));
-            std::memcpy(&write_buffer[offset], &nlen, sizeof(uint16_t));
+            std::memcpy(&write_buffer_[offset], &nlen, sizeof(uint16_t));
             offset += sizeof(uint16_t);
         }
         else if (frame.payload_size > UINT16_MAX) [[unlikely]]
         {
             // full 64 bit payload length
             uint64_t nlen = host_to_network(static_cast<uint64_t>(frame.payload_size));
-            std::memcpy(&write_buffer[offset], &nlen, sizeof(uint64_t));
+            std::memcpy(&write_buffer_[offset], &nlen, sizeof(uint64_t));
             offset += sizeof(uint64_t);
         }
 
@@ -762,14 +762,14 @@ private:
         }
 
         // write 4 byte masking key
-        std::memcpy(&write_buffer[offset], &frame.mask_key.key, sizeof(uint32_t));
+        std::memcpy(&write_buffer_[offset], &frame.mask_key.key, sizeof(uint32_t));
         offset += sizeof(uint32_t);
 
         // mask payload in-place
         frame.mask_key.mask(payload);
 
         // write frame header
-        WS_TRYV(this->socket_.write(write_buffer.subspan(0, offset), timeout));
+        WS_TRYV(this->socket_.write(write_buffer_.subspan(0, offset), timeout));
 
         // write frame payload
         if (frame.payload_size > 0)
@@ -799,8 +799,8 @@ private:
             uint16_t status_code_n = host_to_network(static_cast<uint16_t>(code));
 
             // use last two bytes of write buffer for status code
-            std::memcpy(this->write_buffer.data() + 125, &status_code_n, sizeof(uint16_t));
-            payload = this->write_buffer.subspan(125, sizeof(uint16_t));
+            std::memcpy(this->write_buffer_.data() + 125, &status_code_n, sizeof(uint16_t));
+            payload = this->write_buffer_.subspan(125, sizeof(uint16_t));
 
             std::stringstream msg;
             msg << "Writing close frame with status ";
