@@ -255,11 +255,7 @@ public:
     ) noexcept
     {
         if (this->closed_)
-        {
-            return WS_ERROR_RAW(
-                connection_closed, "Connection in closed state.", close_code::not_set
-            );
-        }
+            return WSError(WSErrorCode::connection_closed, "Connection in closed state.");
 
         Timeout timeout(timeout_ms);
 
@@ -272,8 +268,8 @@ public:
             // check reserved opcodes
             if (is_reserved(frame.header.op_code()))
             {
-                return WS_ERROR_RAW(
-                    protocol_error,
+                return WSError(
+                    WSErrorCode::protocol_error,
                     "Reserved opcode received: " + to_string(frame.header.op_code()),
                     close_code::protocol_error
                 );
@@ -305,7 +301,7 @@ public:
                              " bytes is too large, only " +
                              std::to_string(buffer.max_size() - buffer.size()) +
                              " bytes available.";
-                return WS_ERROR_RAW(buffer_error, msg, close_code::message_too_big);
+                return WSError(WSErrorCode::buffer_error, msg, close_code::message_too_big);
             }
 
             // check if this is the first frame
@@ -325,8 +321,8 @@ public:
                     }
                     else
                     {
-                        return WS_ERROR_RAW(
-                            protocol_error,
+                        return WSError(
+                            WSErrorCode::protocol_error,
                             "Received compressed frame, but compression not enabled.",
                             close_code::protocol_error
                         );
@@ -335,8 +331,8 @@ public:
 
                 if (frame.header.rsv2_bit() || frame.header.rsv3_bit()) [[unlikely]]
                 {
-                    return WS_ERROR_RAW(
-                        protocol_error,
+                    return WSError(
+                        WSErrorCode::protocol_error,
                         "RSV2 or rsv3 bit set, but not supported.",
                         close_code::protocol_error
                     );
@@ -346,8 +342,8 @@ public:
             {
                 if (frame.header.op_code() != opcode::continuation) [[unlikely]]
                 {
-                    return WS_ERROR_RAW(
-                        protocol_error,
+                    return WSError(
+                        WSErrorCode::protocol_error,
                         "Expected continuation frame, but received " +
                             to_string(frame.header.op_code()),
                         close_code::protocol_error
@@ -356,8 +352,8 @@ public:
 
                 if (frame.header.has_rsv_bits()) [[unlikely]]
                 {
-                    return WS_ERROR_RAW(
-                        protocol_error,
+                    return WSError(
+                        WSErrorCode::protocol_error,
                         "RSV bits must not be set on non-first frames.",
                         close_code::protocol_error
                     );
@@ -368,8 +364,8 @@ public:
             if (read_state_.op_code != opcode::continuation &&
                 read_state_.op_code != opcode::text && read_state_.op_code != opcode::binary)
             {
-                return WS_ERROR_RAW(
-                    protocol_error,
+                return WSError(
+                    WSErrorCode::protocol_error,
                     "Unexpected opcode in websocket frame received: " +
                         to_string(read_state_.op_code),
                     close_code::protocol_error
@@ -402,7 +398,7 @@ public:
 
         // check if timeout occurred
         if (timeout.is_expired())
-            return WS_ERROR_RAW(timeout, "Timeout while reading message.", close_code::not_set);
+            return WSError(WSErrorCode::timeout, "Timeout while reading message.");
 
         span<byte> payload_buffer;
 
@@ -427,8 +423,8 @@ public:
                         const_cast<char*>((char*)payload_buffer.data()), payload_buffer.size()
                     ))
                 {
-                    return WS_ERROR_RAW(
-                        protocol_error,
+                    return WSError(
+                        WSErrorCode::protocol_error,
                         "Invalid UTF-8 in websocket TEXT message.",
                         close_code::invalid_frame_payload_data
                     );
@@ -495,8 +491,8 @@ public:
 
             default:
             {
-                return WS_ERROR_RAW(
-                    protocol_error,
+                return WSError(
+                    WSErrorCode::protocol_error,
                     "Unexpected opcode frame received: " + to_string(read_state_.op_code),
                     close_code::protocol_error
                 );
@@ -834,15 +830,17 @@ private:
     {
         if (!frame.header.is_final())
         {
-            return WS_ERROR_RAW(
-                protocol_error, "Received fragmented control frame.", close_code::protocol_error
+            return WSError(
+                WSErrorCode::protocol_error,
+                "Received fragmented control frame.",
+                close_code::protocol_error
             );
         }
 
         if (frame.header.has_rsv_bits())
         {
-            return WS_ERROR_RAW(
-                protocol_error,
+            return WSError(
+                WSErrorCode::protocol_error,
                 "Invalid RSV bits found in control frame.",
                 close_code::protocol_error
             );
@@ -850,8 +848,8 @@ private:
 
         if (frame.payload_size > 125)
         {
-            return WS_ERROR_RAW(
-                protocol_error,
+            return WSError(
+                WSErrorCode::protocol_error,
                 "Control frame payload size larger than 125 bytes, got " +
                     std::to_string(frame.payload_size),
                 close_code::protocol_error
@@ -875,8 +873,8 @@ private:
                 {
                     if (frame.payload_size == 1)
                     {
-                        return WS_ERROR_RAW(
-                            protocol_error,
+                        return WSError(
+                            WSErrorCode::protocol_error,
                             "Invalid close frame payload size of 1.",
                             close_code::protocol_error
                         );
@@ -890,8 +888,8 @@ private:
                         auto code = close_frame.get_close_code();
                         if (!is_valid_close_code(code))
                         {
-                            return WS_ERROR_RAW(
-                                protocol_error,
+                            return WSError(
+                                WSErrorCode::protocol_error,
                                 "Invalid close code " + std::to_string(static_cast<uint16_t>(code)),
                                 close_code::protocol_error
                             );
@@ -902,8 +900,8 @@ private:
                     // check close reason string is valid UTF-8 string
                     if (!close_frame.is_reason_valid_utf8())
                     {
-                        return WS_ERROR_RAW(
-                            protocol_error,
+                        return WSError(
+                            WSErrorCode::protocol_error,
                             "Invalid UTF-8 in websocket close reason string.",
                             close_code::invalid_frame_payload_data
                         );
@@ -942,8 +940,8 @@ private:
 
             default:
             {
-                return WS_ERROR_RAW(
-                    protocol_error,
+                return WSError(
+                    WSErrorCode::protocol_error,
                     "Unexpected opcode for websocket control frame received: " +
                         to_string(frame.header.op_code()),
                     close_code::protocol_error
