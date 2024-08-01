@@ -394,7 +394,7 @@ public:
             int ret = ::shutdown(fd_, SHUT_RDWR);
             if (ret != 0)
             {
-                auto err = this->check_errno(ret, "Shut down of socket failed");
+                auto err = this->check_errno(ret, "Shutdown of socket failed");
                 logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
@@ -427,10 +427,10 @@ public:
 
 private:
     [[nodiscard]] expected<void, WSError> check_errno(
-        ssize_t error_code, const string& desc
+        ssize_t return_code, const string& desc
     ) noexcept
     {
-        if (error_code != -1)
+        if (return_code != -1)
             return {};
 
         int errno_ = errno;

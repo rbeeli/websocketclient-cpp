@@ -80,9 +80,6 @@ public:
         // check if timed out
         if (result.index() == 1)
         {
-            // cancel all outstanding asynchronous operations
-            socket_.lowest_layer().cancel();
-
             // timer completed, indicating a timeout
             co_return WS_ERROR(TIMEOUT, "Read timed out", NOT_SET);
         }
@@ -118,9 +115,6 @@ public:
         // check if timed out
         if (result.index() == 1)
         {
-            // cancel all outstanding asynchronous operations
-            socket_.lowest_layer().cancel();
-
             // timer completed, indicating a timeout
             co_return WS_ERROR(TIMEOUT, "Write timed out", NOT_SET);
         }
@@ -171,7 +165,7 @@ public:
 
         logger_->template log<LogLevel::D>("TCP before shutdown");
 
-        // asynchronously shut down the (underlying) TCP connection
+        // shut down the (underlying) TCP connection
         asio::error_code ec;
         socket_.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
         if (ec && ec != asio::error::eof)

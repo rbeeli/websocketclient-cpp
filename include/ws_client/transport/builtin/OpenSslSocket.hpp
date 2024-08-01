@@ -492,7 +492,7 @@ public:
             }
             else
             {
-                logger_->template log<LogLevel::D>("SSL layer shut down successfully");
+                logger_->template log<LogLevel::D>("SSL layer shutdown successfully");
             }
         }
 
