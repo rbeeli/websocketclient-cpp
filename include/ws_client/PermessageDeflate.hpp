@@ -787,7 +787,7 @@ public:
         return output.data().subspan(0, size);
     }
 
-    [[nodiscard]] static unexpected<WSError> make_error(string_view desc, const char* msg) noexcept
+    [[nodiscard]] static auto make_error(string_view desc, const char* msg) noexcept
     {
         std::ostringstream os;
         os << "zlib [" << desc << "] failed: " << (msg != NULL ? string(msg) : "N/A");

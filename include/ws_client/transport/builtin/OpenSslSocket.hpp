@@ -716,10 +716,10 @@ private:
         return ret;
     }
 
-    [[nodiscard]] static unexpected<WSError> make_error(const string& msg) noexcept
+    [[nodiscard]] static auto make_error(const string& msg) noexcept
     {
         auto errors = get_errors_as_string();
-        return WS_UNEXPECTED(WSError(WSErrorCode::transport_error, msg + ": " + errors));
+        return std::unexpected(WSError(WSErrorCode::transport_error, msg + ": " + errors));
     }
 };
 

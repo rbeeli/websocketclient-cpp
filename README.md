@@ -45,7 +45,7 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
 
 | Dependency                                       | Description                                                                        | Required |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------- |
-| [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for TEXT messages payload validation. | Optional |
+| [simdutf](https://github.com/simdutf/simdutf)    | SIMD instructions based UTF-8 validator used for text messages payload validation. | Optional |
 | [openssl 3](https://github.com/openssl/openssl) | WebSocket Secure (WSS) support.                                                    | If using WSS. |
 | [zlib](https://github.com/madler/zlib)           | Message compression support through permessage-deflate extension.                  | If using compression (permessage-deflate). |
 | [zlib-ng](https://github.com/zlib-ng/zlib-ng)    | Faster alternative to `zlib` library with optimizations for modern CPUs.           | If using compression (permessage-deflate), alternative to `zlib`. |
@@ -78,9 +78,9 @@ The following compile-time configuration switches can be set:
 
 | Option                       | Values      | Description |
 | -------------------------    | ----------- | ------------------------------------------------------------------ |
-| `WS_CLIENT_USE_SIMD_UTF8`    | `1` or `0`  | Enable/disable SIMD instructions based UTF-8 validator for TEXT messages payload validation. |
+| `WS_CLIENT_USE_SIMD_UTF8`    | `1` or `0`  | Enable/disable SIMD instructions based UTF-8 validator for text messages payload validation. |
 | `WS_CLIENT_USE_ZLIB_NG`      | `1` or `0`  | Enable/disable `zlib-ng` instead of `zlib` library for permessage-deflate compression. |
-| `WS_CLIENT_VALIDATE_UTF8`    | `1` or `0`  | Enable/disable UTF-8 validation for TEXT messages payload. |
+| `WS_CLIENT_VALIDATE_UTF8`    | `1` or `0`  | Enable/disable UTF-8 validation for text messages payload. |
 | `WS_CLIENT_LOG_HANDSHAKE`    | `1` or `0`  | Enable/disable handshake log messages. |
 | `WS_CLIENT_LOG_MSG_PAYLOADS` | `1` or `0`  | Enable/disable message payload log messages. |
 | `WS_CLIENT_LOG_MSG_SIZES`    | `1` or `0`  | Enable/disable message size log messages. |

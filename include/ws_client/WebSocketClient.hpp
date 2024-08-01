@@ -425,7 +425,7 @@ public:
                 {
                     return WSError(
                         WSErrorCode::protocol_error,
-                        "Invalid UTF-8 in websocket TEXT message.",
+                        "Invalid UTF-8 in websocket text message.",
                         close_code::invalid_frame_payload_data
                     );
                 }
@@ -435,7 +435,7 @@ public:
                 {
 #if WS_CLIENT_LOG_MSG_PAYLOADS == 1
                     std::stringstream ss;
-                    ss << "Received TEXT message (";
+                    ss << "Received text message (";
                     ss << payload_buffer.size();
                     ss << " bytes):\033[1;35m\n";
                     ss << string(
@@ -445,7 +445,7 @@ public:
                     logger_->template log<LogLevel::I>(ss.str());
 #elif WS_CLIENT_LOG_MSG_SIZES == 1
                     logger_->template log(
-                        LogLevel::I, "Received TEXT message (", payload_buffer.size(), " bytes)"
+                        LogLevel::I, "Received text message (", payload_buffer.size(), " bytes)"
                     );
 #endif
                 }
@@ -618,7 +618,7 @@ public:
             if (!res.has_value())
             {
                 logger_->template log<LogLevel::W>("Socket close failed: " + res.error().message);
-                return WS_UNEXPECTED(res.error());
+                return std::unexpected(res.error());
             }
         }
 

@@ -9,7 +9,6 @@
 namespace ws_client
 {
 using std::expected;
-using std::unexpected;
 using std::string;
 using std::string_view;
 
@@ -78,10 +77,8 @@ inline std::ostream& operator<<(std::ostream& os, const WSError& error)
     return os;
 }
 
-#define WS_UNEXPECTED(EXPRESSION) unexpected(EXPRESSION)
-
 #define WS_ERROR(CODE, MESSAGE, CLOSE_CODE)                                                        \
-    WS_UNEXPECTED(WSError(WSErrorCode::CODE, MESSAGE, CLOSE_CODE))
+    std::unexpected(WSError(WSErrorCode::CODE, MESSAGE, CLOSE_CODE))
 
 /**
  * Checks if the expression returns an `expected` with an error.
@@ -91,7 +88,7 @@ inline std::ostream& operator<<(std::ostream& os, const WSError& error)
 #define WS_TRY(VARIABLE, EXPRESSION)                                                               \
     auto&& VARIABLE = (EXPRESSION);                                                                \
     if (!(VARIABLE).has_value()) [[unlikely]]                                                      \
-        return WS_UNEXPECTED((VARIABLE).error());
+        return std::unexpected((VARIABLE).error());
 
 /**
  * Checks if the expression returns an `expected` with an error.
@@ -112,7 +109,7 @@ inline std::ostream& operator<<(std::ostream& os, const WSError& error)
     {                                                                                              \
         auto&& tmp = (EXPRESSION);                                                                 \
         if (!tmp.has_value()) [[unlikely]]                                                         \
-            return WS_UNEXPECTED(tmp.error());                                                     \
+            return std::unexpected(tmp.error());                                                     \
     }
 
 /**

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string>
+#include <expected>
 #include <variant>
 #include <chrono>
 
@@ -162,7 +163,7 @@ asio::awaitable<expected<void, WSError>> run()
                 asio::use_awaitable
             );
             
-            co_return unexpected{*err};
+            co_return std::unexpected{*err};
             // break;
         }
     }
