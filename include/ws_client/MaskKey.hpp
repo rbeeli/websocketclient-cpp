@@ -146,7 +146,7 @@ struct MaskKey
 
 /**
  * Concept for a MaskKey generator template type.
- * Used in `WebSocketClient` to generate a new masking key for each frame.
+ * Used in `WebSocketClient` and `WebSocketClientAsync` to generate a new masking key for each frame.
  */
 template <typename T>
 concept HasMaskKeyOperator = requires(T t) {
