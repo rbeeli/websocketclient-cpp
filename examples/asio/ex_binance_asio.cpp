@@ -55,15 +55,13 @@ struct msg_stats
 asio::awaitable<expected<void, WSError>> run()
 {
     // parse URL
-    WS_CO_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
-    // WS_CO_TRY(url_res, URL::parse("wss://stream.bybit.com/v5/public/linear"));
-    URL& url = *url_res;
+    WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
     auto executor = co_await asio::this_coro::executor;
     asio::ip::tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url.host(), "https", asio::use_awaitable);
+    auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
 
-    std::cout << "Connecting to " << url.host() << "... \n";
+    std::cout << "Connecting to " << url->host() << "... \n";
 
     asio::ssl::context ctx(asio::ssl::context::sslv23);
     ctx.set_default_verify_paths();
@@ -75,7 +73,7 @@ asio::awaitable<expected<void, WSError>> run()
 
     socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
     socket.set_verify_mode(asio::ssl::verify_peer);
-    socket.set_verify_callback(asio::ssl::host_name_verification(url.host()));
+    socket.set_verify_callback(asio::ssl::host_name_verification(url->host()));
     co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
     std::cout << "Handshake ok\n";
@@ -91,7 +89,7 @@ asio::awaitable<expected<void, WSError>> run()
     );
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // enable compression (permessage-deflate extension)
     handshake.set_permessage_deflate({
@@ -151,7 +149,9 @@ asio::awaitable<expected<void, WSError>> run()
     time_point<system_clock> last_msg;
     msg_stats stats;
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     while (true)
     {
         ++stats.counter;
@@ -160,7 +160,7 @@ asio::awaitable<expected<void, WSError>> run()
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(buffer, 5s); // 5 sec timeout
+            co_await client.read_message(*buffer, 5s); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

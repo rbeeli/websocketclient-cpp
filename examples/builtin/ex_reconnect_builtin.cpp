@@ -17,15 +17,14 @@ using namespace std::chrono;
 expected<void, WSError> run()
 {
     // parse URL
-    WS_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
-    URL& url = *url_res;
+    WS_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
     // websocketclient logger
     ConsoleLogger<LogLevel::D> logger;
 
     // resolve hostname
     DnsResolver dns(&logger);
-    WS_TRY(dns_res, dns.resolve(url.host(), url.port_str()));
+    WS_TRY(dns_res, dns.resolve(url->host(), url->port_str()));
     AddressInfo& addr = (*dns_res)[0];
 
     // create TCP socket
@@ -37,7 +36,7 @@ expected<void, WSError> run()
     OpenSslContext ctx(&logger);
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
-    auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
+    auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url->host(), true);
     WS_TRYV(ssl.init());
     WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout
 
@@ -45,7 +44,7 @@ expected<void, WSError> run()
     auto client = WebSocketClient(&logger, std::move(ssl));
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // enable compression (permessage-deflate extension)
     handshake.set_permessage_deflate({
@@ -70,11 +69,13 @@ expected<void, WSError> run()
     // Message msg(MessageType::text, sub_msg);
     // WS_TRYV(client.send_message(msg, {.compress = false}));
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     while (true)
     {
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 5s);                              // 5 sec timeout
+            client.read_message(*buffer, 5s);                              // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

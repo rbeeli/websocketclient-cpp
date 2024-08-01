@@ -82,9 +82,14 @@ public:
         return permessage_deflate_.has_value();
     }
 
-    inline const URL& get_url() noexcept
+    inline const URL& url() noexcept
     {
         return url_;
+    }
+
+    inline bool is_success() const noexcept
+    {
+        return success_;
     }
 
     /**
@@ -110,11 +115,6 @@ public:
     inline void set_permessage_deflate(PermessageDeflate<TLogger>&& extension)
     {
         permessage_deflate_ = extension;
-    }
-
-    inline bool is_success() const noexcept
-    {
-        return success_;
     }
 
     /**

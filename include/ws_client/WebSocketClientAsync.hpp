@@ -94,12 +94,10 @@ private:
     alignas(64) array<byte, 128> read_buffer_storage_;
     span<byte> read_buffer_ = span(read_buffer_storage_);
 
-    // maintain state for reading messages (might get interrupted with control frames, which require immediate handling)
+    // maintain state for reading messages.
+    // message reading might get interrupted with control frames,
+    // which require immediate handling.
     MessageReadState read_state_;
-
-    // permessage-deflate buffers
-    Buffer decompress_buffer_;
-    Buffer compress_buffer_;
 
 public:
     explicit WebSocketClientAsync(
@@ -129,9 +127,7 @@ public:
           logger_(other.logger_),
           mask_key_gen_(std::move(other.mask_key_gen_)),
           permessage_deflate_ctx_(std::move(other.permessage_deflate_ctx_)),
-          read_state_(other.read_state_),
-          decompress_buffer_(std::move(other.decompress_buffer_)),
-          compress_buffer_(std::move(other.compress_buffer_))
+          read_state_(other.read_state_)
     {
         this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
         this->write_buffer_ = span(this->write_buffer_storage_);
@@ -152,8 +148,6 @@ public:
             this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
             this->read_buffer_ = span(this->read_buffer_storage_);
             this->read_state_ = other.read_state_;
-            this->decompress_buffer_ = std::move(other.decompress_buffer_);
-            this->compress_buffer_ = std::move(other.compress_buffer_);
         }
         return *this;
     }
@@ -212,16 +206,16 @@ public:
         WS_CO_TRYV(co_await this->socket_.write(req_data, timeout));
 
         // read HTTP response
-        Buffer headers_buffer;
+        WS_CO_TRY(headers_buffer, Buffer::create(1024, 1024 * 1024)); // 1 KB to 1 MB
         byte delim[4] = {byte{'\r'}, byte{'\n'}, byte{'\r'}, byte{'\n'}};
         span<byte> delim_span = span(delim);
-        WS_CO_TRYV(co_await this->socket_.read_until(headers_buffer, delim_span, timeout));
+        WS_CO_TRYV(co_await this->socket_.read_until(*headers_buffer, delim_span, timeout));
 
         // read and discard header terminator bytes \r\n\r\n
         WS_CO_TRYV(co_await this->socket_.read_exact(delim_span, timeout));
 
         // process HTTP response
-        WS_CO_TRYV(handshake.process_response(string_from_bytes(headers_buffer.data())));
+        WS_CO_TRYV(handshake.process_response(string_from_bytes(headers_buffer->data())));
 
         // initialize permessage-deflate compression if negotiated
         if (handshake.is_compression_negotiated())
@@ -229,12 +223,6 @@ public:
             auto& permessage_deflate = handshake.get_permessage_deflate();
             this->permessage_deflate_ctx_.emplace(logger_, permessage_deflate);
             WS_CO_TRYV(this->permessage_deflate_ctx_->init());
-
-            // allocate buffers
-            this->decompress_buffer_.set_max_size(permessage_deflate.decompress_buffer_size);
-            this->compress_buffer_.set_max_size(permessage_deflate.compress_buffer_size);
-            WS_CO_TRYV(this->decompress_buffer_.reserve(1024)); // reserve 1 KB initial size
-            WS_CO_TRYV(this->compress_buffer_.reserve(1024));   // reserve 1 KB initial size
         }
 
         this->closed_ = false;
@@ -289,7 +277,7 @@ public:
                 );
             }
 
-            if (read_state_.is_first)
+            if (read_state_.is_first) [[likely]]
             {
                 // clear buffer if this is the first frame
                 buffer.clear();
@@ -311,14 +299,14 @@ public:
                 read_state_.is_first = false;
                 read_state_.op_code = frame.header.op_code();
 
-                // RSV1 indicates DEFLATE compressed message, only if negotiated.
+                // RSV1 indicates DEFLATE compressed message, but only if negotiated.
                 if (frame.header.rsv1_bit())
                 {
                     read_state_.is_compressed = true;
 
                     if (this->permessage_deflate_ctx_ != std::nullopt) [[likely]]
                     {
-                        this->decompress_buffer_.clear();
+                        this->permessage_deflate_ctx_->decompress_buffer().clear();
                     }
                     else
                     {
@@ -378,10 +366,10 @@ public:
             {
                 if (read_state_.is_compressed)
                 {
-                    // read payload into decompression buffer
+                    // read payload directly into decompression buffer
                     WS_CO_TRY_RAW(
                         frame_data_compressed_res,
-                        this->decompress_buffer_.append(frame.payload_size)
+                        this->permessage_deflate_ctx_->decompress_buffer().append(frame.payload_size)
                     );
                     WS_CO_TRYV_RAW(
                         co_await this->socket_.read_exact(*frame_data_compressed_res, timeout)
@@ -408,15 +396,11 @@ public:
         // handle permessage-deflate compression
         if (read_state_.is_compressed)
         {
-            span<byte> input = this->decompress_buffer_.data();
-            WS_CO_TRYV_RAW(this->permessage_deflate_ctx_.value().decompress(input, buffer));
-            payload_buffer = buffer.data();
-        }
-        else
-        {
-            payload_buffer = buffer.data();
+            WS_CO_TRYV_RAW(this->permessage_deflate_ctx_.value().decompress(buffer));
         }
 
+        payload_buffer = buffer.data();
+        
         switch (read_state_.op_code)
         {
             case opcode::text:
@@ -546,9 +530,8 @@ public:
             frame.set_is_compressed(true);
 
             // perform deflate compression using zlib
-            Buffer& output = this->compress_buffer_;
-            output.clear();
-            WS_CO_TRY(res, this->permessage_deflate_ctx_.value().compress(msg.data, output));
+            this->permessage_deflate_ctx_->compress_buffer().clear();
+            WS_CO_TRY(res, this->permessage_deflate_ctx_.value().compress(msg.data));
             payload = *res;
         }
         else

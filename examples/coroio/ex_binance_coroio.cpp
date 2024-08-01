@@ -11,6 +11,7 @@
 #include "ws_client/transport/builtin/DnsResolver.hpp"
 
 using namespace ws_client;
+using namespace std::chrono;
 using namespace std::chrono_literals;
 using namespace NNet;
 using Loop = NNet::TLoop<NNet::TEPoll>;
@@ -52,15 +53,14 @@ struct msg_stats
 TValueTask<expected<void, WSError>> client(Loop* loop)
 {
     // parse URL
-    WS_CO_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
-    URL& url = *url_res;
+    WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
     // websocketclient logger
     ConsoleLogger<LogLevel::D> logger;
 
     // resolve hostname
     DnsResolver dns(&logger);
-    WS_CO_TRY(dns_res, dns.resolve(url.host(), url.port_str()));
+    WS_CO_TRY(dns_res, dns.resolve(url->host(), url->port_str()));
     AddressInfo& addr = (*dns_res)[0];
 
     // TAddress address(&addr.address.addr, addr.ai_addrlen);
@@ -70,12 +70,12 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
 
     // // resolve hostname
     // TResolver<TPollerBase> resolver(loop->Poller());
-    // auto addrs = co_await resolver.Resolve(url.host());
-    // std::cout << "'" << url.host() << "': ";
-    // TAddress addr = addrs[0].WithPort(url.port());
+    // auto addrs = co_await resolver.Resolve(url->host());
+    // std::cout << "'" << url->host() << "': ";
+    // TAddress addr = addrs[0].WithPort(url->port());
     // // for (auto& a : addrs)
     // // {
-    // //     addr = std::move(a.WithPort(url.port()));
+    // //     addr = std::move(a.WithPort(url->port()));
     // //     std::cout << a.ToString() << "\n";
     // // }
 
@@ -84,7 +84,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     TSocket underlying{std::move(addr2), loop->Poller()};
     co_await underlying.Connect();
     TSslSocket ssl_socket(std::move(underlying), ctx);
-    // if (!SSL_set_tlsext_host_name(ssl_socket.GetSsl(), url.host().c_str()))
+    // if (!SSL_set_tlsext_host_name(ssl_socket.GetSsl(), url->host().c_str()))
     //     co_return WS_ERROR(transport_error, "SSL_set_tlsext_host_name failed");
     // SSL_set_verify(ssl_socket.GetSsl(), SSL_VERIFY_NONE, nullptr);
     co_await ssl_socket.Connect();
@@ -97,7 +97,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     );
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // enable compression (permessage-deflate extension)
     handshake.set_permessage_deflate({
@@ -157,19 +157,18 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     std::chrono::time_point<std::chrono::system_clock> last_msg;
     msg_stats stats;
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     while (true)
     {
         ++stats.counter;
 
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      std::chrono::system_clock::now().time_since_epoch()
-        )
-                      .count();
+        auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer, 60s);
+            co_await client.read_message(*buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

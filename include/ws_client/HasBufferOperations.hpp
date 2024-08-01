@@ -16,7 +16,7 @@ using std::span;
  * Concept for buffer-like template type parameters.
  */
 template <typename T>
-concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data, size_t len) {
+concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data, size_t size) {
     /**
      * Returns a span of bytes over the data written to the buffer.
      */
@@ -30,7 +30,7 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
     /**
      * Set the maximum allowed buffer size / capacity.
      */
-    { t.set_max_size(len) } -> std::same_as<void>;
+    { t.set_max_size(size) } -> std::same_as<void>;
 
     /**
      * Get the maximum allowed buffer size / capacity.
@@ -46,7 +46,14 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
      * Reserve space for at least `size` bytes in the buffer.
      * Only performs allocation if the requested size is greater than the current capacity.
      */
-    { t.reserve(len) } -> std::same_as<expected<void, WSError>>;
+    { t.reserve(size) } -> std::same_as<expected<void, WSError>>;
+
+    /**
+     * Resize the buffer to `size` bytes.
+     * The buffer data can then be accessed using the `data` method.
+     * The allocated space is exactly `size` bytes after this operation.
+     */
+    { t.resize(size) } -> std::same_as<expected<void, WSError>>;
 
     /**
      * Get the current number of allocated bytes.
@@ -56,33 +63,26 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
     { t.allocated() } -> std::same_as<size_t>;
 
     /**
-     * Resize the buffer to `size` bytes.
-     * The buffer data can then be accessed using the `data` method.
-     * The allocated space is exactly `size` bytes after this operation.
-     */
-    { t.resize(len) } -> std::same_as<expected<void, WSError>>;
-
-    /**
      * Discard `size` bytes from the end of the buffer.
      * This operation does not deallocate memory, it only reduces the buffer size.
      * Parameter `size` MUST be less than or equal to the current buffer size.
      */
-    { t.discard_end(len) } -> std::same_as<void>;
+    { t.discard_end(size) } -> std::same_as<void>;
 
     /**
-     * Append `len` bytes copied from `data`.
+     * Append `size` bytes copied from `data`.
      * If required, the buffer is resized to accommodate the new data.
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    { t.append(data, len) } -> std::same_as<expected<span<byte>, WSError>>;
+    { t.append(data, size) } -> std::same_as<expected<span<byte>, WSError>>;
 
     /**
-     * Append `len` uninitialized bytes to buffer.
+     * Append `size` uninitialized bytes to buffer.
      * This does not actually write anything to the buffer, it allocates memory if required.
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    { t.append(len) } -> std::same_as<expected<span<byte>, WSError>>;
+    { t.append(size) } -> std::same_as<expected<span<byte>, WSError>>;
 };
 } // namespace ws_client

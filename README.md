@@ -246,16 +246,32 @@ By returning those frames to the user, the library enables the user to decide wh
 ### Buffers and maximum message size
 
 The implementation does not allocate separate memory for each message and/or frames.
-The client maintains a configurable read buffer, which are reused for all messages and frames.
-On a write operation, the message payload is directly written to the socket, without copying it to a separate buffer.
+The user can supply the read buffer for messages as first argument to the `read_message` function.
 
-Additionally, if enabled, the permessage-deflate compression extension maintains a compression and decompression buffer, which are used for all messages and frames.
+On a write operation, the message payload is directly written to the socket, without copying it into a separate buffer.
 
-This implies that the maximum message size is limited by the size of the read/write/compression buffers.
-If exceeded, a `BUFFER_ERROR` error will be returned.
+Additionally, if enabled, the `permessage-deflate` compression extension maintains a compression and decompression buffer internally, which are used for all messages and frames.
+The respective buffer size limits can be configured in the `PermessageDeflate` struct:
 
-The default maximum buffer size of the `Buffer` class is 16 MiB, which can be configured using `Buffer::set_max_size()` instance method.
-Buffer memory is allocated lazily on the heap (on-demand).
+```cpp
+struct PermessageDeflate
+{
+    [...]
+    size_t decompress_buffer_size{100 * 1024};
+    size_t compress_buffer_size{100 * 1024};
+};
+```
+
+The initial size, and the maximum buffer size are set at the creation of a `Buffer` instance:
+
+```cpp
+// create buffer with initial size of 4096 bytes, and maximum size of 1 MB
+Buffer::create(4096, 1024 * 1024);
+```
+
+The initial size is allocated directly.
+Operations that need more buffer memory up to the maximum size lead to on-demand allocations by extending the buffer memory dynamically.
+If any buffer limit would be exceeded by an operation, a `buffer_error` error will be returned.
 
 ### Message payload lifetime
 

@@ -6,6 +6,7 @@ Pull requests and issues are welcome.
 
 - Git builds
 - auto fragmentation write
+- timeout for DnsResolver
 
 - SSL_shutdown sig pipe
 

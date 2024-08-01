@@ -72,11 +72,12 @@ using asio::ip::tcp;
     string response;
     if (read_response)
     {
-        Buffer buffer;
+        // allocate message buffer with 4 KiB initial size and 1 MiB max size
+        WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer, 60s);
+            co_await client.read_message(*buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {
@@ -142,13 +143,15 @@ using asio::ip::tcp;
     // perform handshake
     WS_CO_TRYV(co_await client.handshake(handshake));
 
-    Buffer buffer;
-    buffer.set_max_size(100 * 1024 * 1024); // 100 MB
+
+    // allocate message buffer with 4 KiB initial size and 100 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 100 * 1024 * 1024));
+    
     while (true)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer, 60s);
+            co_await client.read_message(*buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

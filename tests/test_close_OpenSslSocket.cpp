@@ -70,12 +70,14 @@ expected<void, WSError> run()
     Message msg(MessageType::text, payload);
     WS_TRYV(client.send_message(msg));
     
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+    
     while (true)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 60s);
+            client.read_message(*buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
         {

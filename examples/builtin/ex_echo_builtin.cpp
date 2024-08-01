@@ -14,15 +14,14 @@ using namespace ws_client;
 expected<void, WSError> run()
 {
     // parse URL
-    WS_TRY(url_res, URL::parse("wss://echo.websocket.org/"));
-    URL& url = *url_res;
+    WS_TRY(url, URL::parse("wss://echo.websocket.org/"));
 
     // websocketclient logger
     ConsoleLogger<LogLevel::D> logger;
 
     // resolve hostname
     DnsResolver dns(&logger);
-    WS_TRY(dns_res, dns.resolve(url.host(), url.port_str(), AddrType::IPv4));
+    WS_TRY(dns_res, dns.resolve(url->host(), url->port_str(), AddrType::IPv4));
     AddressInfo& addr = (*dns_res)[0];
 
     // create TCP socket
@@ -33,7 +32,7 @@ expected<void, WSError> run()
     OpenSslContext ctx(&logger);
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
-    auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
+    auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url->host(), true);
     WS_TRYV(ssl.init());
     WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout
 
@@ -41,7 +40,7 @@ expected<void, WSError> run()
     auto client = WebSocketClient(&logger, std::move(ssl));
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // custom HTTP header
     handshake.get_request_header().fields.set("X-Custom-Header", "Custom-Value");
@@ -49,12 +48,14 @@ expected<void, WSError> run()
     // perform handshake
     WS_TRYV(client.handshake(handshake, 5s)); // 5 sec timeout
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 5s);                              // 5 sec timeout
+            client.read_message(*buffer, 5s);                             // 5 sec timeout
 
         if (std::get_if<Message>(&var))
         {

@@ -50,8 +50,7 @@ TEST(PermessageDeflateContext, compress_empty)
     EXPECT_TRUE(ctx.init().has_value());
 
     span<byte> payload{};
-    Buffer output;
-    auto res2 = ctx.compress(payload, output);
+    auto res2 = ctx.compress(payload);
     EXPECT_TRUE(res2.has_value());
     span<byte> compressed = *res2;
     EXPECT_EQ(compressed.size(), 6);
@@ -81,8 +80,11 @@ TEST(PermessageDeflateContext, decompress_empty)
 
     uint8_t buf[] = {0x02, 0x00, 0x00, 0x00, 0xff, 0xff};
     span<byte> payload{reinterpret_cast<byte*>(buf), 6};
-    Buffer output;
-    auto res2 = ctx.decompress(payload, output);
+    ctx.decompress_buffer().append(payload.data(), payload.size());
+    
+    Buffer output = Buffer::create(0, 1024).value();
+
+    auto res2 = ctx.decompress(output);
     EXPECT_TRUE(res2.has_value());
     EXPECT_EQ(output.size(), *res2);
     span<byte> decompressed = output.data();
@@ -109,8 +111,11 @@ TEST(PermessageDeflateContext, decompress_hello)
     uint8_t buf[11] = {
         0xf2, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00}; // trailer bytes stripped: 0x00, 0x00, 0xff, 0xff
     span<byte> payload{reinterpret_cast<byte*>(buf), 6};
-    Buffer output;
-    auto res2 = ctx.decompress(payload, output);
+    ctx.decompress_buffer().append(payload.data(), payload.size());
+
+    Buffer output = Buffer::create(0, 1024).value();
+
+    auto res2 = ctx.decompress(output);
     EXPECT_TRUE(res2.has_value());
     EXPECT_EQ(output.size(), *res2);
     span<byte> decompressed = output.data();
@@ -137,17 +142,20 @@ TEST(PermessageDeflateContext, compress_decompress_loop)
     uint8_t buf[] = {0xf2, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00};
     string str = "Hello";
     span<byte> payload{reinterpret_cast<byte*>(str.data()), str.size()};
+    ctx.decompress_buffer().append(payload.data(), payload.size());
 
-    Buffer output;
-    auto res2 = ctx.compress(payload, output);
+    auto res2 = ctx.compress(payload);
     EXPECT_TRUE(res2.has_value());
     span<byte> compressed = *res2;
     EXPECT_EQ(compressed.size(), sizeof(buf));
 
     for (int i = 0; i < 100; i++)
     {
-        Buffer output2;
-        auto res2 = ctx.decompress(compressed, output2);
+        ctx.decompress_buffer().clear();
+        ctx.decompress_buffer().append(compressed.data(), compressed.size());
+
+        Buffer output2 = Buffer::create(0, 1024).value();
+        auto res2 = ctx.decompress(output2);
         EXPECT_TRUE(res2.has_value());
         span<byte> decompressed = output2.data();
         string decompressed_str{reinterpret_cast<char*>(decompressed.data()),

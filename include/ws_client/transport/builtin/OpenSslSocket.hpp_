@@ -210,7 +210,7 @@ public:
     [[nodiscard]] inline expected<size_t, WSError> read(span<byte> buffer, size_t length) override
     {
         if (length > buffer.size())
-            return WS_ERROR(BUFFER_ERROR, "SSL read buffer too small", close_code::not_set);
+            return WS_ERROR(buffer_error, "SSL read buffer too small", close_code::not_set);
 
         size_t bytes_read = 0;
         while (bytes_read == 0)

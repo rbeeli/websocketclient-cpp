@@ -24,14 +24,13 @@ using namespace asio::experimental::awaitable_operators;
 
 awaitable<expected<void, WSError>> run()
 {
-    WS_CO_TRY(url_res, URL::parse("wss://fstream.binance.com/ws"));
-    URL& url = *url_res;
+    WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
     auto executor = co_await asio::this_coro::executor;
     ip::tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url.host(), "https", use_awaitable);
+    auto endpoints = co_await resolver.async_resolve(url->host(), "https", use_awaitable);
 
-    std::cout << "Connecting to " << url.host() << "... \n";
+    std::cout << "Connecting to " << url->host() << "... \n";
 
     ssl::context ctx(ssl::context::sslv23);
     ctx.set_default_verify_paths();
@@ -42,7 +41,7 @@ awaitable<expected<void, WSError>> run()
     co_await asio::async_connect(socket.lowest_layer(), endpoints, use_awaitable);
     socket.lowest_layer().set_option(ip::tcp::no_delay(true));
     socket.set_verify_mode(ssl::verify_peer);
-    socket.set_verify_callback(ssl::host_name_verification(url.host()));
+    socket.set_verify_callback(ssl::host_name_verification(url->host()));
     co_await socket.async_handshake(ssl::stream_base::client, use_awaitable);
 
     std::cout << "Handshake ok\n";
@@ -58,7 +57,7 @@ awaitable<expected<void, WSError>> run()
     );
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // enable compression (permessage-deflate extension)
     handshake.set_permessage_deflate({
@@ -83,12 +82,14 @@ awaitable<expected<void, WSError>> run()
     // Message msg(MessageType::text, sub_msg);
     // WS_CO_TRYV(co_await client.send_message(msg, {.compress = false}));
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     while (client.is_open())
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(buffer, 5s); // 5 sec timeout
+            co_await client.read_message(*buffer, 5s); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

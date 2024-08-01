@@ -2,6 +2,7 @@
 
 #include <expected>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <charconv>
 #include <cstdint>
@@ -88,15 +89,14 @@ struct PermessageDeflate
 
     /**
      * Maximum allowed size of decompression buffer.
-     * 
-     * Default: 100 KB
+     * Default: 100 KiB
      */
     size_t decompress_buffer_size{100 * 1024};
 
     /**
      * Maximum allowed size of compression buffer.
      * 
-     * Default: 100 KB
+     * Default: 100 KiB
      */
     size_t compress_buffer_size{100 * 1024};
 
@@ -574,12 +574,19 @@ private:
     PermessageDeflate<TLogger> permessage_deflate_;
     z_stream* istate_;
     z_stream* ostate_;
+    std::unique_ptr<Buffer> decompress_buffer_;
+    std::unique_ptr<Buffer> compress_buffer_;
 
 public:
     explicit PermessageDeflateContext(
         TLogger* logger, const PermessageDeflate<TLogger> permessage_deflate
     ) noexcept
-        : logger_(logger), permessage_deflate_(std::move(permessage_deflate))
+        : logger_(logger),
+          permessage_deflate_(std::move(permessage_deflate)),
+          istate_(nullptr),
+          ostate_(nullptr),
+          decompress_buffer_(nullptr),
+          compress_buffer_(nullptr)
     {
     }
 
@@ -604,32 +611,69 @@ public:
         : logger_(other.logger_),
           permessage_deflate_(std::move(other.permessage_deflate_)),
           istate_(other.istate_),
-          ostate_(other.ostate_)
+          ostate_(other.ostate_),
+          decompress_buffer_(std::move(other.decompress_buffer_)),
+          compress_buffer_(std::move(other.compress_buffer_))
     {
         other.istate_ = nullptr;
         other.ostate_ = nullptr;
+        other.decompress_buffer_ = nullptr;
+        other.compress_buffer_ = nullptr;
     }
     PermessageDeflateContext& operator=(PermessageDeflateContext&& other) noexcept
     {
         if (this != &other)
         {
+            // clean up current resources
+            if (istate_ != nullptr)
+            {
+                inflateEnd(istate_);
+                deflateEnd(ostate_);
+                delete istate_;
+                delete ostate_;
+            }
+
+            // move resources from other
             logger_ = other.logger_;
             permessage_deflate_ = std::move(other.permessage_deflate_);
             istate_ = other.istate_;
             ostate_ = other.ostate_;
+            decompress_buffer_ = std::move(other.decompress_buffer_);
+            compress_buffer_ = std::move(other.compress_buffer_);
 
+            // reset other's pointers
+            other.logger_ = nullptr;
             other.istate_ = nullptr;
             other.ostate_ = nullptr;
         }
+        return *this;
+    }
+
+    Buffer& compress_buffer() noexcept
+    {
+        return *compress_buffer_;
+    }
+
+    Buffer& decompress_buffer() noexcept
+    {
+        return *decompress_buffer_;
     }
 
     /**
      * Initialize the permessage-deflate context.
-     * This is usually called after the WebSocket handshake is completed
+     * This is called after the WebSocket handshake is completed
      * by the client internally.
      */
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
+        // create decompression buffer with 1 KiB initial size
+        WS_TRY(decompress_buffer, Buffer::create(1024, permessage_deflate_.decompress_buffer_size));
+        decompress_buffer_ = std::make_unique<Buffer>(std::move(decompress_buffer.value()));
+
+        // create compression buffer with 1 KiB initial size
+        WS_TRY(compress_buffer, Buffer::create(1024, permessage_deflate_.compress_buffer_size));
+        compress_buffer_ = std::make_unique<Buffer>(std::move(compress_buffer.value()));
+
         // initialize zlib decompressor
         istate_ = new z_stream();
         istate_->zalloc = Z_NULL;
@@ -664,8 +708,10 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<size_t, WSError> decompress(span<byte> input, Buffer& output) noexcept
+    [[nodiscard]] expected<size_t, WSError> decompress(Buffer& output) noexcept
     {
+        span<byte> input = decompress_buffer().data();
+
         // set zlib input buffer to frame payload
         istate_->next_in = reinterpret_cast<Bytef*>(input.data());
         istate_->avail_in = static_cast<unsigned int>(input.size());
@@ -723,8 +769,10 @@ public:
         return size;
     }
 
-    [[nodiscard]] expected<span<byte>, WSError> compress(span<byte> input, Buffer& output) noexcept
+    [[nodiscard]] expected<span<byte>, WSError> compress(span<byte> input) noexcept
     {
+        auto& output = compress_buffer();
+
         // handle empty payload case
         if (input.size() == 0) [[unlikely]]
         {

@@ -14,9 +14,11 @@ using std::string;
 
 TEST(Buffer, DefaultConstruction)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
+
     EXPECT_EQ(buf.size(), 0);
-    EXPECT_EQ(buf.max_size(), Buffer::default_max_size);
+    EXPECT_EQ(buf.max_size(), 1024 * 1024);
 }
 
 TEST(Buffer, MoveConstruction)
@@ -24,7 +26,9 @@ TEST(Buffer, MoveConstruction)
     string data = "test";
     span<byte> data_span(reinterpret_cast<byte*>(data.data()), data.size());
 
-    Buffer buf1(1024);
+    auto buf1_res = Buffer::create(0, 1024 * 1024);
+    auto& buf1 = buf1_res.value();
+
     auto res = buf1.append(data_span.data(), 4);
     ASSERT_TRUE(res.has_value());
     Buffer buf2(std::move(buf1));
@@ -35,10 +39,13 @@ TEST(Buffer, MoveConstruction)
 
 TEST(Buffer, MoveAssignment)
 {
-    Buffer buf1;
+    auto buf1_res = Buffer::create(0, 1024 * 1024);
+    auto& buf1 = buf1_res.value();
     auto res = buf1.append(4);
     ASSERT_TRUE(res.has_value());
-    Buffer buf2;
+    
+    auto buf2_res = Buffer::create(0, 1024 * 1024);
+    auto& buf2 = buf2_res.value();
     buf2 = std::move(buf1);
 
     EXPECT_EQ(buf2.size(), 4);
@@ -50,7 +57,8 @@ TEST(Buffer, AppendAndAccess)
     string data = "test";
     span<byte> data_span(reinterpret_cast<byte*>(data.data()), data.size());
 
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(data_span.data(), 4);
     ASSERT_TRUE(res.has_value());
 
@@ -60,7 +68,8 @@ TEST(Buffer, AppendAndAccess)
 
 TEST(Buffer, AppendN)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(buf.size(), 4);
@@ -71,7 +80,8 @@ TEST(Buffer, AppendN)
 
 TEST(Buffer, ResetAndAppendN)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(buf.size(), 4);
@@ -91,7 +101,8 @@ TEST(Buffer, ResetAndAppendN)
 
 TEST(Buffer, ReserveAndResize)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.reserve(1024);
     ASSERT_TRUE(res.has_value());
     EXPECT_LE(1024, buf.max_size() - buf.size());
@@ -103,7 +114,8 @@ TEST(Buffer, ReserveAndResize)
 
 TEST(Buffer, ExceedingMaxSize)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     buf.set_max_size(10);
     auto res = buf.append(20);
     EXPECT_FALSE(res.has_value());
@@ -111,7 +123,8 @@ TEST(Buffer, ExceedingMaxSize)
 
 TEST(Buffer, ClearFunctionality)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(buf.size(), 4);
@@ -123,7 +136,8 @@ TEST(Buffer, ClearFunctionality)
 
 TEST(Buffer, EmptyMethod)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     EXPECT_TRUE(buf.empty());
 
     auto res = buf.append(4);
@@ -136,7 +150,8 @@ TEST(Buffer, EmptyMethod)
 
 TEST(Buffer, AtAndOperator)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     EXPECT_NO_THROW((void)buf.at(0));
@@ -145,7 +160,8 @@ TEST(Buffer, AtAndOperator)
 
 TEST(Buffer, SetAndGetMaxSize)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     size_t newMaxSize = 32 * 1024; // 32 KB
     buf.set_max_size(newMaxSize);
     EXPECT_EQ(buf.max_size(), newMaxSize);
@@ -156,7 +172,8 @@ TEST(Buffer, SetAndGetMaxSize)
 
 TEST(Buffer, ResizeSmallerSizes)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     auto res2 = buf.resize(5);
@@ -166,7 +183,8 @@ TEST(Buffer, ResizeSmallerSizes)
 
 TEST(Buffer, AppendZeroLengthData)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     auto res = buf.append(4);
     ASSERT_TRUE(res.has_value());
     auto res2 = buf.append(0);
@@ -176,7 +194,8 @@ TEST(Buffer, AppendZeroLengthData)
 
 TEST(Buffer, ClearGuard)
 {
-    Buffer buf;
+    auto buf_res = Buffer::create(0, 1024 * 1024);
+    auto& buf = buf_res.value();
     {
         BufferClearGuard guard(buf);
         auto res = buf.append(4);

@@ -100,8 +100,8 @@ public:
         if (this != &other)
         {
             hostname_ = std::move(other.hostname_);
-            type_ = other.type_;
             ip_ = std::move(other.ip_);
+            type_ = other.type_;
             ai_family_ = other.ai_family_;
             ai_addrlen_ = other.ai_addrlen_;
             std::memcpy(&address_, &other.address_, other.ai_addrlen_);
@@ -183,5 +183,4 @@ public:
         return os;
     }
 };
-
 } // namespace ws_client

@@ -20,12 +20,11 @@ using namespace ws_client;
 asio::awaitable<expected<void, WSError>> run()
 {
     // parse URL
-    WS_CO_TRY(url_res, URL::parse("wss://echo.websocket.org/"));
-    URL& url = *url_res;
+    WS_CO_TRY(url, URL::parse("wss://echo.websocket.org/"));
 
     auto executor = co_await asio::this_coro::executor;
     asio::ip::tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url.host(), "https", asio::use_awaitable);
+    auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
 
 
     asio::ssl::context ctx(asio::ssl::context::tlsv13);
@@ -35,9 +34,9 @@ asio::awaitable<expected<void, WSError>> run()
         asio::ssl::context::no_sslv3
     );
     ctx.set_verify_mode(asio::ssl::verify_peer);
-    ctx.set_verify_callback(asio::ssl::host_name_verification(url.host()));
+    ctx.set_verify_callback(asio::ssl::host_name_verification(url->host()));
 
-    std::cout << "Connecting to " << url.host() << "... \n";
+    std::cout << "Connecting to " << url->host() << "... \n";
     asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
     co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
     std::cout << "Connected\n";
@@ -63,17 +62,19 @@ asio::awaitable<expected<void, WSError>> run()
     );
 
     // handshake handler
-    auto handshake = Handshake(&logger, url);
+    auto handshake = Handshake(&logger, *url);
 
     // perform handshake
     WS_CO_TRYV(co_await client.handshake(handshake, 5s)); // 5 sec timeout
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+
     for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(buffer, 5s); // 5 sec timeout
+            co_await client.read_message(*buffer, 5s); // 5 sec timeout
 
         if (std::get_if<Message>(&var))
         {

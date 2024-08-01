@@ -71,12 +71,14 @@ asio::awaitable<expected<void, WSError>> run()
     Message msg(MessageType::text, payload);
     WS_CO_TRYV(co_await client.send_message(msg));
 
-    Buffer buffer;
+    // allocate message buffer with 4 KiB initial size and 1 MiB max size
+    WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
+    
     for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            co_await client.read_message(buffer, 60s);
+            co_await client.read_message(*buffer, 60s);
 
         if (std::get_if<Message>(&var))
         {

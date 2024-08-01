@@ -19,8 +19,6 @@ using std::span;
 /**
  * A simple buffer class for storing binary data, similar to `std::vector<byte>`.
  * The buffer can be resized and data can be appended to it.
- * 
- * The default maximum size is 16 MiB, use `set_max_size` to adjust it.
  */
 class Buffer
 {
@@ -30,16 +28,26 @@ private:
     size_t used_;
     byte* buffer_ = nullptr;
 
-public:
     /**
-     * Default maximum buffer size.
-     * If not specified, the buffer will be limited to 16 MB by default.
+     * Private constructor to create a buffer with a maximum size.
+     * Use the factory method `create` to create a new buffer.
      */
-    static constexpr size_t default_max_size = 16 * 1024 * 1024;
-
-    explicit Buffer(size_t max_size = default_max_size) noexcept
+    explicit Buffer(size_t max_size) noexcept //
         : max_size_(max_size), capacity_(0), used_(0)
     {
+    }
+
+public:
+    /**
+     * Factory method to create a new buffer with an initial size and maximum size.
+     */
+    [[nodiscard]] static expected<Buffer, WSError> create(
+        size_t initial_size, size_t max_size
+    ) noexcept
+    {
+        Buffer buffer(max_size);
+        WS_TRYV(buffer.reserve(initial_size));
+        return buffer;
     }
 
     ~Buffer() noexcept
@@ -199,36 +207,38 @@ public:
     }
 
     /**
-     * Append `len` bytes copied from `data`.
+     * Append `size` bytes copied from `data`.
      * If required, the buffer is resized to accommodate the new data.
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    [[nodiscard]] inline expected<span<byte>, WSError> append(const byte* data, size_t len) noexcept
+    inline expected<span<byte>, WSError> append(
+        const byte* data, size_t size
+    ) noexcept
     {
-        auto pos = size();
-        auto new_pos = pos + len;
+        auto pos = this->size();
+        auto new_pos = pos + size;
         if (new_pos > capacity_)
             WS_TRYV(internal_reserve(new_pos));
-        std::memcpy(buffer_ + pos, data, len);
+        std::memcpy(buffer_ + pos, data, size);
         used_ = new_pos;
-        return span<byte>(buffer_ + pos, len);
+        return span<byte>(buffer_ + pos, size);
     }
 
     /**
-     * Append `len` uninitialized bytes to buffer.
+     * Append `size` uninitialized bytes to buffer.
      * This does not actually write anything to the buffer, it allocates memory if required.
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    [[nodiscard]] inline expected<span<byte>, WSError> append(size_t len) noexcept
+    inline expected<span<byte>, WSError> append(size_t size) noexcept
     {
-        auto pos = size();
-        auto new_pos = pos + len;
+        auto pos = this->size();
+        auto new_pos = pos + size;
         if (new_pos > capacity_)
             WS_TRYV(internal_reserve(new_pos));
         used_ = new_pos;
-        return span<byte>(buffer_ + pos, len);
+        return span<byte>(buffer_ + pos, size);
     }
 
     /**
