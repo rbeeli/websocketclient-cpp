@@ -105,7 +105,7 @@ asio::awaitable<expected<void, WSError>> run()
     });
 
     // perform handshake
-    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
+    WS_CO_TRYV(co_await client.handshake(handshake, 5s)); // 5 sec timeout
 
     // subscribe
     std::string sub_msg = R"({
@@ -160,7 +160,7 @@ asio::awaitable<expected<void, WSError>> run()
 
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(buffer, 5000ms); // 5 sec timeout
+            co_await client.read_message(buffer, 5s); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

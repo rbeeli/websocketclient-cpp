@@ -197,7 +197,7 @@ public:
      * User needs to ensure this method is called only once.
      */
     [[nodiscard]] expected<void, WSError> handshake(
-        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5000ms
+        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5s
     )
     {
         if (!this->closed_)
@@ -557,7 +557,7 @@ public:
 
 
     [[nodiscard]] expected<void, WSError> send_pong_frame(
-        span<byte> payload, std::chrono::milliseconds timeout_ms = 5000ms
+        span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)
@@ -585,7 +585,7 @@ public:
      * This method is thread-safe and can be called multiple times.
      */
     [[nodiscard]] inline expected<void, WSError> close(
-        const close_code code, std::chrono::milliseconds timeout_ms = 5000ms
+        const close_code code, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)

@@ -198,7 +198,7 @@ public:
      * User needs to ensure this method is called only once.
      */
     [[nodiscard]] TTask<expected<void, WSError>> handshake(
-        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5000ms
+        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5s
     )
     {
         if (!this->closed_)
@@ -563,7 +563,7 @@ public:
     }
 
     [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(
-        span<byte> payload, std::chrono::milliseconds timeout_ms = 5000ms
+        span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)
@@ -593,7 +593,7 @@ public:
      * shuts down the socket communication and closes the underlying socket connection.
      */
     [[nodiscard]] inline TTask<expected<void, WSError>> close(
-        const close_code code, std::chrono::milliseconds timeout_ms = 5000ms
+        const close_code code, std::chrono::milliseconds timeout_ms = 5s
     )
     {
         if (this->closed_)

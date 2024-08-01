@@ -39,7 +39,7 @@ expected<void, WSError> run()
     WS_TRYV(ctx.set_default_verify_paths());
     auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
+    WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout
 
     // websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
@@ -59,7 +59,7 @@ expected<void, WSError> run()
     });
 
     // perform handshake
-    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
+    WS_TRYV(client.handshake(handshake, 5s)); // 5 sec timeout
 
     // // we don't subscribe so it looks like we are not receiving any messages
     // std::string sub_msg = R"({
@@ -74,7 +74,7 @@ expected<void, WSError> run()
     while (true)
     {
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 5000ms);                          // 5 sec timeout
+            client.read_message(buffer, 5s);                              // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

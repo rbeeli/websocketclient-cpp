@@ -42,36 +42,36 @@ expected<void, WSError> run()
     WS_TRYV(ctx.set_session_cache_mode_client());
     auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
+    WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout
 
     // create websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
-    
+
     // handshake handler
     auto handshake = Handshake(&logger, url);
 
     // enable compression (permessage-deflate extension)
-    handshake.set_permessage_deflate({
-        .logger = &logger,
-        .server_max_window_bits = 15,
-        .client_max_window_bits = 15,
-        .server_no_context_takeover = true,
-        .client_no_context_takeover = true
-    });
+    handshake.set_permessage_deflate(
+        {.logger = &logger,
+         .server_max_window_bits = 15,
+         .client_max_window_bits = 15,
+         .server_no_context_takeover = true,
+         .client_no_context_takeover = true}
+    );
 
     // perform handshake
-    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
+    WS_TRYV(client.handshake(handshake, 5s)); // 5 sec timeout
 
     Buffer buffer;
     while (true)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 30'000ms); // 30 sec timeout
+            client.read_message(buffer, 30s);                             // 30 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {
-            WS_TRYV(client.send_message(*msg, {.timeout = 5000ms})); // 5 sec timeout
+            WS_TRYV(client.send_message(*msg, {.timeout = 5s})); // 5 sec timeout
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {

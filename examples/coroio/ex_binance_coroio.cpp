@@ -111,7 +111,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
     });
 
     // perform handshake
-    WS_CO_TRYV(co_await client.handshake(handshake, 5000ms)); // 5 sec timeout
+    WS_CO_TRYV(co_await client.handshake(handshake, 5s)); // 5 sec timeout
 
     // subscribe
     std::string sub_msg = R"({

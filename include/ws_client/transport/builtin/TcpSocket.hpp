@@ -133,7 +133,7 @@ public:
     /**
      * Establish a connection to the server.
      */
-    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5000ms)
+    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5s)
     {
         if (fd_ == -1)
             return WS_ERROR(

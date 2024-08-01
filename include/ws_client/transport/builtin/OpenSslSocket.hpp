@@ -181,7 +181,7 @@ public:
      * Establish a connection to the server and perform SSL handshake.
      */
     [[nodiscard]] expected<void, WSError> connect(
-        std::chrono::milliseconds timeout_ms = 5000ms
+        std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (!ssl_)

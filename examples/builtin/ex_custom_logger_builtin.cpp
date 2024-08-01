@@ -67,7 +67,7 @@ expected<void, WSError> run()
     WS_TRYV(ctx.set_default_verify_paths());
     auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url.host(), true);
     WS_TRYV(ssl.init());
-    WS_TRYV(ssl.connect(2000ms)); // 2 sec connect timeout
+    WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout
 
     // websocket client
     auto client = WebSocketClient(&logger, std::move(ssl));
@@ -76,14 +76,14 @@ expected<void, WSError> run()
     auto handshake = Handshake(&logger, url);
 
     // perform handshake
-    WS_TRYV(client.handshake(handshake, 5000ms)); // 5 sec timeout
+    WS_TRYV(client.handshake(handshake, 5s)); // 5 sec timeout
 
     Buffer buffer;
     for (int i = 0;; i++)
     {
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(buffer, 60s); // 60 sec timeout
+            client.read_message(buffer, 60s);                             // 60 sec timeout
 
         if (std::get_if<Message>(&var))
         {
