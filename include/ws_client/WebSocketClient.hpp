@@ -230,6 +230,25 @@ public:
     }
 
     /**
+     * Waits until a message is available to read from the WebSocket connection.
+     * Note that this includes control frames like PING, PONG, and CLOSE frames.
+     * 
+     * Note that the timeout does not cause an error, but returns `false` if it expires.
+     * 
+     * @returns `true` if a message is available to read, `false` if timeout expires.
+     */
+    [[nodiscard]] inline expected<bool, WSError> wait_message(std::chrono::milliseconds timeout_ms
+    ) noexcept
+    {
+        if (this->closed_)
+            return WS_ERROR(connection_closed, "Connection in closed state.", close_code::not_set);
+
+        Timeout timeout(timeout_ms);
+
+        return this->socket_.wait_readable(timeout);
+    }
+
+    /**
      * Reads a message from the WebSocket connection.
      * The message is read into the provided buffer, which must have enough space to hold the message.
      * 
@@ -368,7 +387,8 @@ public:
                     // read payload directly into decompression buffer
                     WS_TRY_RAW(
                         frame_data_compressed_res,
-                        this->permessage_deflate_ctx_->decompress_buffer().append(frame.payload_size)
+                        this->permessage_deflate_ctx_->decompress_buffer().append(frame.payload_size
+                        )
                     );
                     WS_TRYV_RAW(this->socket_.read_exact(*frame_data_compressed_res, timeout));
                 }

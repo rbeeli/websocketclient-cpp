@@ -51,6 +51,15 @@ public:
     }
 
     /**
+     * Waits for the socket to become readable, without consuming any data.
+     * Readable is defined as having data application available to read.
+     */
+    [[nodiscard]] expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
+    {
+        return socket_.wait_readable(timeout);
+    }
+
+    /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.

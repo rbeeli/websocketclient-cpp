@@ -138,6 +138,76 @@ public:
     }
 
     /**
+     * Get the current cipher used in the connection.
+     */
+    [[nodiscard]] string get_current_cipher() const noexcept
+    {
+        return SSL_get_cipher(ssl_);
+    }
+
+    /**
+     * Get the current TLS version used in the connection.
+     */
+    [[nodiscard]] int get_current_tls_version() const noexcept
+    {
+        return SSL_version(ssl_);
+    }
+
+    /**
+     * Set the hostname for Server Name Indication (SNI) extension.
+     * 
+     * This is useful when connecting to a server with multiple hostnames on the same IP address,
+     * which is common in shared hosting environments.
+     */
+    [[nodiscard]] expected<void, WSError> set_hostname(const string& hostname) noexcept
+    {
+        if (!SSL_set_tlsext_host_name(ssl_, hostname.c_str()))
+            return make_error(0, "Unable to set hostname");
+        logger_->template log<LogLevel::I>("hostname=" + hostname);
+        return {};
+    }
+
+    /**
+     * Enable or disable peer certificate verification.
+     */
+    [[nodiscard]] expected<void, WSError> set_verify_peer(const bool value) noexcept
+    {
+        SSL_set_verify(ssl_, value ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
+        logger_->template log<LogLevel::I>("verify_peer=" + std::to_string(value));
+        return {};
+    }
+
+    /**
+     * Set the cipher list to use for the connection.
+     * A cipher list is a set of ciphers that the client is willing to use.
+     */
+    [[nodiscard]] expected<void, WSError> set_cipher_list(const string& ciphers) noexcept
+    {
+        if (!SSL_set_cipher_list(ssl_, ciphers.c_str()))
+            return make_error(0, "Unable to set cipher list");
+        logger_->template log<LogLevel::I>("cipher_list=" + ciphers);
+        return {};
+    }
+
+    /**
+     * Set the TLS version range to use for the connection.
+     * The `min_version` and `max_version` are the minimum and maximum TLS versions to use.
+     */
+    [[nodiscard]] expected<void, WSError> set_tls_version_range(
+        int min_version, int max_version
+    ) noexcept
+    {
+        if (!SSL_set_min_proto_version(ssl_, min_version) ||
+            !SSL_set_max_proto_version(ssl_, max_version))
+            return make_error(0, "Unable to set TLS version range");
+        logger_->template log<LogLevel::I>(
+            "tls_version_range=" + std::to_string(min_version) + " to " +
+            std::to_string(max_version)
+        );
+        return {};
+    }
+
+    /**
      * Initialize the SSL/TLS connection.
      * This function must be called before `connect`.
      */
@@ -149,7 +219,7 @@ public:
         // create SSL structure
         ssl_ = SSL_new(ctx_->ssl_ctx());
         if (!ssl_)
-            return make_error("Unable to create SSL structure");
+            return make_error(0, "Unable to create SSL structure");
 
         // set SSL application data (pointer to this instance)
         set_ssl_ex_data();
@@ -168,7 +238,11 @@ public:
 
         // wrap the SSL structure around the socket
         if (SSL_set_fd(ssl_, socket_.fd()) != 1)
-            return make_error("Unable to wrap SSL structure around socket");
+            return make_error(
+                0,
+                "Unable to wrap SSL structure around socket (fd=" + std::to_string(socket_.fd()) +
+                    ")"
+            );
 
         logger_->template log<LogLevel::D>(
             "OpenSslSocket created (fd=" + std::to_string(socket_.fd()) + ")"
@@ -199,55 +273,67 @@ public:
         WS_TRYV(socket_.connect(timeout_ms));
 
         // perform SSL handshake
-        int result;
-        int ssl_error;
+        int ret;
         do
         {
-            result = SSL_connect(ssl_);
-            if (result == 1) [[likely]]
+            ret = SSL_connect(ssl_);
+            if (ret == 1) [[likely]]
                 break; // SSL connection established successfully
 
-            ssl_error = SSL_get_error(ssl_, result);
-            if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
+            int ssl_err = SSL_get_error(ssl_, ret);
+            if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
             {
-                // use select() to wait for the socket to become ready for the SSL operation
+                // use select() to wait for socket to become ready for the SSL operation
                 fd_set fds;
                 FD_ZERO(&fds);
                 FD_SET(socket_.fd(), &fds);
 
                 // set the timeout for select
                 auto remaining = timeout.remaining_timeval();
-                int select_ret = ::select(
+                int ret = ::select(
                     socket_.fd() + 1,
-                    (ssl_error == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                    (ssl_error == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
+                    (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
+                    (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                     nullptr,
                     &remaining
                 );
 
-                if (select_ret == -1)
+                if (ret > 0) [[likely]]
+                {
+                    // retry SSL_connect() after select() indicates readiness
+                    continue;
+                }
+                else if (ret == 0)
+                {
+                    // timeout
+                    return make_error(ret, "connect timeout");
+                }
+                else
                 {
                     if (errno == EINTR)
-                        continue; // interrupted, retry
-                    return make_error("connect failed due to system error");
+                        continue; // interrupted, retry immediately
+                    return make_error(errno, "connect failed due to system error");
                 }
-                if (select_ret == 0) [[unlikely]]
-                    return make_error("connect timeout");
-
-                continue; // retry SSL_connect() after select() indicates readiness
             }
-            else if (ssl_error == SSL_ERROR_SYSCALL)
+            else if (ssl_err == SSL_ERROR_SYSCALL)
             {
                 if (errno == EINTR)
-                    continue; // interrupted, retry
-
-                return make_error("connect failed due to system error");
+                    continue; // interrupted, retry immediately
+                return make_error(errno, "connect failed due to system error");
+            }
+            else if (ssl_err == SSL_ERROR_ZERO_RETURN)
+            {
+                return WS_ERROR(
+                    connection_closed,
+                    "SSL connection closed in connect (SSL_ERROR_ZERO_RETURN)",
+                    close_code::not_set
+                );
             }
             else
             {
-                return make_error("connect failed");
+                return make_error(ssl_err, "connect failed due to SSL error");
             }
-        } while (result != 1);
+        } while (ret != 1);
 
         // Step 1: verify a server certificate was presented during the negotiation
         X509* cert = SSL_get_peer_certificate(ssl_);
@@ -257,90 +343,93 @@ public:
             {
                 X509_free(cert);
                 return make_error(
-                    "Certificate verification error: Hostname mismatch, expected: " + hostname_
+                    -1, "Certificate verification error: Hostname mismatch, expected: " + hostname_
                 );
             }
             X509_free(cert);
         }
         else
-            return make_error("Certificate verification error: No certificate presented");
+            return make_error(-1, "Certificate verification error: No certificate presented");
 
         // Step 2: verify the result of chain verification.
         // Verification performed according to RFC 4158.
         if (SSL_get_verify_result(ssl_) != X509_V_OK)
-            return make_error("Certificate chain verification failed");
+            return make_error(-1, "Certificate chain verification failed");
 
         return {};
     }
 
     /**
-     * Get the current cipher used in the connection.
+     * Waits for the SSL socket to become readable, without consuming any data.
+     * Readable is defined as having data application available to read.
      */
-    [[nodiscard]] string get_current_cipher() const noexcept
+    inline expected<bool, WSError> wait_readable(Timeout<>& timeout)
     {
-        return SSL_get_cipher(ssl_);
-    }
+        char buf[1];
+        do
+        {
+            // try to read one byte without consuming it
+            int ret = SSL_peek(ssl_, buf, 1);
+            int ssl_err = SSL_get_error(ssl_, ret);
 
-    /**
-     * Get the current TLS version used in the connection.
-     */
-    [[nodiscard]] int get_current_tls_version() const noexcept
-    {
-        return SSL_version(ssl_);
-    }
+            if (ssl_err == SSL_ERROR_NONE) [[likely]]
+            {
+                // data is available to read
+                return true;
+            }
+            else if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
+            {
+                // use select to wait for the socket to be ready
+                fd_set fds;
+                FD_ZERO(&fds);
+                FD_SET(socket_.fd(), &fds);
 
-    /**
-     * Set the hostname for Server Name Indication (SNI) extension.
-     * 
-     * This is useful when connecting to a server with multiple hostnames on the same IP address,
-     * which is common in shared hosting environments.
-     */
-    [[nodiscard]] expected<void, WSError> set_hostname(const string& hostname) noexcept
-    {
-        if (!SSL_set_tlsext_host_name(ssl_, hostname.c_str()))
-            return make_error("Unable to set hostname");
-        logger_->template log<LogLevel::I>("hostname=" + hostname);
-        return {};
-    }
+                timeval remaining = timeout.remaining_timeval();
+                int ret = ::select(
+                    socket_.fd() + 1,
+                    (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
+                    (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
+                    nullptr,
+                    &remaining
+                );
 
-    /**
-     * Enable or disable peer certificate verification.
-     */
-    [[nodiscard]] expected<void, WSError> set_verify_peer(const bool value) noexcept
-    {
-        SSL_set_verify(ssl_, value ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
-        logger_->template log<LogLevel::I>("verify_peer=" + std::to_string(value));
-        return {};
-    }
+                if (ret > 0) [[likely]]
+                {
+                    // try again to peek
+                    continue;
+                }
+                else if (ret == 0)
+                {
+                    // timeout
+                    return false;
+                }
+                else if (ret == -1)
+                {
+                    if (errno == EINTR)
+                        continue; // interrupted, retry immediately
+                    return make_error(errno, "wait_readable failed due to system error");
+                }
+            }
+            else if (ssl_err == SSL_ERROR_SYSCALL)
+            {
+                if (errno == EINTR)
+                    continue; // interrupted, retry immediately
+                return make_error(errno, "SSL syscall error in wait_readable");
+            }
+            else if (ssl_err == SSL_ERROR_ZERO_RETURN)
+            {
+                return WS_ERROR(
+                    connection_closed,
+                    "SSL connection closed in wait_readable (SSL_ERROR_ZERO_RETURN)",
+                    close_code::not_set
+                );
+            }
+            else
+                return make_error(ssl_err, "Unexpected SSL error in wait_readable");
+        } while (!timeout.is_expired());
 
-    /**
-     * Set the cipher list to use for the connection.
-     * A cipher list is a set of ciphers that the client is willing to use.
-     */
-    [[nodiscard]] expected<void, WSError> set_cipher_list(const string& ciphers) noexcept
-    {
-        if (!SSL_set_cipher_list(ssl_, ciphers.c_str()))
-            return make_error("Unable to set cipher list");
-        logger_->template log<LogLevel::I>("cipher_list=" + ciphers);
-        return {};
-    }
-
-    /**
-     * Set the TLS version range to use for the connection.
-     * The `min_version` and `max_version` are the minimum and maximum TLS versions to use.
-     */
-    [[nodiscard]] expected<void, WSError> set_tls_version_range(
-        int min_version, int max_version
-    ) noexcept
-    {
-        if (!SSL_set_min_proto_version(ssl_, min_version) ||
-            !SSL_set_max_proto_version(ssl_, max_version))
-            return make_error("Unable to set TLS version range");
-        logger_->template log<LogLevel::I>(
-            "tls_version_range=" + std::to_string(min_version) + " to " +
-            std::to_string(max_version)
-        );
-        return {};
+        // timeout
+        return false;
     }
 
     /**
@@ -356,6 +445,7 @@ public:
         do
         {
             int ret = SSL_read(ssl_, buffer.data(), static_cast<int>(buffer.size()));
+
             if (ret > 0) [[likely]]
             {
                 return static_cast<size_t>(ret);
@@ -368,8 +458,8 @@ public:
             }
             else
             {
-                int err = SSL_get_error(ssl_, ret);
-                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                int ssl_err = SSL_get_error(ssl_, ret);
+                if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
                     // use select to wait for the socket to be ready
                     fd_set fds;
@@ -377,36 +467,48 @@ public:
                     FD_SET(socket_.fd(), &fds);
 
                     timeval remaining = timeout.remaining_timeval();
-                    int select_ret = ::select(
+                    int ret = ::select(
                         socket_.fd() + 1,
-                        (err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                        (err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
+                        (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
+                        (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                         nullptr,
                         &remaining
                     );
 
-                    if (select_ret == -1)
+                    if (ret > 0) [[likely]]
                     {
-                        if (errno == EINTR)
-                            continue; // interrupted, retry
-                        return make_error("read_some failed due to system error");
+                        // socket is ready, continue to retry SSL_read
+                        continue;
                     }
-                    if (select_ret == 0)
+                    else if (ret == 0)
                     {
                         return WS_ERROR(
                             timeout, "read_some operation timed out", close_code::not_set
                         );
                     }
-
-                    // socket is ready, continue to retry SSL_read
-                    continue;
+                    else
+                    {
+                        if (errno == EINTR)
+                            continue; // interrupted, retry immediately
+                        return make_error(ret, "read_some failed due to system error");
+                    }
                 }
-                else if (err == SSL_ERROR_SYSCALL && errno == EINTR)
+                else if (ssl_err == SSL_ERROR_SYSCALL)
                 {
-                    continue; // interrupted, retry
+                    if (errno == EINTR)
+                        continue; // interrupted, retry immediately
+                    return make_error(errno, "SSL syscall error in read_some");
+                }
+                else if (ssl_err == SSL_ERROR_ZERO_RETURN)
+                {
+                    return WS_ERROR(
+                        connection_closed,
+                        "SSL connection closed in read_some (SSL_ERROR_ZERO_RETURN)",
+                        close_code::not_set
+                    );
                 }
                 else
-                    return make_error("read_some failed");
+                    return make_error(ssl_err, "Unexpected SSL error in read_some");
             }
         } while (!timeout.is_expired());
 
@@ -433,13 +535,13 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    transport_error, "SSL connection closed on transport layer", close_code::not_set
+                    connection_closed, "SSL connection closed on transport layer", close_code::not_set
                 );
             }
             else
             {
-                int err = SSL_get_error(ssl_, ret);
-                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                int ssl_err = SSL_get_error(ssl_, ret);
+                if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
                     // use select to wait for the socket to be ready
                     fd_set fds;
@@ -447,36 +549,48 @@ public:
                     FD_SET(socket_.fd(), &fds);
 
                     timeval remaining = timeout.remaining_timeval();
-                    int select_ret = ::select(
+                    int ret = ::select(
                         socket_.fd() + 1,
-                        (err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                        (err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
+                        (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
+                        (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
                         nullptr,
                         &remaining
                     );
 
-                    if (select_ret == -1) [[unlikely]]
+                    if (ret > 0) [[likely]]
+                    {
+                        // socket is ready, continue to retry SSL_write
+                        continue;
+                    }
+                    else if (ret == -1)
                     {
                         if (errno == EINTR)
-                            continue; // interrupted, retry
-                        return make_error("write_some failed due to system error");
+                            continue; // interrupted, retry immediately
+                        return make_error(ret, "write_some failed due to system error");
                     }
-                    if (select_ret == 0) [[unlikely]]
+                    else if (ret == 0)
                     {
                         return WS_ERROR(
                             timeout, "write_some operation timed out", close_code::not_set
                         );
                     }
-
-                    // socket is ready, continue to retry SSL_write
-                    continue;
                 }
-                else if (err == SSL_ERROR_SYSCALL && errno == EINTR)
+                else if (ssl_err == SSL_ERROR_SYSCALL)
                 {
-                    continue; // interrupted, retry
+                    if (errno == EINTR)
+                        continue; // interrupted, retry immediately
+                    return make_error(errno, "SSL syscall error in write_some");
+                }
+                else if (ssl_err == SSL_ERROR_ZERO_RETURN)
+                {
+                    return WS_ERROR(
+                        connection_closed,
+                        "SSL connection closed in write_some (SSL_ERROR_ZERO_RETURN)",
+                        close_code::not_set
+                    );
                 }
                 else
-                    return make_error("write_some failed");
+                    return make_error(ssl_err, "Unexpected SSL error in write_some");
             }
         } while (!timeout.is_expired());
 
@@ -496,13 +610,13 @@ public:
         // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
         if (ssl_)
         {
-            int res = SSL_shutdown(ssl_);
-            if (res == 0) // 0 means call SSL_shutdown() again, for a bidirectional shutdown
-                res = SSL_shutdown(ssl_);
-            if (res != 1)
+            int ret = SSL_shutdown(ssl_);
+            if (ret == 0) // 0 means call SSL_shutdown() again, for a bidirectional shutdown
+                ret = SSL_shutdown(ssl_);
+            if (ret != 1)
             {
                 // shutdown failed
-                auto err = make_error("SSL shutdown failed");
+                auto err = make_error(ret, "SSL shutdown failed");
                 logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
@@ -716,10 +830,16 @@ private:
         return ret;
     }
 
-    [[nodiscard]] static auto make_error(const string& msg) noexcept
+    [[nodiscard]] static std::unexpected<WSError> make_error(
+        ssize_t ret_code, const string& desc
+    ) noexcept
     {
         auto errors = get_errors_as_string();
-        return std::unexpected(WSError(WSErrorCode::transport_error, msg + ": " + errors));
+        return std::unexpected(WSError(
+            WSErrorCode::transport_error,
+            "Error: " + desc + " (return code " + std::to_string(ret_code) + "): " + //
+                errors
+        ));
     }
 };
 

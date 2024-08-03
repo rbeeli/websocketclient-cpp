@@ -112,3 +112,20 @@ target_compile_definitions(ex_reconnect_builtin PRIVATE
     WS_CLIENT_LOG_MSG_SIZES=0
     WS_CLIENT_LOG_FRAMES=0
     WS_CLIENT_LOG_COMPRESSION=0)
+
+# --------------------------------------
+add_executable(ex_wait_message_wss_builtin ex_wait_message_wss_builtin.cpp)
+target_link_libraries(ex_wait_message_wss_builtin PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    PkgConfig::ZLIBNG
+    websocketclient)
+target_compile_definitions(ex_wait_message_wss_builtin PRIVATE
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=0 # Use simdutf for utf-8 validation
+    WS_CLIENT_VALIDATE_UTF8=0 # Disable utf-8 validation
+    WS_CLIENT_LOG_HANDSHAKE=1
+    WS_CLIENT_LOG_MSG_PAYLOADS=0
+    WS_CLIENT_LOG_MSG_SIZES=0
+    WS_CLIENT_LOG_FRAMES=0
+    WS_CLIENT_LOG_COMPRESSION=0)

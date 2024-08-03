@@ -155,37 +155,25 @@ public:
 
         // check if connection is in progress due to non-blocking mode
         if (errno != EINPROGRESS)
-            return this->check_errno(-1, "connecting to the server");
+            return std::unexpected(make_error(-1, "connecting to the server"));
 
         // use select to wait for the connection or timeout
-        fd_set write_fds;
-        FD_ZERO(&write_fds);
-        FD_SET(fd_, &write_fds);
-
-        // wait for data to read or timeout
-        int select_ret;
-        do
-        {
-            auto remaining = timeout.remaining_timeval();
-            select_ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
-        } while (select_ret == -1 && errno == EINTR);
-
-        if (select_ret == 0) [[unlikely]]
+        WS_TRY(connected, this->wait_writeable(timeout));
+        if (!connected.value())
             return WS_ERROR(timeout, "Connect timeout", close_code::not_set);
-
-        WS_TRYV(this->check_errno(select_ret, "connect"));
 
         // check if the connection was successful
         int error;
         socklen_t len = sizeof(error);
         ret = getsockopt(fd_, SOL_SOCKET, SO_ERROR, &error, &len);
-        WS_TRYV(this->check_errno(ret, "getsockopt"));
+        WS_TRYV(this->check_error(ret, "getsockopt"));
         if (error != 0)
         {
             std::string error_message = std::strerror(error);
             std::stringstream ss;
-            ss << "Connect failed to " << address_.hostname() << ":" << address_.port() << " ("
-               << address_.ip() << "): " << error_message << " (error code: " << error << ")";
+            ss << "Connect failed to " << address_.hostname() << ":" << //
+                address_.port() << " (" << address_.ip() << "): " <<    //
+                error_message << " (error code " << error << ")";
             return WS_ERROR(transport_error, ss.str(), close_code::not_set);
         }
 
@@ -195,8 +183,8 @@ public:
         {
             auto elapsed = timeout.template elapsed<std::chrono::microseconds>();
             std::stringstream ss;
-            ss << "Connected to " << address_.hostname() << ":" << address_.port() << " ("
-               << address_.ip() << ") in " << elapsed.count() << " µs";
+            ss << "Connected to " << address_.hostname() << ":" //
+               << address_.port() << " (" << address_.ip() << ") in " << elapsed.count() << " µs";
             logger_->template log<LogLevel::I>(ss.str());
         }
 
@@ -211,7 +199,7 @@ public:
     {
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
-        WS_TRYV(this->check_errno(ret, "set TCP_NODELAY"));
+        WS_TRYV(this->check_error(ret, "set TCP_NODELAY"));
         logger_->template log<LogLevel::D>("TCP_NODELAY=" + std::to_string(value));
         return {};
     }
@@ -245,7 +233,7 @@ public:
     [[nodiscard]] expected<void, WSError> set_SO_RCVBUF(int buffer_size)
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
-        WS_TRYV(this->check_errno(ret, "set SO_RCVBUF"));
+        WS_TRYV(this->check_error(ret, "set SO_RCVBUF"));
         logger_->template log<LogLevel::D>(
             "socket receive buffer size SO_RCVBUF=" + std::to_string(buffer_size)
         );
@@ -258,7 +246,7 @@ public:
     [[nodiscard]] expected<void, WSError> set_SO_SNDBUF(int buffer_size)
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
-        WS_TRYV(this->check_errno(ret, "set SO_SNDBUF"));
+        WS_TRYV(this->check_error(ret, "set SO_SNDBUF"));
         logger_->template log<LogLevel::D>(
             "socket send buffer size SO_SNDBUF=" + std::to_string(buffer_size)
         );
@@ -273,14 +261,85 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_TCP_QUICKACK(bool value)
     {
-        (void)value; // suppress unused parameter warning
+        // suppress unused parameter warning in case TCP_QUICKACK is not available
+        (void)value;
 #ifdef TCP_QUICKACK
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_QUICKACK, (char*)&flag, sizeof(int));
-        WS_TRYV(this->check_errno(ret, "set TCP_QUICKACK"));
+        WS_TRYV(this->check_error(ret, "set TCP_QUICKACK"));
         logger_->template log<LogLevel::D>("TCP_QUICKACK=" + std::to_string(value));
 #endif
         return {};
+    }
+
+    /**
+     * Waits for the socket to become readable, without consuming any data.
+     * Readable is defined as having data application available to read.
+     */
+    inline expected<bool, WSError> wait_readable(Timeout<>& timeout)
+    {
+        // create fd_set for select with timeout
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(fd_, &read_fds);
+
+        while (true)
+        {
+            auto remaining = timeout.remaining_timeval();
+            int ret = ::select(fd_ + 1, &read_fds, nullptr, nullptr, &remaining);
+
+            if (ret > 0) [[likely]]
+            {
+                // socket is readable
+                return true;
+            }
+            else if (ret == 0)
+            {
+                // timeout
+                return false;
+            }
+            else
+            {
+                if (errno == EINTR)
+                    continue; // interrupted, retry immediately
+                return make_error(ret, "Unexpected error in wait_readable");
+            }
+        }
+    }
+
+    /**
+     * Waits for the socket to become writable.
+     * Writable is defined as being able to write data to the socket.
+     */
+    inline expected<bool, WSError> wait_writeable(Timeout<>& timeout)
+    {
+        // create fd_set for select with timeout
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(fd_, &write_fds);
+
+        while (true)
+        {
+            auto remaining = timeout.remaining_timeval();
+            int ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
+
+            if (ret > 0) [[likely]]
+            {
+                // socket is writable
+                return true;
+            }
+            else if (ret == 0)
+            {
+                // timeout
+                return false;
+            }
+            else
+            {
+                if (errno == EINTR)
+                    continue; // interrupted, retry immediately
+                return make_error(ret, "Unexpected error in wait_writeable");
+            }
+        }
     }
 
     /**
@@ -293,47 +352,42 @@ public:
         span<byte> buffer, Timeout<>& timeout
     ) noexcept override
     {
-        // create fd_set for select with timeout
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
-        FD_SET(fd_, &read_fds);
-
-        ssize_t ret = 0;
-        do
+        while (true)
         {
-            // wait for data to read or timeout
-            int select_ret;
-            do
+            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
+            ssize_t ret = ::recv(fd_, buffer.data(), buffer.size(), flags);
+
+            if (ret > 0) [[likely]]
             {
-                auto remaining = timeout.remaining_timeval();
-                select_ret = ::select(fd_ + 1, &read_fds, nullptr, nullptr, &remaining);
-            } while (select_ret == -1 && errno == EINTR);
-
-            if (select_ret == 0) [[unlikely]]
-                return WS_ERROR(timeout, "Read timeout", close_code::not_set);
-
-            WS_TRYV(this->check_errno(select_ret, "read_some (select)"));
-
-            // read data from socket using `recv`, retry on EINTR
-            do
+                // data read successfully
+                return static_cast<size_t>(ret);
+            }
+            else if (ret == 0)
             {
-                constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
-                ret = ::recv(fd_, buffer.data(), buffer.size(), flags);
-            } while (ret == -1 && errno == EINTR);
-
-            if (ret == 0) [[unlikely]]
-            {
+                // connection closed
                 return WS_ERROR(
-                    transport_error, "Connection closed on transport layer", close_code::not_set
+                    connection_closed, "Connection closed on transport layer", close_code::not_set
                 );
             }
-
-            // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
-        } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
-
-        WS_TRYV(this->check_errno(ret, "read_some"));
-
-        return static_cast<size_t>(ret);
+            else
+            {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) [[likely]]
+                {
+                    // would block, wait for readability, then try recv again
+                    WS_TRY(readable, this->wait_readable(timeout));
+                    if (!readable.value())
+                    {
+                        return WS_ERROR(
+                            timeout, "Timeout occured during read_some", close_code::not_set
+                        );
+                    }
+                }
+                else if (errno == EINTR)
+                    continue; // interrupted, retry immediately
+                else
+                    return make_error(ret, "Unexpected recv error in read_some");
+            }
+        }
     }
 
     /**
@@ -346,47 +400,42 @@ public:
         const span<byte> buffer, Timeout<>& timeout
     ) noexcept override
     {
-        // create fd_set for select with timeout
-        fd_set write_fds;
-        FD_ZERO(&write_fds);
-        FD_SET(fd_, &write_fds);
-
-        ssize_t ret = 0;
-        do
+        while (true)
         {
-            // wait for socket to be ready for writing or timeout
-            int select_ret;
-            do
+            constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
+            ssize_t ret = ::send(fd_, buffer.data(), buffer.size(), flags);
+
+            if (ret > 0) [[likely]]
             {
-                auto remaining = timeout.remaining_timeval();
-                select_ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
-            } while (select_ret == -1 && errno == EINTR);
-
-            if (select_ret == 0) [[unlikely]]
-                return WS_ERROR(timeout, "Write timeout", close_code::not_set);
-
-            WS_TRYV(this->check_errno(select_ret, "write_some (select)"));
-
-            // write data to socket using `send`, retry on EINTR
-            do
+                // data written successfully
+                return static_cast<size_t>(ret);
+            }
+            else if (ret == 0)
             {
-                constexpr int flags = MSG_NOSIGNAL; // prevent SIGPIPE signal on broken pipe
-                ret = ::send(fd_, buffer.data(), buffer.size(), flags);
-            } while (ret == -1 && errno == EINTR);
-
-            if (ret == 0) [[unlikely]]
-            {
+                // connection closed
                 return WS_ERROR(
-                    transport_error, "Connection closed on transport layer", close_code::not_set
+                    connection_closed, "Connection closed on transport layer", close_code::not_set
                 );
             }
-
-            // retry on EAGAIN or EWOULDBLOCK (non-blocking), should not happen with select normally
-        } while (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
-
-        WS_TRYV(this->check_errno(ret, "write_some"));
-
-        return static_cast<size_t>(ret);
+            else
+            {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) [[likely]]
+                {
+                    // would block, wait for writeability, then try send again
+                    WS_TRY(readable, this->wait_writeable(timeout));
+                    if (!readable.value())
+                    {
+                        return WS_ERROR(
+                            timeout, "Timeout occured during write_some", close_code::not_set
+                        );
+                    }
+                }
+                else if (errno == EINTR)
+                    continue; // interrupted, retry immediately
+                else
+                    return make_error(ret, "Unexpected send error in write_some");
+            }
+        }
     }
 
     /**
@@ -405,7 +454,7 @@ public:
             int ret = ::shutdown(fd_, SHUT_RDWR);
             if (ret != 0)
             {
-                auto err = this->check_errno(ret, "Shutdown of socket failed");
+                auto err = make_error(ret, "Shutdown of socket failed");
                 logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
@@ -425,7 +474,7 @@ public:
             int ret = ::close(fd_);
             if (ret != 0)
             {
-                auto err = this->check_errno(ret, "Socket close failed");
+                auto err = make_error(ret, "Socket close failed");
                 logger_->template log<LogLevel::W>(err.error().message);
                 return err;
             }
@@ -435,20 +484,22 @@ public:
     }
 
 private:
-    [[nodiscard]] expected<void, WSError> check_errno(
-        ssize_t return_code, const string& desc
-    ) noexcept
+    [[nodiscard]] std::unexpected<WSError> make_error(ssize_t ret_code, const string& desc) noexcept
     {
-        if (return_code != -1)
-            return {};
-
         int errno_ = errno;
         return WS_ERROR(
             transport_error,
-            "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
-                std::to_string(errno_) + ")",
+            "Error: " + desc + " (return code " + std::to_string(ret_code) + "): " + //
+                string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")",
             close_code::not_set
         );
+    }
+
+    [[nodiscard]] expected<void, WSError> check_error(ssize_t ret_code, const string& desc) noexcept
+    {
+        if (ret_code != -1)
+            return {};
+        return make_error(ret_code, desc);
     }
 };
 

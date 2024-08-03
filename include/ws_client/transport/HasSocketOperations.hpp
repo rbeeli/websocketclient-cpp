@@ -40,6 +40,12 @@ concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeou
     { t.write_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
 
     /**
+     * Waits for the socket to become readable, without consuming any data.
+     * Readable is defined as having data application available to read.
+     */
+    { t.wait_readable(timeout) } -> std::same_as<expected<bool, WSError>>;
+
+    /**
      * Shuts down socket communication.
      * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
