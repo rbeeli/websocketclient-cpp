@@ -146,10 +146,10 @@ The user can provide their own transport layer (socket) implementation if needed
 All that is required is to implement the following functions in a custom socket class:
 
 ```cpp
-read_some(buffer, timeout)
-write_some(buffer, timeout)
-shutdown(timeout)
-close()
+read_some(buffer, timeout);
+write_some(buffer, timeout);
+shutdown(timeout);
+close();
 ```
 
 For details, see the concepts `HasSocketOperations` in [HasSocketOperations.hpp](include/ws_client/transport/HasSocketOperations.hpp), or `HasSocketOperationsAsync` in [HasSocketOperationsAsync.hpp](include/ws_client/transport/HasSocketOperationsAsync.hpp) respectively.
@@ -243,6 +243,20 @@ The control frames *ping*, *pong* and *close* are returned to the client in the 
 The user is responsible for sending the corresponding pong or close frame in response.
 By returning those frames to the user, the library enables the user to decide when and what to write as response, and does not hide any networking control flow, which would require synchronization.
 
+### Timeouts
+
+All network operations have a timeout parameter to limit the time spent on a single operation,
+thus avoiding blocking the application indefinitely.
+
+This includes the following functions in `WebSocketClient` and `WebSocketClientAsync`:
+
+* `handshake`
+* `wait_message`
+* `read_message`
+* `send_message`
+* `send_pong_frame`
+* `close`
+
 ### Buffers and maximum message size
 
 The implementation does not allocate separate memory for each message and/or frames.
@@ -257,15 +271,15 @@ The respective buffer size limits can be configured in the `PermessageDeflate` s
 struct PermessageDeflate
 {
     [...]
-    size_t decompress_buffer_size{100 * 1024};
-    size_t compress_buffer_size{100 * 1024};
+    size_t decompress_buffer_size{100 * 1024}; // 100 KiB
+    size_t compress_buffer_size{100 * 1024}; // 100 KiB
 };
 ```
 
 The initial size, and the maximum buffer size are set at the creation of a `Buffer` instance:
 
 ```cpp
-// create buffer with initial size of 4096 bytes, and maximum size of 1 MB
+// create buffer with initial size of 4 KiB, and maximum size of 1 MiB
 Buffer::create(4096, 1024 * 1024);
 ```
 

@@ -95,7 +95,7 @@ public:
      * Initialize the socket and set options.
      * This function must be called before `connect`.
      */
-    [[nodiscard]] expected<void, WSError> init()
+    [[nodiscard]] expected<void, WSError> init() noexcept
     {
         if (fd_ != -1)
             return WS_ERROR(logic_error, "TCP socket already initialized", close_code::not_set);
@@ -133,7 +133,7 @@ public:
     /**
      * Establish a connection to the server.
      */
-    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5s)
+    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5s) noexcept
     {
         if (fd_ == -1)
             return WS_ERROR(
@@ -195,7 +195,7 @@ public:
      * Enable or disable TCP_NODELAY option (Nagle's algorithm).
      * Disabling Nagle's algorithm can reduce latency due to reduced buffering.
      */
-    [[nodiscard]] expected<void, WSError> set_TCP_NODELAY(bool value)
+    [[nodiscard]] expected<void, WSError> set_TCP_NODELAY(bool value) noexcept
     {
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
@@ -207,7 +207,7 @@ public:
     /**
      * Enable or disable O_NONBLOCK option (non-blocking mode).
      */
-    [[nodiscard]] expected<void, WSError> set_O_NONBLOCK(bool value)
+    [[nodiscard]] expected<void, WSError> set_O_NONBLOCK(bool value) noexcept
     {
         int flags = fcntl(fd_, F_GETFL, 0);
         if (flags == -1)
@@ -230,7 +230,7 @@ public:
     /**
      * Set SO_RCVBUF option (receive buffer size).
      */
-    [[nodiscard]] expected<void, WSError> set_SO_RCVBUF(int buffer_size)
+    [[nodiscard]] expected<void, WSError> set_SO_RCVBUF(int buffer_size) noexcept
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_RCVBUF"));
@@ -243,7 +243,7 @@ public:
     /**
      * Set SO_SNDBUF option (send buffer size).
      */
-    [[nodiscard]] expected<void, WSError> set_SO_SNDBUF(int buffer_size)
+    [[nodiscard]] expected<void, WSError> set_SO_SNDBUF(int buffer_size) noexcept
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_SNDBUF"));
@@ -259,7 +259,7 @@ public:
      * 
      * Note: TCP_QUICKACK is not available on macOS, hence a no-op on that platform.
      */
-    [[nodiscard]] expected<void, WSError> set_TCP_QUICKACK(bool value)
+    [[nodiscard]] expected<void, WSError> set_TCP_QUICKACK(bool value) noexcept
     {
         // suppress unused parameter warning in case TCP_QUICKACK is not available
         (void)value;
@@ -276,7 +276,7 @@ public:
      * Waits for the socket to become readable, without consuming any data.
      * Readable is defined as having data application available to read.
      */
-    inline expected<bool, WSError> wait_readable(Timeout<>& timeout)
+    inline expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
     {
         // create fd_set for select with timeout
         fd_set read_fds;
@@ -311,7 +311,7 @@ public:
      * Waits for the socket to become writable.
      * Writable is defined as being able to write data to the socket.
      */
-    inline expected<bool, WSError> wait_writeable(Timeout<>& timeout)
+    inline expected<bool, WSError> wait_writeable(Timeout<>& timeout) noexcept
     {
         // create fd_set for select with timeout
         fd_set write_fds;

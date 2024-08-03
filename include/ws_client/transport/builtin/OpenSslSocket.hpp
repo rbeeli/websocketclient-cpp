@@ -363,7 +363,7 @@ public:
      * Waits for the SSL socket to become readable, without consuming any data.
      * Readable is defined as having data application available to read.
      */
-    inline expected<bool, WSError> wait_readable(Timeout<>& timeout)
+    inline expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
     {
         char buf[1];
         do
@@ -653,7 +653,7 @@ public:
     }
 
 private:
-    void set_ssl_ex_data()
+    void set_ssl_ex_data() noexcept
     {
         std::call_once(open_ssl_ex_once_flag, []() { //
             open_ssl_ex_ix = SSL_get_ex_new_index(0, (void*)"OpenSslSocket", NULL, NULL, NULL);
@@ -661,17 +661,17 @@ private:
         SSL_set_ex_data(ssl_, open_ssl_ex_ix, this);
     }
 
-    void ssl_log_error(string_view msg)
+    void ssl_log_error(string_view msg) noexcept
     {
         logger_->template log<LogLevel::E>(msg);
     }
 
-    void ssl_log_debug(string_view msg)
+    void ssl_log_debug(string_view msg) noexcept
     {
         logger_->template log<LogLevel::D>(msg);
     }
 
-    bool ssl_log_debug_enabled() const
+    bool ssl_log_debug_enabled() const noexcept
     {
         return logger_->template is_enabled<LogLevel::D>();
     }
@@ -756,7 +756,7 @@ private:
     }
 
     template <typename TLogger2>
-    static void ssl_info_callback(const SSL* ssl, int where, int ret)
+    static void ssl_info_callback(const SSL* ssl, int where, int ret) noexcept
     {
         OpenSslSocket<TLogger2>* this_ = reinterpret_cast<OpenSslSocket<TLogger2>*>(
             SSL_get_ex_data(ssl, open_ssl_ex_ix)

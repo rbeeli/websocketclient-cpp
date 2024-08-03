@@ -13,12 +13,13 @@ using std::span;
 
 /**
  * Circular buffer data structure for primitive / trivially copyable types.
+ * 
  * The buffer is a fixed-size array that wraps around when it reaches the end.
  * The buffer can be used to store and retrieve items in a FIFO manner.
  * The buffer is not thread-safe and should be used in a single-threaded context only.
  * It is not allowed to push more items than the buffer can store,
  * the user MUST check the available space before pushing.
- * Memory is allocated using std::malloc.
+ * Memory is allocated using `std::malloc`.
  */
 template <typename T>
     requires std::is_trivially_copyable_v<T>

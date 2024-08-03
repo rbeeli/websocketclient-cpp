@@ -152,6 +152,9 @@ public:
         return *this;
     }
 
+    /**
+     * Returns the underlying socket object.
+     */
     [[nodiscard]] inline BufferedSocketAsync<TSocket, TTask>& underlying() noexcept
     {
         return this->socket_;
@@ -193,7 +196,7 @@ public:
      */
     [[nodiscard]] TTask<expected<void, WSError>> handshake(
         Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5s
-    )
+    ) noexcept
     {
         if (!this->closed_)
             co_return WS_ERROR(logic_error, "Connection already open.", close_code::not_set);
@@ -487,6 +490,13 @@ public:
         }
     }
 
+    /**
+     * Sends a message to the WebSocket server.
+     * 
+     * Compression and send timeout can be configured using the `SendOptions` struct.
+     * 
+     * NOTE: The message is always sent as a single frame, fragmentation is currently not supported.
+     */
     [[nodiscard]] TTask<expected<void, WSError>> send_message(
         const Message& msg, SendOptions options = {}
     ) noexcept
@@ -545,6 +555,9 @@ public:
         co_return expected<void, WSError>{};
     }
 
+    /**
+     * Sends a PONG frame to the server in response to a PING frame.
+     */
     [[nodiscard]] TTask<expected<void, WSError>> send_pong_frame(
         span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
@@ -572,12 +585,14 @@ public:
     /**
      * Closes the WebSocket connection.
      * 
-     * This method sends a close frame to the server and waits for the server,
-     * shuts down the socket communication and closes the underlying socket connection.
+     * This method sends a CLOSE frame to the server,
+     * shuts down the socket communication, and closes the underlying socket connection.
+     * 
+     * This method can be called multiple times.
      */
     [[nodiscard]] inline TTask<expected<void, WSError>> close(
         const close_code code, std::chrono::milliseconds timeout_ms = 5s
-    )
+    ) noexcept
     {
         if (this->closed_)
             co_return expected<void, WSError>{};
@@ -670,9 +685,9 @@ private:
             );
         }
 
+#if WS_CLIENT_LOG_FRAMES == 1
         if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-#if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
             msg << "Received ";
             msg << to_string(frame.header.op_code());
@@ -691,8 +706,8 @@ private:
             msg << " payload_size=";
             msg << frame.payload_size;
             logger_->template log<LogLevel::D>(msg.str());
-#endif
         }
+#endif
 
         co_return frame;
     }
@@ -701,9 +716,9 @@ private:
         Frame& frame, span<byte> payload, Timeout<>& timeout
     ) noexcept
     {
+#if WS_CLIENT_LOG_FRAMES == 1
         if (logger_->template is_enabled<LogLevel::D>())
         {
-#if WS_CLIENT_LOG_FRAMES == 1
             std::stringstream msg;
             msg << "Writing ";
             msg << to_string(frame.header.op_code());
@@ -722,8 +737,8 @@ private:
             msg << " payload_size=";
             msg << frame.payload_size;
             logger_->template log<LogLevel::D>(msg.str());
-#endif
         }
+#endif
 
         size_t offset = 0;
         write_buffer_[0] = frame.header.b0;
