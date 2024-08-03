@@ -58,7 +58,7 @@ public:
         {
             int n = co_await socket_.ReadSome(buffer.data(), buffer.size());
             if (n == 0)
-                co_return WS_ERROR(transport_error, "Connection closed by peer", close_code::not_set);
+                co_return WS_ERROR(connection_closed, "Connection closed by peer", close_code::not_set);
             else if (n == -1)
                 co_return WS_ERROR(transport_error, "Read error", close_code::not_set);
             co_return static_cast<size_t>(n);
@@ -84,7 +84,7 @@ public:
         {
             int n = co_await socket_.WriteSome(buffer.data(), buffer.size());
             if (n == 0)
-                co_return WS_ERROR(transport_error, "Connection closed by peer", close_code::not_set);
+                co_return WS_ERROR(connection_closed, "Connection closed by peer", close_code::not_set);
             else if (n == -1)
                 co_return WS_ERROR(transport_error, "Read error", close_code::not_set);
             co_return static_cast<size_t>(n);
