@@ -26,7 +26,7 @@ using std::string;
     {
         int errno_ = errno;
         return WS_ERROR(
-            uncategorized,
+            uncategorized_error,
             "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
                 std::to_string(errno_) + ")",
             close_code::not_set

@@ -46,7 +46,7 @@ public:
      * @param hostname          Hostname to resolve, e.g. "example.com"
      * @param service           Service name or port number, e.g. "80", "http", "https", etc.
      * @param type              Address type to resolve, e.g. `AddrType::IPv4`, `AddrType::IPv6`,
-     *                          `AddrType::Unspecified`
+     *                          `AddrType::unspecified`
      * @param resolve_canonname Whether to resolve canonical name of the host
      * 
      * @return Vector of `AddressInfo` objects, each containing resolved IP address and other info.
@@ -54,22 +54,22 @@ public:
     expected<vector<AddressInfo>, WSError> resolve(
         const string& hostname,
         const string& service,
-        AddrType type = AddrType::Unspecified,
+        AddrType type = AddrType::unspecified,
         bool resolve_canonname = false
-    )
+    ) const noexcept
     {
         auto now = std::chrono::system_clock::now();
 
         addrinfo hints{};
         switch (type)
         {
-            case AddrType::Unspecified:
+            case AddrType::unspecified:
                 hints.ai_family = AF_UNSPEC;
                 break;
-            case AddrType::IPv4:
+            case AddrType::ipv4:
                 hints.ai_family = AF_INET;
                 break;
-            case AddrType::IPv6:
+            case AddrType::ipv6:
                 hints.ai_family = AF_INET6;
                 break;
         }
@@ -80,7 +80,7 @@ public:
             hints.ai_flags = AI_CANONNAME;
 
         logger->template log<LogLevel::D>(
-            "Resolving hostname " + hostname + " (type=" + to_string(type) + ")"
+            "Resolving hostname " + hostname + " (type=" + string(to_string(type)) + ")"
         );
 
         // resolve hostname to IP address using getaddrinfo POSIX function
@@ -89,9 +89,9 @@ public:
         if (ret != 0)
         {
             // Use gai_strerror to get a human-readable error message
-            string error_message = "Failed to resolve hostname: ";
-            error_message += gai_strerror(ret);
-            return WS_ERROR(url_error, error_message, close_code::not_set);
+            string err_msg = "Failed to resolve hostname: ";
+            err_msg += gai_strerror(ret);
+            return WS_ERROR(url_error, std::move(err_msg), close_code::not_set);
         }
 
         if (logger->template is_enabled<LogLevel::I>())
@@ -110,7 +110,7 @@ public:
         for (auto res = getaddrinfo_res; res != nullptr; res = res->ai_next)
         {
             if (res->ai_family == AF_INET &&
-                (type == AddrType::IPv4 || type == AddrType::Unspecified))
+                (type == AddrType::ipv4 || type == AddrType::unspecified))
             {
                 // IPv4
                 sockaddr_in* ipv4 = reinterpret_cast<sockaddr_in*>(res->ai_addr);
@@ -121,7 +121,7 @@ public:
                 {
                     result.emplace_back(
                         hostname,
-                        AddrType::IPv4,
+                        AddrType::ipv4,
                         string(ipCStr),
                         res->ai_family,
                         res->ai_addrlen,
@@ -142,7 +142,7 @@ public:
                 }
             }
             else if (res->ai_family == AF_INET6 &&
-                     (type == AddrType::IPv6 || type == AddrType::Unspecified))
+                     (type == AddrType::ipv6 || type == AddrType::unspecified))
             {
                 // IPv6
                 sockaddr_in6* ipv6 = reinterpret_cast<sockaddr_in6*>(res->ai_addr);
@@ -153,7 +153,7 @@ public:
                 {
                     result.emplace_back(
                         hostname,
-                        AddrType::IPv6,
+                        AddrType::ipv6,
                         string(ipCStr),
                         res->ai_family,
                         res->ai_addrlen,

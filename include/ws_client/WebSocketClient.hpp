@@ -280,7 +280,7 @@ public:
             {
                 return WSError(
                     WSErrorCode::protocol_error,
-                    "Reserved opcode received: " + to_string(frame.header.op_code()),
+                    "Reserved opcode received: " + std::string(to_string(frame.header.op_code())),
                     close_code::protocol_error
                 );
             }
@@ -311,7 +311,9 @@ public:
                              " bytes is too large, only " +
                              std::to_string(buffer.max_size() - buffer.size()) +
                              " bytes available.";
-                return WSError(WSErrorCode::buffer_error, msg, close_code::message_too_big);
+                return WSError(
+                    WSErrorCode::buffer_error, std::move(msg), close_code::message_too_big
+                );
             }
 
             // check if this is the first frame
@@ -354,8 +356,8 @@ public:
                 {
                     return WSError(
                         WSErrorCode::protocol_error,
-                        "Expected continuation frame, but received " +
-                            to_string(frame.header.op_code()),
+                        std::move(string("Expected continuation frame, but received ")
+                                      .append(to_string(frame.header.op_code()))),
                         close_code::protocol_error
                     );
                 }
@@ -376,8 +378,8 @@ public:
             {
                 return WSError(
                     WSErrorCode::protocol_error,
-                    "Unexpected opcode in websocket frame received: " +
-                        to_string(read_state_.op_code),
+                    std::move(string("Unexpected opcode in websocket frame received: ")
+                                  .append(to_string(read_state_.op_code))),
                     close_code::protocol_error
                 );
             }
@@ -409,7 +411,7 @@ public:
 
         // check if timeout occurred
         if (timeout.is_expired())
-            return WSError(WSErrorCode::timeout, "Timeout while reading message.");
+            return WSError(WSErrorCode::timeout_error, "Timeout while reading WebSocket message.");
 
         span<byte> payload_buffer;
 
@@ -500,7 +502,8 @@ public:
             {
                 return WSError(
                     WSErrorCode::protocol_error,
-                    "Unexpected opcode frame received: " + to_string(read_state_.op_code),
+                    std::move(string("Unexpected opcode frame received: ")
+                                  .append(to_string(read_state_.op_code))),
                     close_code::protocol_error
                 );
             }
@@ -957,8 +960,8 @@ private:
             {
                 return WSError(
                     WSErrorCode::protocol_error,
-                    "Unexpected opcode for websocket control frame received: " +
-                        to_string(frame.header.op_code()),
+                    std::move(string("Unexpected opcode for websocket control frame received: ")
+                                  .append(to_string(frame.header.op_code()))),
                     close_code::protocol_error
                 );
             }

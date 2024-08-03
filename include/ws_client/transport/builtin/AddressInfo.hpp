@@ -2,6 +2,7 @@
 
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -16,24 +17,24 @@ using std::vector;
 
 enum class AddrType : uint8_t
 {
-    Unspecified,
-    IPv4,
-    IPv6
+    unspecified,
+    ipv4,
+    ipv6
 };
 
 // to_string
-string to_string(AddrType type)
+constexpr const string_view to_string(AddrType type) noexcept
 {
     switch (type)
     {
-        case AddrType::Unspecified:
-            return "Unspecified";
-        case AddrType::IPv4:
-            return "IPv4";
-        case AddrType::IPv6:
-            return "IPv6";
+        case AddrType::unspecified:
+            return "unspecified";
+        case AddrType::ipv4:
+            return "ipv4";
+        case AddrType::ipv6:
+            return "ipv6";
         default:
-            return "Unknown";
+            return "unknown";
     }
 }
 
@@ -176,7 +177,7 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const AddressInfo& addr)
     {
         os << "AddressInfo{host=" << addr.hostname() << ", "
-           << "type=" << (addr.type() == AddrType::IPv4 ? "IPv4" : "IPv6") << ", ip=" << addr.ip();
+           << "type=" << to_string(addr.type()) << ", ip=" << addr.ip();
         if (!addr.ai_canonname_.empty())
             os << ", canonname=" << addr.ai_canonname_;
         os << "}";

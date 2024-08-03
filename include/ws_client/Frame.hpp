@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <cstdint>
 #include <span>
 #include <limits>
@@ -73,7 +74,7 @@ static bool is_reserved(opcode v) noexcept
            (v >= opcode::control_rsvb && v <= opcode::control_rsvf);
 }
 
-static constexpr string to_string(opcode v)
+static constexpr string_view to_string(opcode v)
 {
     switch (v)
     {
@@ -110,7 +111,7 @@ static constexpr string to_string(opcode v)
         case opcode::control_rsvf:
             return "control_rsvf";
         default:
-            return "Unknown (" + std::to_string(static_cast<uint8_t>(v)) + ")";
+            return "unknown";
     }
 }
 

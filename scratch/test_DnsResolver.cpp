@@ -10,7 +10,7 @@ int main()
 {
     try
     {
-        auto res = DnsResolver::resolve("example.com", "80", AddrType::Unspecified);
+        auto res = DnsResolver::resolve("example.com", "80", AddrType::unspecified);
         if (!res)
         {
             std::cerr << "Failed to resolve hostname: " << res.error().message << std::endl;

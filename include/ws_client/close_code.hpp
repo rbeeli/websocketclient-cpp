@@ -1,11 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace ws_client
 {
-using std::string;
-
 /**
  * Enum for WebSocket close frame status codes as defined in RFC 6455.
  */
@@ -54,7 +53,7 @@ static bool is_valid_close_code(close_code code)
            (static_cast<uint16_t>(code) >= 3000 && static_cast<uint16_t>(code) <= 4999);
 }
 
-static constexpr string to_string(close_code code)
+static constexpr std::string_view to_string(close_code code)
 {
     switch (code)
     {
@@ -77,7 +76,7 @@ static constexpr string to_string(close_code code)
         case close_code::unexpected_condition:
             return "unexpected_condition";
         default:
-            return "Unknown (" + std::to_string(static_cast<uint16_t>(code)) + ")";
+            return "unknown";
     }
 }
 }; // namespace ws_client

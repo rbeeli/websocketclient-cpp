@@ -8,15 +8,6 @@ Pull requests and issues are welcome.
 - auto fragmentation write
 - timeout for DnsResolver
 
-- SSL_shutdown sig pipe
-
-  - https://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
-  - BIO_free_all(this->web); // TODO throws sometimes, e.g. websocketclient init error
-
-    NOTE: When using SSL, it seems impossible to avoid SIGPIPE in all cases, since on some operating systems, SIGPIPE can only be suppressed on a per-message basis, but there is no way to make the OpenSSL library do so for its internal communications. If your program needs to avoid being terminated on SIGPIPE, the only fully general way might be to set up a signal handler for SIGPIPE to handle or ignore it yourself.
-
-    OpenSslSocket.hpp: Use custom BIO to allow setting MSG_NOSIGNAL
-
 ## Useful resources
 
 - https://jamespascoe.github.io/accu2023/#/9/2/3
@@ -28,21 +19,23 @@ Pull requests and issues are welcome.
 Lists all connections:
 
 ```bash
-sudo ss -tp | grep main_demo
+sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)"
 ```
 
 Closes WebSocket connection at port 443 of process:
 
 ```bash
-sudo ss -tp | grep "pid=$(pidof bybit_orderbook)" | grep -oP '\s\K[^ ]+(?=:https)'443
+sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)'
 
-sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof bybit_orderbook)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
+sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
+
+sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_hello_ws_builtin)" | grep -oP '\s\K[^ ]+(?=:http)') dport = 8080
 
 sudo ss -K dst '127.0.0.1' dport = 443
 
 sudo ss -K dst 66.241.124.119:443
 
-pidof bybit_orderbook
+pidof ex_echo_builtin
 ```
 
 ## Compiler varia

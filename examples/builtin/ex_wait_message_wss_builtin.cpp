@@ -74,13 +74,13 @@ expected<void, WSError> run()
 
     while (true)
     {
-        // wait for message for 3 sec
+        // wait for message for 2 sec
         bool readable = false;
         do
         {
-            WS_TRY(read_res, client.wait_message(3s));
+            WS_TRY(read_res, client.wait_message(2s));
             if (!(readable = read_res.value()))
-                logger.log<LogLevel::W>("No message received within 3 sec, continue waiting...");
+                logger.log<LogLevel::W>("No message received within 2 sec, continue waiting...");
         } while (!readable);
 
         // read message (only 1 sec timeout since we know socket is readable)

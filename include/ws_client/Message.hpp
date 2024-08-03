@@ -21,7 +21,7 @@ enum class MessageType : uint8_t
     binary = static_cast<uint8_t>(opcode::binary)
 };
 
-static constexpr string to_string(MessageType v)
+static constexpr string_view to_string(MessageType v)
 {
     switch (v)
     {
@@ -30,7 +30,7 @@ static constexpr string to_string(MessageType v)
         case MessageType::binary:
             return "binary";
         default:
-            return "UNKNOWN (" + std::to_string(static_cast<uint8_t>(v)) + ")";
+            return "unknown";
     }
 }
 

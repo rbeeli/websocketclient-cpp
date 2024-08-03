@@ -27,7 +27,7 @@ expected<void, WSError> run()
 
     // resolve hostname
     DnsResolver dns(&logger);
-    WS_TRY(dns_res, dns.resolve(url->host(), url->port_str(), AddrType::IPv4));
+    WS_TRY(dns_res, dns.resolve(url->host(), url->port_str(), AddrType::ipv4));
     AddressInfo& addr = (*dns_res)[0];
 
     // create TCP socket

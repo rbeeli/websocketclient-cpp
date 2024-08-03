@@ -133,7 +133,9 @@ public:
     /**
      * Establish a connection to the server.
      */
-    [[nodiscard]] expected<void, WSError> connect(std::chrono::milliseconds timeout_ms = 5s) noexcept
+    [[nodiscard]] expected<void, WSError> connect(
+        std::chrono::milliseconds timeout_ms = 5s
+    ) noexcept
     {
         if (fd_ == -1)
             return WS_ERROR(
@@ -160,7 +162,7 @@ public:
         // use select to wait for the connection or timeout
         WS_TRY(connected, this->wait_writeable(timeout));
         if (!connected.value())
-            return WS_ERROR(timeout, "Connect timeout", close_code::not_set);
+            return WS_ERROR(timeout_error, "Connect timeout", close_code::not_set);
 
         // check if the connection was successful
         int error;
@@ -378,14 +380,14 @@ public:
                     if (!readable.value())
                     {
                         return WS_ERROR(
-                            timeout, "Timeout occured during read_some", close_code::not_set
+                            timeout_error, "Socket read timed out", close_code::not_set
                         );
                     }
                 }
                 else if (errno == EINTR)
                     continue; // interrupted, retry immediately
                 else
-                    return make_error(ret, "Unexpected recv error in read_some");
+                    return make_error(ret, "Unexpected recv error in socket read operation");
             }
         }
     }
@@ -426,14 +428,14 @@ public:
                     if (!readable.value())
                     {
                         return WS_ERROR(
-                            timeout, "Timeout occured during write_some", close_code::not_set
+                            timeout_error, "Socket write timed out", close_code::not_set
                         );
                     }
                 }
                 else if (errno == EINTR)
                     continue; // interrupted, retry immediately
                 else
-                    return make_error(ret, "Unexpected send error in write_some");
+                    return make_error(ret, "Unexpected send error in socket write operation");
             }
         }
     }
@@ -487,12 +489,9 @@ private:
     [[nodiscard]] std::unexpected<WSError> make_error(ssize_t ret_code, const string& desc) noexcept
     {
         int errno_ = errno;
-        return WS_ERROR(
-            transport_error,
-            "Error: " + desc + " (return code " + std::to_string(ret_code) + "): " + //
-                string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")",
-            close_code::not_set
-        );
+        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + //
+                     string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")";
+        return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
     }
 
     [[nodiscard]] expected<void, WSError> check_error(ssize_t ret_code, const string& desc) noexcept

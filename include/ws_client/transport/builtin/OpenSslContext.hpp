@@ -3,6 +3,7 @@
 #include <expected>
 #include <string>
 #include <span>
+#include <csignal>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -28,6 +29,9 @@ public:
     explicit OpenSslContext(TLogger* logger) noexcept //
         : logger(logger), ctx(nullptr)
     {
+        // ignore SIGPIPE signal, which would terminate the process,
+        // return EPIPE error code instead when writing to a closed socket
+        std::signal(SIGPIPE, SIG_IGN);
     }
 
     ~OpenSslContext() noexcept
@@ -67,7 +71,7 @@ public:
         return this->ctx;
     }
 
-    [[nodiscard]] expected<void, WSError> init()
+    [[nodiscard]] expected<void, WSError> init() noexcept
     {
         // create SSL context
         this->ctx = SSL_CTX_new(TLS_client_method());

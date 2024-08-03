@@ -18,7 +18,7 @@ using std::span;
 /**
  * Case-insensitive single ASCII character comparison (less than).
  */
-inline bool less_ci_char(const char a, const char b)
+inline bool less_ci_char(const char a, const char b) noexcept
 {
     return std::tolower(static_cast<unsigned char>(a)) <
            std::tolower(static_cast<unsigned char>(b));
@@ -27,7 +27,7 @@ inline bool less_ci_char(const char a, const char b)
 /**
  * Case-insensitive single ASCII character equality comparison.
  */
-inline bool equals_ci_char(const char a, const char b)
+inline bool equals_ci_char(const char a, const char b) noexcept
 {
     return std::tolower(static_cast<unsigned char>(a)) ==
            std::tolower(static_cast<unsigned char>(b));
@@ -36,7 +36,7 @@ inline bool equals_ci_char(const char a, const char b)
 /**
  * Case-insensitive string equality comparison.
  */
-inline bool equals_ci(const string& a, const string& b)
+inline bool equals_ci(const string& a, const string& b) noexcept
 {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), equals_ci_char);
 }
@@ -44,7 +44,7 @@ inline bool equals_ci(const string& a, const string& b)
 /**
  * Case-insensitive string equality comparison.
  */
-inline bool equals_ci(const string_view lhs, const string_view rhs)
+inline bool equals_ci(const string_view lhs, const string_view rhs) noexcept
 {
     return lhs.size() == rhs.size() &&
            std::equal(lhs.begin(), lhs.end(), rhs.begin(), equals_ci_char);
@@ -62,7 +62,7 @@ inline bool equals_ci(const string_view lhs, const string_view rhs)
  */
 struct CaseInsensitiveLess
 {
-    bool operator()(const string_view s1, const string_view s2) const
+    bool operator()(const string_view s1, const string_view s2) const noexcept
     {
         if (s1.size() != s2.size())
             return s1.size() < s2.size();
@@ -76,7 +76,7 @@ struct CaseInsensitiveLess
 /**
  * Trim whitespace-like characters from beginning of string in-place.
  */
-inline void trim_left(string& s)
+inline void trim_left(string& s) noexcept
 {
     s.erase(
         s.begin(),
@@ -87,7 +87,7 @@ inline void trim_left(string& s)
 /**
  * Trim whitespace-like characters from end of string in-place.
  */
-inline void trim_right(string& s)
+inline void trim_right(string& s) noexcept
 {
     s.erase(
         std::find_if(s.rbegin(), s.rend(), [](unsigned char c) { return !std::isspace(c); }).base(),
@@ -98,7 +98,7 @@ inline void trim_right(string& s)
 /**
  * Trim whitespace-like characters from beginning and end of string in-place.
  */
-inline void trim(string& s)
+inline void trim(string& s) noexcept
 {
     trim_left(s);
     trim_right(s);

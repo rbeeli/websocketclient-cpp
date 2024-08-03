@@ -2,6 +2,7 @@
 
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <expected>
 
 #include "ws_client/close_code.hpp"
@@ -10,7 +11,6 @@ namespace ws_client
 {
 using std::expected;
 using std::string;
-using std::string_view;
 
 enum class WSErrorCode : uint8_t
 {
@@ -19,13 +19,13 @@ enum class WSErrorCode : uint8_t
     protocol_error = 4,
     url_error = 5,
     buffer_error = 6,
-    uncategorized = 7,
+    uncategorized_error = 7,
     compression_error = 8,
-    timeout = 9,
+    timeout_error = 9,
     logic_error = 10,
 };
 
-static constexpr string_view to_string(const WSErrorCode& error)
+static constexpr std::string_view to_string(const WSErrorCode& error)
 {
     switch (error)
     {
@@ -39,12 +39,12 @@ static constexpr string_view to_string(const WSErrorCode& error)
             return "url_error";
         case WSErrorCode::buffer_error:
             return "buffer_error";
-        case WSErrorCode::uncategorized:
-            return "uncategorized";
+        case WSErrorCode::uncategorized_error:
+            return "uncategorized_error";
         case WSErrorCode::compression_error:
             return "compression_error";
-        case WSErrorCode::timeout:
-            return "timeout";
+        case WSErrorCode::timeout_error:
+            return "timeout_error";
         case WSErrorCode::logic_error:
             return "logic_error";
         default:
@@ -58,13 +58,13 @@ struct WSError
     string message;
     close_code close_with_code;
 
-    WSError(WSErrorCode code, string message)
-        : code(code), message(message), close_with_code(close_code::not_set)
+    WSError(WSErrorCode code, string&& message)
+        : code(code), message(std::move(message)), close_with_code(close_code::not_set)
     {
     }
 
-    WSError(WSErrorCode code, string message, close_code close_with_code)
-        : code(code), message(message), close_with_code(close_with_code)
+    WSError(WSErrorCode code, string&& message, close_code close_with_code)
+        : code(code), message(std::move(message)), close_with_code(close_with_code)
     {
     }
 };

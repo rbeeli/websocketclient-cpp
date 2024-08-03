@@ -119,7 +119,7 @@ awaitable<expected<void, WSError>> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            if (err->code == WSErrorCode::timeout)
+            if (err->code == WSErrorCode::timeout_error)
             {
                 std::cout << "read_message timed out\n";
                 break;

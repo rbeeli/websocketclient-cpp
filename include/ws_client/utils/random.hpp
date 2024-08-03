@@ -44,7 +44,7 @@ struct xoshiro128p
 {
     uint32_t s[4];
 
-    xoshiro128p()
+    xoshiro128p() noexcept
     {
         // seed with current time
         uint64_t seed = static_cast<uint64_t>(
@@ -58,7 +58,7 @@ struct xoshiro128p
         s[3] = static_cast<uint32_t>(z >> 32);
     }
 
-    explicit xoshiro128p(uint64_t seed)
+    explicit xoshiro128p(uint64_t seed) noexcept
     {
         uint64_t z = seed_splitmix64(seed);
         s[0] = static_cast<uint32_t>(z);
@@ -68,7 +68,7 @@ struct xoshiro128p
         s[3] = static_cast<uint32_t>(z >> 32);
     }
 
-    static uint64_t seed_splitmix64(uint64_t x)
+    static uint64_t seed_splitmix64(uint64_t x) noexcept
     {
         uint64_t z = (x += 0x9e3779b97f4a7c15);
         z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
@@ -76,7 +76,7 @@ struct xoshiro128p
         return z ^ (z >> 31);
     }
 
-    static inline uint32_t rotl(const uint32_t x, int k)
+    static inline uint32_t rotl(const uint32_t x, int k) noexcept
     {
         return (x << k) | (x >> (32 - k));
     }

@@ -127,11 +127,17 @@ public:
         return socket_;
     }
 
+    /**
+     * Returns the underlying SSL structure.
+     */
     inline SSL* ssl() const noexcept
     {
         return ssl_;
     }
 
+    /**
+     * Returns the underlying SSL context.
+     */
     inline OpenSslContext<TLogger>* ctx() const noexcept
     {
         return ctx_;
@@ -142,6 +148,7 @@ public:
      */
     [[nodiscard]] string get_current_cipher() const noexcept
     {
+        WS_TRYV(ensure_ssl_init());
         return SSL_get_cipher(ssl_);
     }
 
@@ -150,6 +157,7 @@ public:
      */
     [[nodiscard]] int get_current_tls_version() const noexcept
     {
+        WS_TRYV(ensure_ssl_init());
         return SSL_version(ssl_);
     }
 
@@ -161,9 +169,14 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_hostname(const string& hostname) noexcept
     {
-        if (!SSL_set_tlsext_host_name(ssl_, hostname.c_str()))
-            return make_error(0, "Unable to set hostname");
+        WS_TRYV(ensure_ssl_init());
+
+        int ret = SSL_set_tlsext_host_name(ssl_, hostname.c_str());
+        if (ret != 1)
+            return ssl_error(ret, "Unable to set hostname");
+
         logger_->template log<LogLevel::I>("hostname=" + hostname);
+
         return {};
     }
 
@@ -172,8 +185,15 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_verify_peer(const bool value) noexcept
     {
-        SSL_set_verify(ssl_, value ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
+        WS_TRYV(ensure_ssl_init());
+
+        if (value)
+            SSL_set_verify(ssl_, SSL_VERIFY_PEER, OpenSslSocket<TLogger>::ssl_verify_callback<TLogger>);
+        else
+            SSL_set_verify(ssl_, SSL_VERIFY_NONE, nullptr);
+
         logger_->template log<LogLevel::I>("verify_peer=" + std::to_string(value));
+
         return {};
     }
 
@@ -183,9 +203,14 @@ public:
      */
     [[nodiscard]] expected<void, WSError> set_cipher_list(const string& ciphers) noexcept
     {
-        if (!SSL_set_cipher_list(ssl_, ciphers.c_str()))
-            return make_error(0, "Unable to set cipher list");
+        WS_TRYV(ensure_ssl_init());
+
+        int ret = SSL_set_cipher_list(ssl_, ciphers.c_str());
+        if (ret != 1)
+            return ssl_error(ret, "Unable to set cipher list");
+
         logger_->template log<LogLevel::I>("cipher_list=" + ciphers);
+
         return {};
     }
 
@@ -197,13 +222,23 @@ public:
         int min_version, int max_version
     ) noexcept
     {
-        if (!SSL_set_min_proto_version(ssl_, min_version) ||
-            !SSL_set_max_proto_version(ssl_, max_version))
-            return make_error(0, "Unable to set TLS version range");
+        WS_TRYV(ensure_ssl_init());
+
+        // set TLS min version
+        int ret = SSL_set_min_proto_version(ssl_, min_version);
+        if (ret != 1)
+            return ssl_error(ret, "Unable to set min. TLS version: " + std::to_string(min_version));
+
+        // set TLS max version
+        ret = SSL_set_max_proto_version(ssl_, max_version);
+        if (ret != 1)
+            return ssl_error(ret, "Unable to set max. TLS version: " + std::to_string(max_version));
+
         logger_->template log<LogLevel::I>(
             "tls_version_range=" + std::to_string(min_version) + " to " +
             std::to_string(max_version)
         );
+
         return {};
     }
 
@@ -219,30 +254,30 @@ public:
         // create SSL structure
         ssl_ = SSL_new(ctx_->ssl_ctx());
         if (!ssl_)
-            return make_error(0, "Unable to create SSL structure");
+            return ssl_error(0, "Unable to create SSL structure");
 
         // set SSL application data (pointer to this instance)
         set_ssl_ex_data();
 
-        // register verify callback
-        SSL_set_verify(ssl_, SSL_VERIFY_PEER, OpenSslSocket<TLogger>::ssl_verify_callback<TLogger>);
+        // wrap the SSL structure around the socket
+        int ret = SSL_set_fd(ssl_, socket_.fd());
+        if (ret != 1)
+        {
+            return ssl_error(
+                ret,
+                "Unable to create SSL object for file descriptor (fd=" +
+                    std::to_string(socket_.fd()) + ")"
+            );
+        }
 
-        // regsiter info callback
-        SSL_set_info_callback(ssl_, OpenSslSocket<TLogger>::ssl_info_callback<TLogger>);
+        // configure certificate verification
+        WS_TRYV(this->set_verify_peer(verify_));
 
         // set SNI hostname
         WS_TRYV(this->set_hostname(hostname_));
 
-        // configure peer certificate verification
-        WS_TRYV(this->set_verify_peer(verify_));
-
-        // wrap the SSL structure around the socket
-        if (SSL_set_fd(ssl_, socket_.fd()) != 1)
-            return make_error(
-                0,
-                "Unable to wrap SSL structure around socket (fd=" + std::to_string(socket_.fd()) +
-                    ")"
-            );
+        // regsiter info callback
+        SSL_set_info_callback(ssl_, OpenSslSocket<TLogger>::ssl_info_callback<TLogger>);
 
         logger_->template log<LogLevel::D>(
             "OpenSslSocket created (fd=" + std::to_string(socket_.fd()) + ")"
@@ -283,43 +318,16 @@ public:
             int ssl_err = SSL_get_error(ssl_, ret);
             if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
             {
-                // use select() to wait for socket to become ready for the SSL operation
-                fd_set fds;
-                FD_ZERO(&fds);
-                FD_SET(socket_.fd(), &fds);
-
-                // set the timeout for select
-                auto remaining = timeout.remaining_timeval();
-                int ret = ::select(
-                    socket_.fd() + 1,
-                    (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                    (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
-                    nullptr,
-                    &remaining
-                );
-
-                if (ret > 0) [[likely]]
-                {
-                    // retry SSL_connect() after select() indicates readiness
-                    continue;
-                }
-                else if (ret == 0)
-                {
-                    // timeout
-                    return make_error(ret, "connect timeout");
-                }
-                else
-                {
-                    if (errno == EINTR)
-                        continue; // interrupted, retry immediately
-                    return make_error(errno, "connect failed due to system error");
-                }
+                // use select() to wait for the socket to get ready
+                WS_TRY(ready, ssl_select(timeout, ssl_err));
+                if (!ready.value())
+                    return WS_ERROR(timeout_error, "SSL handshake timed out", close_code::not_set);
             }
             else if (ssl_err == SSL_ERROR_SYSCALL)
             {
                 if (errno == EINTR)
                     continue; // interrupted, retry immediately
-                return make_error(errno, "connect failed due to system error");
+                return syscall_error(-1, "connect failed due to system error");
             }
             else if (ssl_err == SSL_ERROR_ZERO_RETURN)
             {
@@ -330,10 +338,8 @@ public:
                 );
             }
             else
-            {
-                return make_error(ssl_err, "connect failed due to SSL error");
-            }
-        } while (ret != 1);
+                return syscall_error(ssl_err, "connect failed due to SSL error");
+        } while (ret != 1 && !timeout.is_expired());
 
         // Step 1: verify a server certificate was presented during the negotiation
         X509* cert = SSL_get_peer_certificate(ssl_);
@@ -342,19 +348,37 @@ public:
             if (X509_check_host(cert, hostname_.c_str(), hostname_.size(), 0, nullptr) != 1)
             {
                 X509_free(cert);
-                return make_error(
-                    -1, "Certificate verification error: Hostname mismatch, expected: " + hostname_
+                return WS_ERROR(
+                    transport_error,
+                    "Certificate verification error: Hostname mismatch, expected: " + hostname_,
+                    close_code::not_set
                 );
             }
             X509_free(cert);
         }
         else
-            return make_error(-1, "Certificate verification error: No certificate presented");
+        {
+            return WS_ERROR(
+                transport_error,
+                "Certificate verification error: No certificate presented",
+                close_code::not_set
+            );
+        }
 
         // Step 2: verify the result of chain verification.
         // Verification performed according to RFC 4158.
-        if (SSL_get_verify_result(ssl_) != X509_V_OK)
-            return make_error(-1, "Certificate chain verification failed");
+        long verify_ret = SSL_get_verify_result(ssl_);
+        if (verify_ret != X509_V_OK)
+        {
+            const char* err_str = X509_verify_cert_error_string(verify_ret);
+            string err_desc = err_str ? err_str : "Unknown error";
+            return WS_ERROR(
+                transport_error,
+                "Certificate chain verification failed: " + err_desc +
+                    " (code: " + std::to_string(verify_ret) + ")",
+                close_code::not_set
+            );
+        }
 
         return {};
     }
@@ -379,42 +403,16 @@ public:
             }
             else if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
             {
-                // use select to wait for the socket to be ready
-                fd_set fds;
-                FD_ZERO(&fds);
-                FD_SET(socket_.fd(), &fds);
-
-                timeval remaining = timeout.remaining_timeval();
-                int ret = ::select(
-                    socket_.fd() + 1,
-                    (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                    (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
-                    nullptr,
-                    &remaining
-                );
-
-                if (ret > 0) [[likely]]
-                {
-                    // try again to peek
-                    continue;
-                }
-                else if (ret == 0)
-                {
-                    // timeout
+                // use select() to wait for the socket to get ready
+                WS_TRY(ready, ssl_select(timeout, ssl_err));
+                if (!ready.value())
                     return false;
-                }
-                else if (ret == -1)
-                {
-                    if (errno == EINTR)
-                        continue; // interrupted, retry immediately
-                    return make_error(errno, "wait_readable failed due to system error");
-                }
             }
             else if (ssl_err == SSL_ERROR_SYSCALL)
             {
                 if (errno == EINTR)
                     continue; // interrupted, retry immediately
-                return make_error(errno, "SSL syscall error in wait_readable");
+                return syscall_error(-1, "SSL syscall error in wait_readable");
             }
             else if (ssl_err == SSL_ERROR_ZERO_RETURN)
             {
@@ -425,7 +423,7 @@ public:
                 );
             }
             else
-                return make_error(ssl_err, "Unexpected SSL error in wait_readable");
+                return ssl_error(ssl_err, "Unexpected SSL error in wait_readable");
         } while (!timeout.is_expired());
 
         // timeout
@@ -461,43 +459,16 @@ public:
                 int ssl_err = SSL_get_error(ssl_, ret);
                 if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
-                    // use select to wait for the socket to be ready
-                    fd_set fds;
-                    FD_ZERO(&fds);
-                    FD_SET(socket_.fd(), &fds);
-
-                    timeval remaining = timeout.remaining_timeval();
-                    int ret = ::select(
-                        socket_.fd() + 1,
-                        (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                        (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
-                        nullptr,
-                        &remaining
-                    );
-
-                    if (ret > 0) [[likely]]
-                    {
-                        // socket is ready, continue to retry SSL_read
-                        continue;
-                    }
-                    else if (ret == 0)
-                    {
-                        return WS_ERROR(
-                            timeout, "read_some operation timed out", close_code::not_set
-                        );
-                    }
-                    else
-                    {
-                        if (errno == EINTR)
-                            continue; // interrupted, retry immediately
-                        return make_error(ret, "read_some failed due to system error");
-                    }
+                    // use select() to wait for the socket to get ready
+                    WS_TRY(ready, ssl_select(timeout, ssl_err));
+                    if (!ready.value())
+                        return WS_ERROR(timeout_error, "SSL read timed out", close_code::not_set);
                 }
                 else if (ssl_err == SSL_ERROR_SYSCALL)
                 {
                     if (errno == EINTR)
                         continue; // interrupted, retry immediately
-                    return make_error(errno, "SSL syscall error in read_some");
+                    return syscall_error(-1, "SSL syscall error in read_some");
                 }
                 else if (ssl_err == SSL_ERROR_ZERO_RETURN)
                 {
@@ -508,11 +479,11 @@ public:
                     );
                 }
                 else
-                    return make_error(ssl_err, "Unexpected SSL error in read_some");
+                    return ssl_error(ssl_err, "Unexpected SSL error in read_some");
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(timeout, "read_some operation timed out", close_code::not_set);
+        return WS_ERROR(timeout_error, "SSL read timed out", close_code::not_set);
     }
 
     /**
@@ -535,7 +506,9 @@ public:
             else if (ret == 0)
             {
                 return WS_ERROR(
-                    connection_closed, "SSL connection closed on transport layer", close_code::not_set
+                    connection_closed,
+                    "SSL connection closed on transport layer",
+                    close_code::not_set
                 );
             }
             else
@@ -543,43 +516,16 @@ public:
                 int ssl_err = SSL_get_error(ssl_, ret);
                 if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
-                    // use select to wait for the socket to be ready
-                    fd_set fds;
-                    FD_ZERO(&fds);
-                    FD_SET(socket_.fd(), &fds);
-
-                    timeval remaining = timeout.remaining_timeval();
-                    int ret = ::select(
-                        socket_.fd() + 1,
-                        (ssl_err == SSL_ERROR_WANT_READ) ? &fds : nullptr,
-                        (ssl_err == SSL_ERROR_WANT_WRITE) ? &fds : nullptr,
-                        nullptr,
-                        &remaining
-                    );
-
-                    if (ret > 0) [[likely]]
-                    {
-                        // socket is ready, continue to retry SSL_write
-                        continue;
-                    }
-                    else if (ret == -1)
-                    {
-                        if (errno == EINTR)
-                            continue; // interrupted, retry immediately
-                        return make_error(ret, "write_some failed due to system error");
-                    }
-                    else if (ret == 0)
-                    {
-                        return WS_ERROR(
-                            timeout, "write_some operation timed out", close_code::not_set
-                        );
-                    }
+                    // use select() to wait for the socket to get ready
+                    WS_TRY(ready, ssl_select(timeout, ssl_err));
+                    if (!ready.value())
+                        return WS_ERROR(timeout_error, "SSL write timed out", close_code::not_set);
                 }
                 else if (ssl_err == SSL_ERROR_SYSCALL)
                 {
                     if (errno == EINTR)
                         continue; // interrupted, retry immediately
-                    return make_error(errno, "SSL syscall error in write_some");
+                    return syscall_error(-1, "SSL syscall error in write_some");
                 }
                 else if (ssl_err == SSL_ERROR_ZERO_RETURN)
                 {
@@ -590,11 +536,11 @@ public:
                     );
                 }
                 else
-                    return make_error(ssl_err, "Unexpected SSL error in write_some");
+                    return ssl_error(ssl_err, "Unexpected SSL error in write_some");
             }
         } while (!timeout.is_expired());
 
-        return WS_ERROR(timeout, "write_some operation timed out", close_code::not_set);
+        return WS_ERROR(timeout_error, "SSL write timed out", close_code::not_set);
     }
 
     /**
@@ -610,20 +556,43 @@ public:
         // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
         if (ssl_)
         {
-            int ret = SSL_shutdown(ssl_);
-            if (ret == 0) // 0 means call SSL_shutdown() again, for a bidirectional shutdown
+            int ret;
+            do
+            {
                 ret = SSL_shutdown(ssl_);
-            if (ret != 1)
-            {
-                // shutdown failed
-                auto err = make_error(ret, "SSL shutdown failed");
-                logger_->template log<LogLevel::W>(err.error().message);
-                return err;
-            }
-            else
-            {
-                logger_->template log<LogLevel::D>("SSL layer shutdown successfully");
-            }
+                if (ret == 0)
+                {
+                    // wait for the peer's close_notify alert
+                    continue;
+                }
+                else if (ret < 0)
+                {
+                    int ssl_err = SSL_get_error(ssl_, ret);
+                    if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
+                    {
+                        // use select() to wait for the socket to get ready
+                        WS_TRY(ready, ssl_select(timeout, ssl_err));
+                        if (!ready.value())
+                            return WS_ERROR(
+                                timeout_error, "SSL shutdown timed out", close_code::not_set
+                            );
+                    }
+                    else if (ssl_err == SSL_ERROR_SYSCALL)
+                    {
+                        if (errno == EINTR)
+                            continue; // interrupted, retry immediately
+                        return syscall_error(-1, "SSL syscall error during shutdown");
+                    }
+                    else
+                    {
+                        auto err = ssl_error(ssl_err, "SSL shutdown failed");
+                        logger_->template log<LogLevel::W>(err.error().message);
+                        return err;
+                    }
+                }
+            } while (ret != 1 && !timeout.is_expired());
+
+            logger_->template log<LogLevel::D>("SSL layer shutdown successfully");
         }
 
         // shutdown the underlying TCP socket
@@ -676,13 +645,19 @@ private:
         return logger_->template is_enabled<LogLevel::D>();
     }
 
+    /**
+     * Certificate verification callback.
+     * It is called for each certificate in the chain sent by the peer
+     * Starts from the root certificate, and so on.
+     * 
+     * @returns `1` means that the given certificate is trusted,
+     *          `0` immediately aborts the SSL connection.
+     */
     template <typename TLogger2>
     static int ssl_verify_callback(int preverify, X509_STORE_CTX* x509_ctx) noexcept
     {
         // For error codes, see http://www.openssl.org/docs/apps/verify.html
         // https://stackoverflow.com/questions/42272164/make-openssl-accept-expired-certificates
-
-        int err = X509_STORE_CTX_get_error(x509_ctx);
 
         // get OpenSslSocket instance from app data in SSL structure
         SSL* ssl = reinterpret_cast<SSL*>(
@@ -697,62 +672,106 @@ private:
         if (cert && this_->ssl_log_debug_enabled())
         {
             BIO* bio = BIO_new(BIO_s_mem());
-            X509_print_ex(bio, cert, XN_FLAG_MULTILINE, X509_FLAG_COMPAT);
-            char* data;
-            long len = BIO_get_mem_data(bio, &data);
-            if (len > 0)
+            if (bio)
             {
-                string certificate_info(data, len);
-                this_->ssl_log_debug(certificate_info);
+                X509_print_ex(bio, cert, XN_FLAG_MULTILINE, X509_FLAG_COMPAT);
+                char* data;
+                long len = BIO_get_mem_data(bio, &data);
+                if (len > 0)
+                {
+                    string certificate_info(data, len);
+                    this_->ssl_log_debug(certificate_info);
+                }
+                BIO_free(bio);
             }
-            BIO_free(bio);
+            else
+            {
+                this_->ssl_log_error(
+                    "Unable to print certificate information, failed to allocate BIO."
+                );
+                return 0;
+            }
         }
 
         if (preverify == 0)
         {
-            switch (err)
-            {
-                case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
-                    this_->ssl_log_error("Issuer certificate could not be found locally.");
-                    break;
-
-                case X509_V_ERR_CERT_UNTRUSTED:
-                    this_->ssl_log_error("Certificate is not trusted.");
-                    break;
-
-                case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
-                    this_->ssl_log_error("Self-signed certificate encountered in chain.");
-                    break;
-
-                case X509_V_ERR_CERT_NOT_YET_VALID:
-                case X509_V_ERR_CERT_HAS_EXPIRED:
-                    if (cert)
-                    {
-                        BIO* bio = BIO_new(BIO_s_mem());
-                        X509_NAME_print_ex(bio, X509_get_subject_name(cert), 0, XN_FLAG_MULTILINE);
-                        char* data;
-                        long len = BIO_get_mem_data(bio, &data);
-                        if (len > 0)
-                        {
-                            string subject(data, len);
-                            this_->ssl_log_error(
-                                "Certificate not valid yet or expired for subject:\n" + subject
-                            );
-                        }
-                        BIO_free(bio);
-                    }
-                    break;
-
-                default:
-                    this_->ssl_log_error("Unhandled X509 verification error.");
-                    break;
-            }
+            int err = X509_STORE_CTX_get_error(x509_ctx);
+            ssl_verify_log_error(this_, err, cert);
+            return 0; // abort the SSL connection
         }
 
-        if (err == X509_V_OK)
-            return 1;
+        return 1;
+    }
 
-        return preverify;
+    template <typename TLogger2>
+    static void ssl_verify_log_error(OpenSslSocket<TLogger2>* this_, int err, X509* cert) noexcept
+    {
+        switch (err)
+        {
+            case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+                this_->ssl_log_error("Issuer certificate could not be found locally.");
+                break;
+
+            case X509_V_ERR_CERT_UNTRUSTED:
+                this_->ssl_log_error("Certificate is not trusted.");
+                break;
+
+            case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+                this_->ssl_log_error("Self-signed certificate encountered in chain.");
+                break;
+
+            case X509_V_ERR_CERT_REVOKED:
+                this_->ssl_log_error("Certificate has been revoked.");
+                break;
+
+            case X509_V_ERR_INVALID_CA:
+                this_->ssl_log_error("Invalid CA certificate.");
+                break;
+
+            case X509_V_ERR_CERT_NOT_YET_VALID:
+                if (cert)
+                    this_->ssl_log_error(
+                        "Certificate not valid yet for subject: " + get_cert_subject(cert)
+                    );
+                else
+                    this_->ssl_log_error("Certificate not valid yet.");
+                break;
+
+            case X509_V_ERR_CERT_HAS_EXPIRED:
+                if (cert)
+                    this_->ssl_log_error(
+                        "Certificate has expired for subject: " + get_cert_subject(cert)
+                    );
+                else
+                    this_->ssl_log_error("Certificate has expired.");
+                break;
+
+            default:
+                string err_str = string(X509_verify_cert_error_string(err));
+                this_->ssl_log_error(
+                    "Certificate verification error: " + err_str + " (code " + //
+                    std::to_string(err) + ")"
+                );
+                break;
+        }
+    }
+
+    static string get_cert_subject(X509* cert) noexcept
+    {
+        BIO* bio = BIO_new(BIO_s_mem());
+        if (!bio)
+            return "FATAL: Unable to allocate BIO for certificate subject.";
+        X509_NAME_print_ex(bio, X509_get_subject_name(cert), 0, XN_FLAG_MULTILINE);
+        char* data;
+        long len = BIO_get_mem_data(bio, &data);
+        if (len <= 0)
+        {
+            BIO_free(bio);
+            return "";
+        }
+        string ret(data, static_cast<size_t>(len));
+        BIO_free(bio);
+        return ret;
     }
 
     template <typename TLogger2>
@@ -814,9 +833,60 @@ private:
         }
     }
 
-    [[nodiscard]] static string get_errors_as_string() noexcept
+    [[nodiscard]] expected<void, WSError> ensure_ssl_init() noexcept
+    {
+        if (!ssl_)
+            return WS_ERROR(logic_error, "OpenSslSocket not initialized.", close_code::not_set);
+        return {};
+    }
+
+    /**
+     * Wait for the socket to become ready for SSL operation.
+     * 
+     * @returns `true` if the socket is ready, `false` if timeout occurred.
+     */
+    [[nodiscard]] expected<bool, WSError> ssl_select(
+        Timeout<>& timeout, int ssl_err_read_write
+    ) noexcept
+    {
+        // use select() to wait for socket to become ready for the SSL operation
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(socket_.fd(), &fds);
+
+        // set the timeout for select
+        auto remaining = timeout.remaining_timeval();
+        int ret = ::select(
+            socket_.fd() + 1,
+            ssl_err_read_write == SSL_ERROR_WANT_READ ? &fds : nullptr,
+            ssl_err_read_write == SSL_ERROR_WANT_WRITE ? &fds : nullptr,
+            nullptr,
+            &remaining
+        );
+
+        if (ret > 0) [[likely]]
+        {
+            // select() indicates readiness
+            return true;
+        }
+        else if (ret == 0)
+        {
+            // timeout
+            return false;
+        }
+        else
+        {
+            if (errno == EINTR)
+                return true; // interrupted, retry immediately
+            return syscall_error(ret, "SSL socket operation failed due to system error");
+        }
+    }
+
+    [[nodiscard]] static string get_ssl_errors() noexcept
     {
         BIO* bio = BIO_new(BIO_s_mem());
+        if (!bio)
+            return "FATAL: Unable to allocate BIO for SSL errors.";
         ERR_print_errors(bio);
         char* buf;
         long len = BIO_get_mem_data(bio, &buf);
@@ -830,16 +900,23 @@ private:
         return ret;
     }
 
-    [[nodiscard]] static std::unexpected<WSError> make_error(
+    [[nodiscard]] static std::unexpected<WSError> ssl_error(
         ssize_t ret_code, const string& desc
     ) noexcept
     {
-        auto errors = get_errors_as_string();
-        return std::unexpected(WSError(
-            WSErrorCode::transport_error,
-            "Error: " + desc + " (return code " + std::to_string(ret_code) + "): " + //
-                errors
-        ));
+        string errors = get_ssl_errors();
+        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + errors;
+        return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
+    }
+
+    [[nodiscard]] static std::unexpected<WSError> syscall_error(
+        ssize_t ret_code, const string& desc
+    ) noexcept
+    {
+        int errno_ = errno;
+        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + //
+                     string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")";
+        return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
     }
 };
 

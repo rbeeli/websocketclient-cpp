@@ -28,7 +28,8 @@ public:
      * Default constructor.
      * Initializes the start time to the current time.
      */
-    Timeout(const DT timeout) : start_(ClockT::now()), timeout_(timeout)
+    Timeout(const DT timeout) noexcept //
+        : start_(ClockT::now()), timeout_(timeout)
     {
         assert(timeout_ > DT::zero() && "timeout must be positive and non-zero");
     }
@@ -36,7 +37,8 @@ public:
     /**
      * Constructor with a custom start time.
      */
-    Timeout(const DT timeout, const ClockT::time_point start) : start_(start), timeout_(timeout)
+    Timeout(const DT timeout, const ClockT::time_point start) noexcept //
+        : start_(start), timeout_(timeout)
     {
         assert(timeout_ > DT::zero() && "timeout must be positive and non-zero");
     }

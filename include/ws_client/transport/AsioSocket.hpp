@@ -81,7 +81,7 @@ public:
         if (result.index() == 1)
         {
             // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout, "Read timed out", close_code::not_set);
+            co_return WS_ERROR(timeout_error, "Read timed out", close_code::not_set);
         }
 
         if (ec)
@@ -116,7 +116,7 @@ public:
         if (result.index() == 1)
         {
             // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout, "Write timed out", close_code::not_set);
+            co_return WS_ERROR(timeout_error, "Write timed out", close_code::not_set);
         }
 
         if (ec)
