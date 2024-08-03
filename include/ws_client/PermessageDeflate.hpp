@@ -745,9 +745,9 @@ public:
         } while (istate_->avail_out == 0);
 
 #if WS_CLIENT_LOG_COMPRESSION == 1
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-            logger->template log<LogLevel::D>(
+            logger_->template log<LogLevel::D>(
                 "compression ratio: " + std::to_string((double)size / input.size())
             );
         }
@@ -819,9 +819,9 @@ public:
         } while (ostate_->avail_out == 0);
 
 #if WS_CLIENT_LOG_COMPRESSION == 1
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-            logger->template log<LogLevel::D>(
+            logger_->template log<LogLevel::D>(
                 "compression ratio: " + std::to_string((double)input.size() / size)
             );
         }

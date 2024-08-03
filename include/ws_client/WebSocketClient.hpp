@@ -453,9 +453,11 @@ public:
                     ss << "\033[0m";
                     logger_->template log<LogLevel::I>(ss.str());
 #elif WS_CLIENT_LOG_MSG_SIZES == 1
-                    logger_->template log(
-                        LogLevel::I, "Received text message (", payload_buffer.size(), " bytes)"
-                    );
+                    std::stringstream ss;
+                    ss << "Received text message (";
+                    ss << payload_buffer.size();
+                    ss << " bytes)";
+                    logger_->template log<LogLevel::I>(ss.str());
 #endif
                 }
 
@@ -482,11 +484,11 @@ public:
                     ss << "\033[0m";
                     logger_->template log<LogLevel::I>(ss.str());
 #elif WS_CLIENT_LOG_MSG_SIZES == 1
-                    logger_->template log(
-                        LogLevel::I,
-                        "Received binary message (" + std::to_string(payload_buffer.size()) +
-                            " bytes)"
-                    );
+                    std::stringstream ss;
+                    ss << "Received binary message (";
+                    ss << payload_buffer.size();
+                    ss << " bytes)";
+                    logger_->template log<LogLevel::I>(ss.str());
 #endif
                 }
 
@@ -537,10 +539,13 @@ public:
             ss << "\033[0m";
             logger_->template log<LogLevel::I>(ss.str());
 #elif WS_CLIENT_LOG_MSG_SIZES == 1
-            logger_->template log<LogLevel::I>(
-                "Writing " + to_string(msg.type) + " message (" + std::to_string(msg.data.size()) +
-                " bytes)"
-            );
+            std::stringstream ss;
+            ss << "Writing ";
+            ss << to_string(msg.type);
+            ss << " message (";
+            ss << msg.data.size();
+            ss << " bytes)";
+            logger_->template log<LogLevel::I>(ss.str());
 #endif
         }
 
