@@ -45,6 +45,7 @@ public:
         size_t initial_size, size_t max_size
     ) noexcept
     {
+        assert(initial_size <= max_size && "Initial size must be less than or equal to max size");
         Buffer buffer(max_size);
         WS_TRYV(buffer.reserve(initial_size));
         return buffer;

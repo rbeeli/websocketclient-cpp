@@ -571,7 +571,7 @@ class PermessageDeflateContext
 {
 private:
     TLogger* logger_;
-    PermessageDeflate<TLogger> permessage_deflate_;
+    PermessageDeflate<TLogger> def_;
     z_stream* istate_;
     z_stream* ostate_;
     std::unique_ptr<Buffer> decompress_buffer_;
@@ -582,7 +582,7 @@ public:
         TLogger* logger, const PermessageDeflate<TLogger> permessage_deflate
     ) noexcept
         : logger_(logger),
-          permessage_deflate_(std::move(permessage_deflate)),
+          def_(std::move(permessage_deflate)),
           istate_(nullptr),
           ostate_(nullptr),
           decompress_buffer_(nullptr),
@@ -609,7 +609,7 @@ public:
     // enable move
     PermessageDeflateContext(PermessageDeflateContext&& other) noexcept
         : logger_(other.logger_),
-          permessage_deflate_(std::move(other.permessage_deflate_)),
+          def_(std::move(other.def_)),
           istate_(other.istate_),
           ostate_(other.ostate_),
           decompress_buffer_(std::move(other.decompress_buffer_)),
@@ -635,7 +635,7 @@ public:
 
             // move resources from other
             logger_ = other.logger_;
-            permessage_deflate_ = std::move(other.permessage_deflate_);
+            def_ = std::move(other.def_);
             istate_ = other.istate_;
             ostate_ = other.ostate_;
             decompress_buffer_ = std::move(other.decompress_buffer_);
@@ -666,12 +666,18 @@ public:
      */
     [[nodiscard]] expected<void, WSError> init() noexcept
     {
-        // create decompression buffer with 1 KiB initial size
-        WS_TRY(decompress_buffer, Buffer::create(1024, permessage_deflate_.decompress_buffer_size));
+        // create decompression buffer
+        size_t decom_init_size = 1024;
+        if (def_.decompress_buffer_size < decom_init_size)
+            decom_init_size = def_.decompress_buffer_size;
+        WS_TRY(decompress_buffer, Buffer::create(decom_init_size, def_.decompress_buffer_size));
         decompress_buffer_ = std::make_unique<Buffer>(std::move(decompress_buffer.value()));
 
-        // create compression buffer with 1 KiB initial size
-        WS_TRY(compress_buffer, Buffer::create(1024, permessage_deflate_.compress_buffer_size));
+        // create compression buffer
+        size_t comp_init_size = 1024;
+        if (def_.compress_buffer_size < comp_init_size)
+            comp_init_size = def_.compress_buffer_size;
+        WS_TRY(compress_buffer, Buffer::create(comp_init_size, def_.compress_buffer_size));
         compress_buffer_ = std::make_unique<Buffer>(std::move(compress_buffer.value()));
 
         // initialize zlib decompressor
@@ -682,7 +688,7 @@ public:
         istate_->avail_in = 0;
         istate_->next_in = Z_NULL;
 
-        auto ret = inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits);
+        auto ret = inflateInit2(istate_, -1 * def_.server_max_window_bits);
         if (ret != Z_OK)
             return make_error("inflateInit2", istate_->msg);
 
@@ -696,10 +702,10 @@ public:
 
         ret = deflateInit2(
             ostate_,
-            permessage_deflate_.deflate_compression_level,
+            def_.deflate_compression_level,
             Z_DEFLATED,
-            -1 * permessage_deflate_.client_max_window_bits,
-            permessage_deflate_.deflate_memory_level,
+            -1 * def_.client_max_window_bits,
+            def_.deflate_memory_level,
             Z_DEFAULT_STRATEGY
         );
         if (ret != Z_OK)
@@ -750,13 +756,13 @@ public:
         // resize output buffer
         output.discard_end(output.size() - buffer_pos - size);
 
-        if (permessage_deflate_.server_no_context_takeover)
+        if (def_.server_no_context_takeover)
         {
             // reset inflate state (discard LZ77 sliding window, no context takeover)
             if (Z_OK != inflateEnd(istate_))
                 return make_error("inflateEnd", istate_->msg);
 
-            if (Z_OK != inflateInit2(istate_, -1 * permessage_deflate_.server_max_window_bits))
+            if (Z_OK != inflateInit2(istate_, -1 * def_.server_max_window_bits))
                 return make_error("inflateInit2", istate_->msg);
         }
         else
@@ -789,7 +795,7 @@ public:
         ostate_->avail_in = static_cast<unsigned int>(input.size());
 
         // zlib flush mode (preserve LZ77 sliding window or not)
-        int client_flush_mode = permessage_deflate_.client_no_context_takeover //
+        int client_flush_mode = def_.client_no_context_takeover //
                                     ? Z_FULL_FLUSH
                                     : Z_SYNC_FLUSH;
 
@@ -822,7 +828,7 @@ public:
 #endif
 
         // reset deflate state depending on negotiated configuration
-        if (permessage_deflate_.client_no_context_takeover)
+        if (def_.client_no_context_takeover)
         {
             if (Z_OK != deflateReset(ostate_))
                 return make_error("deflateReset", ostate_->msg);
