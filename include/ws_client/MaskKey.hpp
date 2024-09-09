@@ -116,13 +116,13 @@ struct MaskKey
         auto mask_func = [&key_128](byte* data)
         {
             // Load data into two 64-bit chunks (128 bits total)
-            uint32x4_t chunk = ::vld1q_u32(reinterpret_cast<const uint32_t*>(data));
+            uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t*>(data));
 
             // XOR the loaded data with the key vector
             chunk = ::veorq_u32(chunk, key_128);
 
             // Store the result back into memory
-            ::vst1q_u32(reinterpret_cast<uint32_t*>(data), chunk);
+            vst1q_u32(reinterpret_cast<uint32_t*>(data), chunk);
         };
         mask_aligned<16>(data, len, key, mask_func);
     }

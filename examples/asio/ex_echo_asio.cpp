@@ -3,6 +3,7 @@
 #include <string>
 #include <variant>
 #include <chrono>
+#include <exception>
 
 #include <asio.hpp>
 #include <asio/read_until.hpp>

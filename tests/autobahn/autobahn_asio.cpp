@@ -4,6 +4,7 @@
 #include <chrono>
 #include <signal.h>
 #include <netinet/tcp.h>
+#include <exception>
 
 #include <asio.hpp>
 #include <asio/read_until.hpp>

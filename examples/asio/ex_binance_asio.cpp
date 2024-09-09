@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <string>
 #include <chrono>
+#include <exception>
 
 #include <asio.hpp>
 #include <asio/read_until.hpp>

@@ -4,4 +4,4 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/certs/cert.pem
 
 add_subdirectory(asio)
 add_subdirectory(builtin)
-add_subdirectory(coroio)
+# add_subdirectory(coroio)
