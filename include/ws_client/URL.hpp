@@ -118,9 +118,9 @@ public:
 
     /**
      * Parses the passed URL string into a `URL` object.
-     * Use this method to create a `URL` object from a string.
-     * The constructor is private, so this is the only way to create a `URL` object
-     * in order to be able to return an error if the URL is invalid.
+     * Use this method to create a `URL` object from a `string_view`.
+     * The constructor is private, so this is the only way to create an `URL` object
+     * in order to return an error if the URL is invalid without using exceptions.
      */
     [[nodiscard]] static expected<URL, WSError> parse(string_view url) noexcept
     {
