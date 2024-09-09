@@ -108,7 +108,7 @@ struct Message
 };
 
 // iostream operator for Message
-std::ostream& operator<<(std::ostream& os, const Message& msg)
+inline std::ostream& operator<<(std::ostream& os, const Message& msg)
 {
     os << "Message(type=" << to_string(msg.type) << ", data=" << msg.to_string_view() << ")";
     return os;
@@ -121,7 +121,7 @@ struct SendOptions
      * Only applicable if permessage-deflate compression
      * was negotiated during the WebSocket handshake,
      * otherwise this option is ignored.
-     * 
+     *
      * Default: `true`
      */
     bool compress{true};
@@ -130,14 +130,14 @@ struct SendOptions
      * Timeout for sending the message, in milliseconds.
      * If the message cannot be sent within this time,
      * the send operation will fail with a timeout error.
-     * 
+     *
      * Default: 30 seconds.
      */
     std::chrono::milliseconds timeout{std::chrono::seconds(30)};
 };
 
 // iostream operator for SendOptions
-std::ostream& operator<<(std::ostream& os, const SendOptions& opts)
+inline std::ostream& operator<<(std::ostream& os, const SendOptions& opts)
 {
     os << "SendOptions(compress=" << opts.compress << ")";
     return os;
