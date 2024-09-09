@@ -8,10 +8,12 @@
 #include <algorithm>
 
 #include "ws_client/errors.hpp"
+#include "ws_client/utils/string.hpp"
 
 namespace ws_client
 {
 using std::string;
+using std::string_view;
 
 /**
  * URL parser.
@@ -50,7 +52,7 @@ public:
     /**
      * Map of default ports for known protocols.
      */
-    inline static std::unordered_map<string, int> protocol_port_map = {
+    inline static std::unordered_map<string, int, string_like_hash, std::equal_to<>> protocol_port_map = {
         {"https", 443}, {"wss", 443}, {"http", 80}, {"ws", 80}, {"ftp", 21}, {"ssh", 22}
     };
 
@@ -120,25 +122,24 @@ public:
      * The constructor is private, so this is the only way to create a `URL` object
      * in order to be able to return an error if the URL is invalid.
      */
-    [[nodiscard]] static expected<URL, WSError> parse(const string& url) noexcept
+    [[nodiscard]] static expected<URL, WSError> parse(string_view url) noexcept
     {
-        string u = url;
         string protocol;
         string host;
         int port = 0;
         string resource;
 
         // extract protocol
-        size_t protocol_end_pos = u.find("://");
+        size_t protocol_end_pos = url.find("://");
         if (protocol_end_pos != string::npos)
         {
-            protocol = u.substr(0, protocol_end_pos);
+            protocol = url.substr(0, protocol_end_pos);
             std::transform(protocol.begin(), protocol.end(), protocol.begin(), ::tolower);
         }
         else
         {
             return WS_ERROR(
-                url_error, "Invalid URL, protocol not found: " + url, close_code::not_set
+                url_error, "Invalid URL, protocol not found: " + string(url), close_code::not_set
             );
         }
 
@@ -150,28 +151,28 @@ public:
 
         // detect and handle IPv6 address
         size_t host_end_pos;
-        if (u[offset] == '[')
+        if (url[offset] == '[')
         {
             // find the closing bracket for IPv6 address
-            size_t ipv6_end_pos = u.find(']', offset);
+            size_t ipv6_end_pos = url.find(']', offset);
             if (ipv6_end_pos == string::npos)
             {
                 return WS_ERROR(
                     url_error,
-                    "Invalid URL, closing bracket for IPv6 address not found: " + url,
+                    "Invalid URL, closing bracket for IPv6 address not found: " + string(url),
                     close_code::not_set
                 );
             }
 
             // exclude brackets when setting the host
-            host = u.substr(offset + 1, ipv6_end_pos - offset - 1);
-            host_end_pos = u.find_first_of('/', ipv6_end_pos);
+            host = url.substr(offset + 1, ipv6_end_pos - offset - 1);
+            host_end_pos = url.find_first_of('/', ipv6_end_pos);
 
             // extract port if present
             size_t port_start = ipv6_end_pos + 1;
-            if (u[port_start] == ':')
+            if (url[port_start] == ':')
             {
-                string port_str = u.substr(port_start + 1, host_end_pos - port_start - 1);
+                string_view port_str = url.substr(port_start + 1, host_end_pos - port_start - 1);
                 if (port_str.empty())
                 {
                     port = defaultport_;
@@ -189,13 +190,13 @@ public:
         }
         else
         {
-            host_end_pos = u.find_first_of('/', offset);
-            size_t colon_pos = u.find(':', offset);
+            host_end_pos = url.find_first_of('/', offset);
+            size_t colon_pos = url.find(':', offset);
             if (colon_pos != string::npos &&
                 (host_end_pos == string::npos || colon_pos < host_end_pos))
             {
-                host = u.substr(offset, colon_pos - offset);
-                string port_str = u.substr(colon_pos + 1, host_end_pos - colon_pos - 1);
+                host = url.substr(offset, colon_pos - offset);
+                string_view port_str = url.substr(colon_pos + 1, host_end_pos - colon_pos - 1);
                 if (port_str.empty())
                 {
                     port = defaultport_;
@@ -208,13 +209,13 @@ public:
             }
             else
             {
-                host = u.substr(offset, host_end_pos - offset);
+                host = url.substr(offset, host_end_pos - offset);
                 port = defaultport_;
             }
         }
 
         // extract resource (everything after host/port)
-        resource = (host_end_pos != string::npos ? u.substr(host_end_pos) : "/");
+        resource = (host_end_pos != string::npos ? url.substr(host_end_pos) : "/");
 
         return URL(protocol, host, port, resource);
     }
@@ -223,18 +224,18 @@ public:
      * Returns the default port for the specified protocol.
      * The string must be lowercase.
      */
-    [[nodiscard]] static expected<int, WSError> get_default_port(const string& protocol) noexcept
+    [[nodiscard]] static expected<int, WSError> get_default_port(string_view protocol) noexcept
     {
         auto it = protocol_port_map.find(protocol);
         if (it != protocol_port_map.end())
             return it->second;
 
         return WS_ERROR(
-            url_error, "Invalid URL, unknown protocol: " + protocol, close_code::not_set
+            url_error, "Invalid URL, unknown protocol: " + string(protocol), close_code::not_set
         );
     }
 
-    [[nodiscard]] static inline expected<int, WSError> parse_port(const string& input)
+    [[nodiscard]] static inline expected<int, WSError> parse_port(string_view input)
     {
         int port;
         auto const res = std::from_chars(input.data(), input.data() + input.size(), port);
@@ -242,7 +243,7 @@ public:
         if (res.ec != std::errc{})
         {
             return WS_ERROR(
-                url_error, "Failed to parse port number form URL: " + input, close_code::not_set
+                url_error, "Failed to parse port number form URL: " + string(input), close_code::not_set
             );
         }
 
