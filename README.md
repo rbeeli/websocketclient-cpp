@@ -117,7 +117,25 @@ The following CMake options can be set in order to build examples, tests and/or 
 
 Output files are generated in the `build` directory.
 
-### GCC
+### Build header-only CMake project
+
+The following generates a CMake project and copies all header files to `build/install`.
+This is sufficient if you only want to use the library in your project.
+
+```bash
+cmake -B build -DCMAKE_INSTALL_PREFIX=build/install
+cmake --build build
+cmake --install build
+```
+
+If you want to install it locally to the system's default location, usually `/usr/local/include`, omit the `-DCMAKE_INSTALL_PREFIX=build/install` option.
+
+### Build header-only CMake project and compile examples
+
+The build is based on `vcpkg`, which is used to install dependencies.
+Ensure that `vcpkg` is installed and the environment variable `VCPKG_ROOT` is set.
+
+#### GCC
 
 ```bash
 cmake --preset gcc_dev_install
@@ -125,7 +143,7 @@ cmake --build --preset gcc_dev_install
 cmake --install build/gcc/dev_install --config Release
 ```
 
-### Clang
+#### Clang
 
 ```bash
 cmake --preset clang_dev_install
