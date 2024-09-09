@@ -9,7 +9,7 @@ using std::string;
 /**
  * Base64 encodes binary data as string.
  */
-string base64_encode(const unsigned char* data, const size_t len)
+inline string base64_encode(const unsigned char* data, const size_t len)
 {
     static constexpr char encode_table[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

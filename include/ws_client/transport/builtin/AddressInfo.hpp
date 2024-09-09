@@ -23,7 +23,7 @@ enum class AddrType : uint8_t
 };
 
 // to_string
-constexpr const string_view to_string(AddrType type) noexcept
+inline constexpr const string_view to_string(AddrType type) noexcept
 {
     switch (type)
     {
@@ -39,7 +39,7 @@ constexpr const string_view to_string(AddrType type) noexcept
 }
 
 // ostream operator
-std::ostream& operator<<(std::ostream& os, AddrType type)
+inline std::ostream& operator<<(std::ostream& os, AddrType type)
 {
     os << to_string(type);
     return os;
@@ -47,7 +47,7 @@ std::ostream& operator<<(std::ostream& os, AddrType type)
 
 /**
  * Represents a resolved POSIX address info.
- * 
+ *
  * Currently only supports IPv4 (`AF_INET`) and IPv6 (`AF_INET6`) address families.
  */
 class AddressInfo
