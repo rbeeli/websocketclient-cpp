@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sys/time.h>
+#include <cassert>
 #include <chrono>
 
 namespace ws_client
@@ -10,7 +11,7 @@ using namespace std::chrono;
 /**
  * Utility class to update a timeout by incorporating the elapsed time.
  * The start time is initialized to the current time.
- * 
+ *
  * Template Parameters:
  * DT - Duration type, defaults to milliseconds
  * ClockT - Clock type, defaults to steady_clock for monotonic time measurement
