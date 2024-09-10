@@ -110,37 +110,12 @@ asio::awaitable<expected<void, WSError>> run()
     std::string sub_msg = R"({
         "method": "SUBSCRIBE",
         "params": [
-            "!ticker@arr",
             "btcusdt@depth@0ms",
             "btcusdt@bookTicker",
             "btcusdt@aggTrade",
             "ethusdt@depth@0ms",
             "ethusdt@bookTicker",
-            "ethusdt@aggTrade",
-            "xrpusdt@depth@0ms",
-            "xrpusdt@bookTicker",
-            "xrpusdt@aggTrade",
-            "adausdt@depth@0ms",
-            "adausdt@bookTicker",
-            "adausdt@aggTrade",
-            "solusdt@depth@0ms",
-            "solusdt@bookTicker",
-            "solusdt@aggTrade",
-            "arbusdt@depth@0ms",
-            "arbusdt@bookTicker",
-            "arbusdt@aggTrade",
-            "bnbusdt@depth@0ms",
-            "bnbusdt@bookTicker",
-            "bnbusdt@aggTrade",
-            "avaxusdt@depth@0ms",
-            "avaxusdt@bookTicker",
-            "avaxusdt@aggTrade",
-            "dogeusdt@depth@0ms",
-            "dogeusdt@bookTicker",
-            "dogeusdt@aggTrade",
-            "aptusdt@depth@0ms",
-            "aptusdt@bookTicker",
-            "aptusdt@aggTrade"
+            "ethusdt@aggTrade"
         ],
         "id": 1
     })";
@@ -157,8 +132,6 @@ asio::awaitable<expected<void, WSError>> run()
     {
         ++stats.counter;
 
-        auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
             co_await client.read_message(*buffer, 5s); // 5 sec timeout
@@ -167,6 +140,7 @@ asio::awaitable<expected<void, WSError>> run()
         {
             stats.total_bytes += msg->data.size();
 
+            auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
             auto E = std::atoll(extract_json_property_value(msg->to_string_view(), "E").data());
             auto latency = ms - E;
             stats.avg_latency += static_cast<double>(latency);

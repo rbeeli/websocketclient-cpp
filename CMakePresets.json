@@ -185,14 +185,16 @@
       "name": "clang_debug tests sanitized",
       "inherits": ["clang_debug tests"],
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -funwind-tables"
+        "__DISABLED": "-fsanitize=leak",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g -funwind-tables"
       }
     },
     {
       "name": "clang_debug examples sanitized",
       "inherits": ["clang_debug examples"],
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -funwind-tables"
+        "__DISABLED": "-fsanitize=leak",
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g -funwind-tables"
       }
     },
     {

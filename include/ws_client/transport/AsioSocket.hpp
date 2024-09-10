@@ -66,15 +66,17 @@ public:
         span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
-        asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
         // set a timeout for the read operation
         read_timer_.expires_after(timeout.remaining());
 
+        // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
+        asio::error_code ec1;
+        asio::error_code ec2;
         auto result = co_await (
-            socket_.async_read_some(buf, asio::redirect_error(asio::use_awaitable, ec)) ||
-            read_timer_.async_wait(asio::use_awaitable)
+            socket_.async_read_some(buf, asio::redirect_error(asio::use_awaitable, ec1)) ||
+            read_timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
         );
 
         // check if timed out
@@ -84,8 +86,8 @@ public:
             co_return WS_ERROR(timeout_error, "Read timed out", close_code::not_set);
         }
 
-        if (ec)
-            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
+        if (ec1)
+            co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
 
         // return the number of bytes read
         co_return std::get<0>(result);
@@ -101,15 +103,17 @@ public:
         const span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
-        asio::error_code ec;
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
         // set a timeout for the write operation
         write_timer_.expires_after(timeout.remaining());
 
+        // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
+        asio::error_code ec1;
+        asio::error_code ec2;
         auto result = co_await (
-            asio::async_write(socket_, buf, asio::redirect_error(asio::use_awaitable, ec)) ||
-            write_timer_.async_wait(asio::use_awaitable)
+            asio::async_write(socket_, buf, asio::redirect_error(asio::use_awaitable, ec1)) ||
+            write_timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
         );
 
         // check if timed out
@@ -119,8 +123,8 @@ public:
             co_return WS_ERROR(timeout_error, "Write timed out", close_code::not_set);
         }
 
-        if (ec)
-            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
+        if (ec1)
+            co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
 
         // return the number of bytes written
         co_return std::get<0>(result);
@@ -143,13 +147,15 @@ public:
         {
             logger_->template log<LogLevel::D>("SSL before async_shutdown");
 
-            // asynchronously shut down the SSL connection, but don't wait
-            asio::error_code ec;
+            // asynchronously shut down the SSL connection, but don't wait.
+            // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
+            asio::error_code ec1;
+            asio::error_code ec2;
             asio::steady_timer timer{socket_.get_executor()};
             timer.expires_after(timeout.remaining());
             auto res = co_await (
-                socket_.async_shutdown(asio::redirect_error(asio::use_awaitable, ec)) ||
-                timer.async_wait(asio::use_awaitable)
+                socket_.async_shutdown(asio::redirect_error(asio::use_awaitable, ec1)) ||
+                timer.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
             );
             timer.cancel();
 
@@ -159,8 +165,8 @@ public:
                 logger_->template log<LogLevel::W>("SSL async_shutdown timed out");
             }
 
-            if (ec && ec != asio::error::eof)
-                co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
+            if (ec1 && ec1 != asio::error::eof)
+                co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
         }
 
         logger_->template log<LogLevel::D>("TCP before shutdown");
