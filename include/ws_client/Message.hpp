@@ -63,23 +63,23 @@ struct Message
      * Creates a Message from a buffer, without copying the data.
      * The passed buffer MUST remain valid for the lifetime of this `Message` instance.
      */
-    explicit Message(MessageType type, span<byte> data) noexcept : type(type), data(data)
+    explicit Message(MessageType type, span<byte> data) noexcept //
+        : type(type), data(data)
     {
     }
 
     /**
-     * Creates a Message from a string, without copying the data.
-     * The passed string MUST remain valid for the lifetime of this `Message` instance.
+     * Creates a Message from a buffer, without copying the data.
+     * The passed buffer MUST remain valid for the lifetime of this `Message` instance.
      */
-    explicit Message(MessageType type, string& data) noexcept
-        : type(type),
-          data(span<byte>(reinterpret_cast<byte*>(const_cast<char*>(data.data())), data.size()))
+    explicit Message(MessageType type, span<const byte> data) noexcept //
+        : type(type), data(const_cast<byte*>(data.data()), data.size())
     {
     }
 
     /**
-     * Creates a Message from a string_view, without copying the data.
-     * The string underlying the passed string_view MUST remain valid
+     * Creates a Message from a `string_view`, without copying the data.
+     * The string underlying the passed `string_view` MUST remain valid
      * for the lifetime of this `Message` instance.
      */
     explicit Message(MessageType type, string_view data) noexcept
@@ -89,21 +89,21 @@ struct Message
     }
 
     /**
-     * Returns a string_view of the message payload.
-     * The returned string_view is valid as long as the underlying
+     * Returns a `string_view` of the message payload.
+     * The returned `string_view` is valid as long as the underlying
      * `Message` buffer is valid.
      */
-    inline string_view to_string_view() const noexcept
+    [[nodiscard]] inline string_view to_string_view() const noexcept
     {
-        return string_view(reinterpret_cast<char*>(data.data()), data.size());
+        return string_view(reinterpret_cast<const char*>(data.data()), data.size());
     }
 
     /**
-     * Returns a string copy of the message payload.
+     * Returns a `string` copy of the message payload.
      */
-    inline string to_string() const noexcept
+    [[nodiscard]] inline string to_string() const noexcept
     {
-        return string(reinterpret_cast<char*>(data.data()), data.size());
+        return string(reinterpret_cast<const char*>(data.data()), data.size());
     }
 };
 
