@@ -24,7 +24,7 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
   - Ability to provide custom transport layer
   - No callback hell and easier object liftime management when using C++20 coroutines
 - Pluggable logging (optional)
-- **GCC 12+** and **Clang 19+** compiler support
+- **GCC 13+** and **Clang 16+** compiler support
 - Tested on 64-bit **x86** and **ARM64** (**Ubuntu x86**, **MacOS M2 ARM64**) platforms (32-bit NOT supported)
 - Passes all [Autobahn Testsuite](https://github.com/crossbario/autobahn-testsuite) tests
 

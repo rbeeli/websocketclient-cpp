@@ -3,6 +3,7 @@
 #include <expected>
 #include <cstddef>
 #include <cstring>
+#include <format>
 #include <algorithm>
 #include <span>
 #include <concepts>
@@ -213,9 +214,7 @@ public:
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    inline expected<span<byte>, WSError> append(
-        const byte* data, size_t size
-    ) noexcept
+    inline expected<span<byte>, WSError> append(const byte* data, size_t size) noexcept
     {
         auto pos = this->size();
         auto new_pos = pos + size;
@@ -259,8 +258,11 @@ private:
         {
             return WS_ERROR(
                 buffer_error,
-                "Requested buffer size " + std::to_string(size) +
-                    " exceeds maximum allowed size of " + std::to_string(max_size_) + " bytes",
+                std::format(
+                    "Requested buffer size {} exceeds maximum allowed size of {} bytes",
+                    size,
+                    max_size_
+                ),
                 close_code::not_set
             );
         }
@@ -273,7 +275,7 @@ private:
         {
             return WS_ERROR(
                 buffer_error,
-                "Failed to allocate buffer of size " + std::to_string(size),
+                std::format("Failed to allocate buffer of size {}", size),
                 close_code::not_set
             );
         }

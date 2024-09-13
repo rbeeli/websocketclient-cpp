@@ -1,6 +1,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string>
+#include <format>
 #include <chrono>
 #include <exception>
 
@@ -111,7 +112,7 @@ awaitable<expected<void, WSError>> run()
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
@@ -127,7 +128,7 @@ awaitable<expected<void, WSError>> run()
             }
 
             // error occurred - must close connection
-            logger.log<LogLevel::E>("Error: " + err->message);
+            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             co_return expected<void, WSError>{};
         }

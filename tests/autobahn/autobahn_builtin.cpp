@@ -1,6 +1,7 @@
 #include <iostream>
 #include <chrono>
 #include <string>
+#include <format>
 #include <variant>
 
 #define WS_CLIENT_LOG_HANDSHAKE 0
@@ -49,7 +50,7 @@ using std::byte;
     {
         // allocate message buffer with 4 KiB initial size and 100 MiB max size
         WS_TRY(buffer, Buffer::create(4096, 100 * 1024 * 1024));
-        
+
         // read message from server into buffer
         variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
             client.read_message(*buffer, 60s);
@@ -123,7 +124,7 @@ using std::byte;
 
     // allocate message buffer with 4 KiB initial size and 100 MiB max size
     WS_TRY(buffer, Buffer::create(4096, 100 * 1024 * 1024));
-    
+
     while (true)
     {
         // read message from server into buffer
@@ -169,7 +170,7 @@ int main()
 
     // getCaseCount
     {
-        auto res = send_request("ws://" + host + "/getCaseCount", true);
+        auto res = send_request(std::format("ws://{}/getCaseCount", host), true);
         if (!res.has_value())
         {
             std::cerr << "Failed to fetch cases count: " << res.error() << std::endl;
@@ -189,9 +190,7 @@ int main()
     {
         // getCaseInfo
         {
-            auto res = send_request(
-                "ws://" + host + "/getCaseInfo?case=" + std::to_string(i), true
-            );
+            auto res = send_request(std::format("ws://{}/getCaseInfo?case={}", host, i), true);
             if (!res.has_value())
             {
                 std::cerr << "Failed to fetch case info: " << res.error() << std::endl;
@@ -200,7 +199,7 @@ int main()
             std::cout << res.value() << std::endl;
         }
 
-        string url = "ws://" + host + "/runCase?case=" + std::to_string(i) + "&agent=" + agent;
+        string url = std::format("ws://{}/runCase?case={}&agent={}", host, i, agent);
         auto res_case = run_case(url);
         if (!res_case.has_value())
             std::cerr << "Case " << i << ": " << res_case.error() << std::endl;
@@ -210,7 +209,7 @@ int main()
 
     // updateReports
     {
-        auto res = send_request("ws://" + host + "/updateReports?agent=" + agent, false);
+        auto res = send_request(std::format("ws://{}/updateReports?agent={}", host, agent), false);
         if (!res.has_value())
         {
             std::cerr << "Failed to update reports: " << res.error() << std::endl;

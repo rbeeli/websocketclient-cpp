@@ -2,6 +2,7 @@
 
 #include <expected>
 #include <string>
+#include <format>
 #include <span>
 #include <mutex>
 #include <chrono>
@@ -175,7 +176,7 @@ public:
         if (ret != 1)
             return ssl_error(ret, "Unable to set hostname");
 
-        logger_->template log<LogLevel::I>("hostname=" + hostname);
+        logger_->template log<LogLevel::I>(std::format("hostname={}", hostname));
 
         return {};
     }
@@ -192,7 +193,7 @@ public:
         else
             SSL_set_verify(ssl_, SSL_VERIFY_NONE, nullptr);
 
-        logger_->template log<LogLevel::I>("verify_peer=" + std::to_string(value));
+        logger_->template log<LogLevel::I>(std::format("verify_peer={}", value));
 
         return {};
     }
@@ -209,7 +210,7 @@ public:
         if (ret != 1)
             return ssl_error(ret, "Unable to set cipher list");
 
-        logger_->template log<LogLevel::I>("cipher_list=" + ciphers);
+        logger_->template log<LogLevel::I>(std::format("cipher_list={}", ciphers));
 
         return {};
     }
@@ -227,16 +228,15 @@ public:
         // set TLS min version
         int ret = SSL_set_min_proto_version(ssl_, min_version);
         if (ret != 1)
-            return ssl_error(ret, "Unable to set min. TLS version: " + std::to_string(min_version));
+            return ssl_error(ret, std::format("Unable to set min. TLS version: {}", min_version));
 
         // set TLS max version
         ret = SSL_set_max_proto_version(ssl_, max_version);
         if (ret != 1)
-            return ssl_error(ret, "Unable to set max. TLS version: " + std::to_string(max_version));
+            return ssl_error(ret, std::format("Unable to set max. TLS version: {}", max_version));
 
         logger_->template log<LogLevel::I>(
-            "tls_version_range=" + std::to_string(min_version) + " to " +
-            std::to_string(max_version)
+            std::format("tls_version_range={} to {}", min_version, max_version)
         );
 
         return {};
@@ -265,8 +265,7 @@ public:
         {
             return ssl_error(
                 ret,
-                "Unable to create SSL object for file descriptor (fd=" +
-                    std::to_string(socket_.fd()) + ")"
+                std::format("Unable to create SSL object for file descriptor (fd={})", socket_.fd())
             );
         }
 
@@ -280,7 +279,7 @@ public:
         SSL_set_info_callback(ssl_, OpenSslSocket<TLogger>::ssl_info_callback<TLogger>);
 
         logger_->template log<LogLevel::D>(
-            "OpenSslSocket created (fd=" + std::to_string(socket_.fd()) + ")"
+            std::format("OpenSslSocket created (fd={})", socket_.fd())
         );
 
         return {};
@@ -350,7 +349,9 @@ public:
                 X509_free(cert);
                 return WS_ERROR(
                     transport_error,
-                    "Certificate verification error: Hostname mismatch, expected: " + hostname_,
+                    std::format(
+                        "Certificate verification error: Hostname mismatch, expected: {}", hostname_
+                    ),
                     close_code::not_set
                 );
             }
@@ -374,8 +375,9 @@ public:
             string err_desc = err_str ? err_str : "Unknown error";
             return WS_ERROR(
                 transport_error,
-                "Certificate chain verification failed: " + err_desc +
-                    " (code: " + std::to_string(verify_ret) + ")",
+                std::format(
+                    "Certificate chain verification failed: {} (code: {})", err_desc, verify_ret
+                ),
                 close_code::not_set
             );
         }
@@ -730,18 +732,18 @@ private:
 
             case X509_V_ERR_CERT_NOT_YET_VALID:
                 if (cert)
-                    this_->ssl_log_error(
-                        "Certificate not valid yet for subject: " + get_cert_subject(cert)
-                    );
+                    this_->ssl_log_error(std::format(
+                        "Certificate not valid yet for subject: {}", get_cert_subject(cert)
+                    ));
                 else
                     this_->ssl_log_error("Certificate not valid yet.");
                 break;
 
             case X509_V_ERR_CERT_HAS_EXPIRED:
                 if (cert)
-                    this_->ssl_log_error(
-                        "Certificate has expired for subject: " + get_cert_subject(cert)
-                    );
+                    this_->ssl_log_error(std::format(
+                        "Certificate has expired for subject: {}", get_cert_subject(cert)
+                    ));
                 else
                     this_->ssl_log_error("Certificate has expired.");
                 break;
@@ -749,8 +751,7 @@ private:
             default:
                 string err_str = string(X509_verify_cert_error_string(err));
                 this_->ssl_log_error(
-                    "Certificate verification error: " + err_str + " (code " + //
-                    std::to_string(err) + ")"
+                    std::format("Certificate verification error: {} (code {})", err_str, err)
                 );
                 break;
         }
@@ -794,21 +795,23 @@ private:
         if (where & SSL_CB_LOOP)
         {
             if (this_->ssl_log_debug_enabled())
-                this_->ssl_log_debug("SSL " + string(str) + ": " + SSL_state_string_long(ssl));
+                this_->ssl_log_debug(std::format("SSL {}: {}", str, SSL_state_string_long(ssl)));
         }
         else if (where & SSL_CB_ALERT)
         {
             string direction = (where & SSL_CB_READ) ? "read" : "write";
             string alert_type = SSL_alert_type_string_long(ret);
             string alert_desc = SSL_alert_desc_string_long(ret);
-            this_->ssl_log_error("SSL alert " + direction + " " + alert_type + ": " + alert_desc);
+            this_->ssl_log_error(
+                std::format("SSL alert {} {}: {}", direction, alert_type, alert_desc)
+            );
         }
         else if (where & SSL_CB_EXIT)
         {
             if (ret == 0)
             {
                 this_->ssl_log_error(
-                    "SSL " + string(str) + " failed in " + string(SSL_state_string_long(ssl))
+                    std::format("SSL {} failed in {}", str, SSL_state_string_long(ssl))
                 );
             }
             else if (ret < 0)
@@ -816,10 +819,9 @@ private:
                 int err = SSL_get_error(ssl, ret);
                 if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
                 {
-                    this_->ssl_log_error(
-                        "SSL " + string(str) + " error in " + string(SSL_state_string_long(ssl)) +
-                        " (code " + std::to_string(err) + ")"
-                    );
+                    this_->ssl_log_error(std::format(
+                        "SSL {} error in {} (code {})", str, SSL_state_string_long(ssl), err
+                    ));
                 }
             }
         }
@@ -904,9 +906,11 @@ private:
         ssize_t ret_code, const string& desc
     ) noexcept
     {
-        string errors = get_ssl_errors();
-        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + errors;
-        return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
+        return WS_ERROR(
+            transport_error,
+            std::format("{} (return code {}): {}", desc, ret_code, get_ssl_errors()),
+            close_code::not_set
+        );
     }
 
     [[nodiscard]] static std::unexpected<WSError> syscall_error(
@@ -914,9 +918,13 @@ private:
     ) noexcept
     {
         int errno_ = errno;
-        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + //
-                     string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")";
-        return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
+        return WS_ERROR(
+            transport_error,
+            std::format(
+                "{} (return code {}): {} ({})", desc, ret_code, std::strerror(errno_), errno_
+            ),
+            close_code::not_set
+        );
     }
 };
 

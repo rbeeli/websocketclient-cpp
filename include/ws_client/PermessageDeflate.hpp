@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <format>
 #include <charconv>
 #include <cstdint>
 #include <span>
@@ -164,20 +165,17 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
         if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
-            logger->template log<LogLevel::D>(
+            logger->template log<LogLevel::D>(std::format(
                 "Negotiated permessage-deflate parameters:\n"
-                " - server_max_window_bits:      " +
-                std::to_string(this->server_max_window_bits) +
-                "\n"
-                " - client_max_window_bits:      " +
-                std::to_string(this->client_max_window_bits) +
-                "\n"
-                " - server_no_context_takeover:  " +
-                std::to_string(this->server_no_context_takeover) +
-                "\n"
-                " - client_no_context_takeover:  " +
-                std::to_string(this->client_no_context_takeover)
-            );
+                " - server_max_window_bits:      {}\n"
+                " - client_max_window_bits:      {}\n"
+                " - server_no_context_takeover:  {:d}\n"
+                " - client_no_context_takeover:  {:d}",
+                this->server_max_window_bits,
+                this->client_max_window_bits,
+                this->server_no_context_takeover,
+                this->client_no_context_takeover
+            ));
         }
 #endif
 
@@ -205,10 +203,10 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
-                    logger->template log<LogLevel::D>(
-                        "server_no_context_takeover adjusted from " +
-                        std::to_string(this->server_no_context_takeover) + " to 0"
-                    );
+                    logger->template log<LogLevel::D>(std::format(
+                        "server_no_context_takeover adjusted from {:d} to 0",
+                        this->server_no_context_takeover
+                    ));
                 }
 #endif
             }
@@ -218,10 +216,10 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
-                logger->template log<LogLevel::D>(
-                    "server_no_context_takeover adjusted from " +
-                    std::to_string(this->server_no_context_takeover) + " to 1"
-                );
+                logger->template log<LogLevel::D>(std::format(
+                    "server_no_context_takeover adjusted from {:d} to 1",
+                    this->server_no_context_takeover
+                ));
             }
 #endif
             this->server_no_context_takeover = true;
@@ -251,10 +249,10 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
-                logger->template log<LogLevel::D>(
-                    "client_no_context_takeover adjusted from " +
-                    std::to_string(this->client_no_context_takeover) + " to 1"
-                );
+                logger->template log<LogLevel::D>(std::format(
+                    "client_no_context_takeover adjusted from {:d} to 1",
+                    this->client_no_context_takeover
+                ));
             }
 #endif
             this->client_no_context_takeover = true;
@@ -282,11 +280,12 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
-                    logger->template log<LogLevel::D>(
-                        "server_max_window_bits=" + std::to_string(this->server_max_window_bits) +
-                        " not acknowledged by server, use default value " +
-                        std::to_string(default_server_max_window_bits)
-                    );
+                    logger->template log<LogLevel::D>(std::format(
+                        "server_max_window_bits={} not acknowledged by server, use default value "
+                        "{}",
+                        this->server_max_window_bits,
+                        default_server_max_window_bits
+                    ));
                 }
 #endif
                 this->server_max_window_bits = default_server_max_window_bits;
@@ -300,8 +299,11 @@ struct PermessageDeflate
                 {
                     return WS_ERROR(
                         protocol_error,
-                        "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
-                            std::to_string(res_value),
+                        std::format(
+                            "Invalid server_max_window_bits value received. Expected: 8-15, got: "
+                            "{}",
+                            res_value
+                        ),
                         close_code::not_set
                     );
                 }
@@ -310,9 +312,11 @@ struct PermessageDeflate
                 {
                     return WS_ERROR(
                         protocol_error,
-                        "Received server_max_window_bits " + std::to_string(res_value) +
-                            " greater than requested value of " +
-                            std::to_string(this->server_max_window_bits),
+                        std::format(
+                            "Received server_max_window_bits {} greater than requested value of {}",
+                            res_value,
+                            this->server_max_window_bits
+                        ),
                         close_code::not_set
                     );
                 }
@@ -322,11 +326,11 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
                     if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                     {
-                        logger->template log<LogLevel::D>(
-                            "server_max_window_bits adjusted from " +
-                            std::to_string(this->server_max_window_bits) + " to " +
-                            std::to_string(res_value)
-                        );
+                        logger->template log<LogLevel::D>(std::format(
+                            "server_max_window_bits adjusted from {} to {}",
+                            this->server_max_window_bits,
+                            res_value
+                        ));
                     }
 #endif
                     this->server_max_window_bits = res_value;
@@ -342,8 +346,10 @@ struct PermessageDeflate
             {
                 return WS_ERROR(
                     protocol_error,
-                    "Invalid server_max_window_bits value received. Expected: 8-15, got: " +
-                        std::to_string(res_value),
+                    std::format(
+                        "Invalid server_max_window_bits value received. Expected: 8-15, got: {}",
+                        res_value
+                    ),
                     close_code::not_set
                 );
             }
@@ -353,11 +359,11 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
             {
-                logger->template log<LogLevel::D>(
-                    "server_max_window_bits adjusted from " +
-                    std::to_string(this->server_max_window_bits) + " to " +
-                    std::to_string(res_value)
-                );
+                logger->template log<LogLevel::D>(std::format(
+                    "server_max_window_bits adjusted from {} to {}",
+                    this->server_max_window_bits,
+                    res_value
+                ));
             }
 #endif
         }
@@ -368,10 +374,9 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
             {
-                logger->template log<LogLevel::I>(
-                    "Using default server_max_window_bits: " +
-                    std::to_string(this->server_max_window_bits)
-                );
+                logger->template log<LogLevel::I>(std::format(
+                    "Using default server_max_window_bits: {}", this->server_max_window_bits
+                ));
             }
 #endif
         }
@@ -398,11 +403,12 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
                 if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                 {
-                    logger->template log<LogLevel::D>(
-                        "client_max_window_bits=" + std::to_string(this->client_max_window_bits) +
-                        " not acknowledged by server, use default value " +
-                        std::to_string(default_client_max_window_bits)
-                    );
+                    logger->template log<LogLevel::D>(std::format(
+                        "client_max_window_bits={} not acknowledged by server, use default value "
+                        "{}",
+                        this->client_max_window_bits,
+                        default_client_max_window_bits
+                    ));
                 }
 #endif
 
@@ -417,8 +423,11 @@ struct PermessageDeflate
                 {
                     return WS_ERROR(
                         protocol_error,
-                        "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
-                            std::to_string(res_value),
+                        std::format(
+                            "Invalid client_max_window_bits value received. Expected: 8-15, got: "
+                            "{}",
+                            res_value
+                        ),
                         close_code::not_set
                     );
                 }
@@ -427,9 +436,11 @@ struct PermessageDeflate
                 {
                     return WS_ERROR(
                         protocol_error,
-                        "Received client_max_window_bits " + std::to_string(res_value) +
-                            " greater than requested value of " +
-                            std::to_string(this->client_max_window_bits),
+                        std::format(
+                            "Received client_max_window_bits {} greater than requested value of {}",
+                            res_value,
+                            this->client_max_window_bits
+                        ),
                         close_code::not_set
                     );
                 }
@@ -439,11 +450,11 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
                     if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
                     {
-                        logger->template log<LogLevel::D>(
-                            "client_max_window_bits adjusted from " +
-                            std::to_string(this->client_max_window_bits) + " to " +
-                            std::to_string(res_value)
-                        );
+                        logger->template log<LogLevel::D>(std::format(
+                            "client_max_window_bits adjusted from {} to {}",
+                            this->client_max_window_bits,
+                            res_value
+                        ));
                     }
 #endif
                     this->client_max_window_bits = res_value;
@@ -465,8 +476,10 @@ struct PermessageDeflate
             {
                 return WS_ERROR(
                     protocol_error,
-                    "Failed to parse client_max_window_bits from server: " +
-                        client_max_window_bits_str,
+                    std::format(
+                        "Failed to parse client_max_window_bits from server: {}",
+                        client_max_window_bits_str
+                    ),
                     close_code::not_set
                 );
             }
@@ -475,8 +488,10 @@ struct PermessageDeflate
             {
                 return WS_ERROR(
                     protocol_error,
-                    "Invalid client_max_window_bits value received. Expected: 8-15, got: " +
-                        std::to_string(client_max_window_bits_parsed),
+                    std::format(
+                        "Invalid client_max_window_bits value received. Expected: 8-15, got: {}",
+                        client_max_window_bits_parsed
+                    ),
                     close_code::not_set
                 );
             }
@@ -490,10 +505,9 @@ struct PermessageDeflate
 #if WS_CLIENT_LOG_HANDSHAKE == 1
             if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
             {
-                logger->template log<LogLevel::I>(
-                    "Using default client_max_window_bits: " +
-                    std::to_string(this->client_max_window_bits)
-                );
+                logger->template log<LogLevel::I>(std::format(
+                    "Using default client_max_window_bits: {}", this->client_max_window_bits
+                ));
             }
 #endif
         }
@@ -501,25 +515,31 @@ struct PermessageDeflate
         return {};
     }
 
-    string get_Sec_WebSocket_Extensions_value() const
+    string get_SecWebSocketExtensions_value() const
     {
-        std::ostringstream stream;
-        stream << "permessage-deflate";
+        string result = "permessage-deflate";
 
         if (this->server_max_window_bits > 0)
-            stream << "; server_max_window_bits=" << +this->server_max_window_bits;
+        {
+            result += "; server_max_window_bits=";
+            result += std::to_string(this->server_max_window_bits);
+        }
 
         if (this->client_max_window_bits > 0)
-            stream << "; client_max_window_bits=" << +this->client_max_window_bits;
+        {
+            result += "; client_max_window_bits=";
+            result += std::to_string(this->client_max_window_bits);
+        }
 
         if (this->server_no_context_takeover)
-            stream << "; server_no_context_takeover";
+            result += "; server_no_context_takeover";
 
         if (this->client_no_context_takeover)
-            stream << "; client_no_context_takeover";
+            result += "; client_no_context_takeover";
 
-        return stream.str();
+        return result;
     }
+
 
     map<string, string> parse_WebSocketExtensions(const string& header)
     {
@@ -558,7 +578,9 @@ struct PermessageDeflate
         {
             return WS_ERROR(
                 protocol_error,
-                "Invalid window bits value received. Expected: 8-15, got: " + bits_string,
+                std::format(
+                    "Invalid window bits value received. Expected: 8-15, got: {}", bits_string
+                ),
                 close_code::not_set
             );
         }
@@ -748,7 +770,7 @@ public:
         if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
             logger_->template log<LogLevel::D>(
-                "compression ratio: " + std::to_string((double)size / input.size())
+                std::format("compression ratio: {:.3f}", static_cast<double>(size) / input.size())
             );
         }
 #endif
@@ -822,7 +844,7 @@ public:
         if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
         {
             logger_->template log<LogLevel::D>(
-                "compression ratio: " + std::to_string((double)input.size() / size)
+                std::format("compression ratio: {:.3f}", static_cast<double>(input.size()) / size)
             );
         }
 #endif
@@ -843,9 +865,11 @@ public:
 
     [[nodiscard]] static auto make_error(string_view desc, const char* msg) noexcept
     {
-        std::ostringstream os;
-        os << "zlib [" << desc << "] failed: " << (msg != NULL ? string(msg) : "N/A");
-        return WS_ERROR(compression_error, os.str(), close_code::not_set);
+        return WS_ERROR(
+            compression_error,
+            std::format("zlib [{}] failed: {}", desc, msg ? msg : "N/A"),
+            close_code::not_set
+        );
     }
 };
 } // namespace ws_client

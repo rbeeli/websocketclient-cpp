@@ -1,6 +1,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string>
+#include <format>
 #include <variant>
 #include <chrono>
 #include <exception>
@@ -80,7 +81,7 @@ asio::awaitable<expected<void, WSError>> run()
         if (std::get_if<Message>(&var))
         {
             // write message back to server
-            string text = "This is the " + std::to_string(i) + "th message";
+            string text = std::format("This is the {}th message", i);
             Message msg2(MessageType::text, text);
             WS_CO_TRYV(co_await client.send_message(msg2));
         }
@@ -101,7 +102,7 @@ asio::awaitable<expected<void, WSError>> run()
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
@@ -111,7 +112,7 @@ asio::awaitable<expected<void, WSError>> run()
         else if (auto err = std::get_if<WSError>(&var))
         {
             // error occurred - must close connection
-            logger.log<LogLevel::E>("Error: " + err->message);
+            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             co_return expected<void, WSError>{};
         }

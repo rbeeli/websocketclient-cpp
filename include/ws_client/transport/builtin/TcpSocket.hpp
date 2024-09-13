@@ -5,6 +5,8 @@
 #include <chrono>
 #include <unistd.h>
 #include <cstring>
+#include <string>
+#include <format>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -102,7 +104,7 @@ public:
 
         // create a socket based on family (IPv4 or IPv6)
         logger_->template log<LogLevel::D>(
-            "Creating socket (family=" + std::to_string(address_.family()) + ")"
+            std::format("Creating socket (family={})", address_.family())
         );
         fd_ = ::socket(address_.family(), SOCK_STREAM, 0);
         if (fd_ == -1)
@@ -110,8 +112,9 @@ public:
             int error_code = errno;
             return WS_ERROR(
                 transport_error,
-                "Error creating TCP socket: " + std::string(std::strerror(error_code)) + " (" +
-                    std::to_string(error_code) + ")",
+                std::format(
+                    "Error creating TCP socket: {} ({})", std::strerror(error_code), error_code
+                ),
                 close_code::not_set
             );
         }
@@ -125,7 +128,7 @@ public:
         // enable quickack by default (if available on platform)
         WS_TRYV(this->set_TCP_QUICKACK(true));
 
-        logger_->template log<LogLevel::D>("Socket created (fd=" + std::to_string(fd_) + ")");
+        logger_->template log<LogLevel::D>(std::format("Socket created (fd={})", fd_));
 
         return {};
     }
@@ -172,11 +175,18 @@ public:
         if (error != 0)
         {
             std::string error_message = std::strerror(error);
-            std::stringstream ss;
-            ss << "Connect failed to " << address_.hostname() << ":" << //
-                address_.port() << " (" << address_.ip() << "): " <<    //
-                error_message << " (error code " << error << ")";
-            return WS_ERROR(transport_error, ss.str(), close_code::not_set);
+            return WS_ERROR(
+                transport_error,
+                std::format(
+                    "Connect failed to {}:{} ({}): {} (error code {})",
+                    address_.hostname(),
+                    address_.port(),
+                    address_.ip(),
+                    error_message,
+                    error
+                ),
+                close_code::not_set
+            );
         }
 
         connected_ = true;
@@ -184,10 +194,13 @@ public:
         if (logger_->template is_enabled<LogLevel::I>())
         {
             auto elapsed = timeout.template elapsed<std::chrono::microseconds>();
-            std::stringstream ss;
-            ss << "Connected to " << address_.hostname() << ":" //
-               << address_.port() << " (" << address_.ip() << ") in " << elapsed.count() << " µs";
-            logger_->template log<LogLevel::I>(ss.str());
+            logger_->template log<LogLevel::I>(std::format(
+                "Connected to {}:{} ({}) in {} µs",
+                address_.hostname(),
+                address_.port(),
+                address_.ip(),
+                elapsed.count()
+            ));
         }
 
         return {};
@@ -202,7 +215,7 @@ public:
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_error(ret, "set TCP_NODELAY"));
-        logger_->template log<LogLevel::D>("TCP_NODELAY=" + std::to_string(value));
+        logger_->template log<LogLevel::D>(std::format("TCP_NODELAY={}", value));
         return {};
     }
 
@@ -225,7 +238,8 @@ public:
                 transport_error, "Failed to set socket to non-blocking", close_code::not_set
             );
 
-        logger_->template log<LogLevel::D>("O_NONBLOCK=" + std::to_string(value));
+        logger_->template log<LogLevel::D>(std::format("O_NONBLOCK={}", value));
+
         return {};
     }
 
@@ -237,7 +251,7 @@ public:
         int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_RCVBUF"));
         logger_->template log<LogLevel::D>(
-            "socket receive buffer size SO_RCVBUF=" + std::to_string(buffer_size)
+            std::format("socket receive buffer size SO_RCVBUF={}", buffer_size)
         );
         return {};
     }
@@ -250,7 +264,7 @@ public:
         int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_SNDBUF"));
         logger_->template log<LogLevel::D>(
-            "socket send buffer size SO_SNDBUF=" + std::to_string(buffer_size)
+            std::format("socket send buffer size SO_SNDBUF={}", buffer_size)
         );
         return {};
     }
@@ -269,7 +283,7 @@ public:
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_QUICKACK, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_error(ret, "set TCP_QUICKACK"));
-        logger_->template log<LogLevel::D>("TCP_QUICKACK=" + std::to_string(value));
+        logger_->template log<LogLevel::D>(std::format("TCP_QUICKACK={}", value));
 #endif
         return {};
     }
@@ -450,9 +464,7 @@ public:
     {
         if (fd_ != -1)
         {
-            logger_->template log<LogLevel::D>(
-                "Shutting down socket (fd=" + std::to_string(fd_) + ")"
-            );
+            logger_->template log<LogLevel::D>(std::format("Shutting down socket (fd={})", fd_));
             int ret = ::shutdown(fd_, SHUT_RDWR);
             if (ret != 0)
             {
@@ -472,7 +484,7 @@ public:
     {
         if (fd_ != -1)
         {
-            logger_->template log<LogLevel::D>("Closing socket (fd=" + std::to_string(fd_) + ")");
+            logger_->template log<LogLevel::D>(std::format("Closing socket (fd={})", fd_));
             int ret = ::close(fd_);
             if (ret != 0)
             {
@@ -489,8 +501,9 @@ private:
     [[nodiscard]] std::unexpected<WSError> make_error(ssize_t ret_code, const string& desc) noexcept
     {
         int errno_ = errno;
-        string msg = desc + " (return code " + std::to_string(ret_code) + "): " + //
-                     string(std::strerror(errno_)) + " (" + std::to_string(errno_) + ")";
+        string msg = std::format(
+            "{} (return code {}): {} ({})", desc, ret_code, std::strerror(errno_), errno_
+        );
         return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
     }
 

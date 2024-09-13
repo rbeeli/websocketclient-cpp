@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <format>
 #include <variant>
 #include <chrono>
 #include <signal.h>
@@ -39,8 +40,7 @@ using asio::ip::tcp;
         int errno_ = errno;
         return WS_ERROR(
             uncategorized_error,
-            "Error during " + desc + ": " + string(std::strerror(errno_)) + " (" +
-                std::to_string(errno_) + ")",
+            std::format("Error during {}: {} ({})", desc, std::strerror(errno_), errno_),
             close_code::not_set
         );
     }
@@ -147,7 +147,7 @@ using asio::ip::tcp;
 
     // allocate message buffer with 4 KiB initial size and 100 MiB max size
     WS_CO_TRY(buffer, Buffer::create(4096, 100 * 1024 * 1024));
-    
+
     while (true)
     {
         // read message from server into buffer
@@ -193,7 +193,7 @@ awaitable<void> client()
 
     // getCaseCount
     {
-        auto res = co_await send_request("ws://" + host + "/getCaseCount", true);
+        auto res = co_await send_request(std::format("ws://{}/getCaseCount", host), true);
         if (!res.has_value())
         {
             std::cerr << "Failed to fetch cases count: " << res.error() << std::endl;
@@ -214,7 +214,7 @@ awaitable<void> client()
         // getCaseInfo
         {
             auto res = co_await send_request(
-                "ws://" + host + "/getCaseInfo?case=" + std::to_string(i), true
+                std::format("ws://{}/getCaseInfo?case={}", host, i), true
             );
             if (!res.has_value())
             {
@@ -224,7 +224,7 @@ awaitable<void> client()
             std::cout << res.value() << std::endl;
         }
 
-        string url = "ws://" + host + "/runCase?case=" + std::to_string(i) + "&agent=" + agent;
+        string url = std::format("ws://{}/runCase?case={}&agent={}", host, i, agent);
         auto res_case = co_await run_case(url);
         if (!res_case.has_value())
             std::cerr << "Case " << i << ": " << res_case.error() << std::endl;
@@ -234,7 +234,9 @@ awaitable<void> client()
 
     // updateReports
     {
-        auto res = co_await send_request("ws://" + host + "/updateReports?agent=" + agent, false);
+        auto res = co_await send_request(
+            std::format("ws://{}/updateReports?agent={}", host, agent), false
+        );
         if (!res.has_value())
         {
             std::cerr << "Failed to update reports: " << res.error() << std::endl;

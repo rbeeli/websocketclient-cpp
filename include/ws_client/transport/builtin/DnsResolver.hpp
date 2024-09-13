@@ -2,7 +2,7 @@
 
 #include <expected>
 #include <ostream>
-#include <sstream>
+#include <format>
 #include <string>
 #include <vector>
 #include <netdb.h>
@@ -80,7 +80,7 @@ public:
             hints.ai_flags = AI_CANONNAME;
 
         logger->template log<LogLevel::D>(
-            "Resolving hostname " + hostname + " (type=" + string(to_string(type)) + ")"
+            std::format("Resolving hostname {} (type={})", hostname, to_string(type))
         );
 
         // resolve hostname to IP address using getaddrinfo POSIX function
@@ -88,22 +88,23 @@ public:
         auto ret = ::getaddrinfo(hostname.c_str(), service.c_str(), &hints, &getaddrinfo_res);
         if (ret != 0)
         {
-            // Use gai_strerror to get a human-readable error message
-            string err_msg = "Failed to resolve hostname: ";
-            err_msg += gai_strerror(ret);
-            return WS_ERROR(url_error, std::move(err_msg), close_code::not_set);
+            return WS_ERROR(
+                url_error,
+                std::format("Failed to resolve hostname: {}", gai_strerror(ret)),
+                close_code::not_set
+            );
         }
 
         if (logger->template is_enabled<LogLevel::I>())
         {
-            std::stringstream ss;
-            ss << "Resolved hostname " << hostname << " in "
-               << std::chrono::duration_cast<std::chrono::microseconds>(
-                      std::chrono::system_clock::now() - now
-                  )
-                      .count()
-               << " µs";
-            logger->template log<LogLevel::I>(ss.str());
+            logger->template log<LogLevel::I>(std::format(
+                "Resolved hostname {} in {} µs",
+                hostname,
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::system_clock::now() - now
+                )
+                    .count()
+            ));
         }
 
         vector<AddressInfo> result;
@@ -134,9 +135,11 @@ public:
                     int error_code = errno;
                     return WS_ERROR(
                         transport_error,
-                        "Failed to convert IPv4 address to string: " +
-                            std::string(std::strerror(error_code)) + " (" +
-                            std::to_string(error_code) + ")",
+                        std::format(
+                            "Failed to convert IPv4 address to string: {} ({})",
+                            std::strerror(error_code),
+                            error_code
+                        ),
                         close_code::not_set
                     );
                 }
@@ -166,9 +169,11 @@ public:
                     int error_code = errno;
                     return WS_ERROR(
                         transport_error,
-                        "Failed to convert IPv6 address to string: " +
-                            std::string(std::strerror(error_code)) + " (" +
-                            std::to_string(error_code) + ")",
+                        std::format(
+                            "Failed to convert IPv6 address to string: {} ({})",
+                            std::strerror(error_code),
+                            error_code
+                        ),
                         close_code::not_set
                     );
                 }
@@ -176,10 +181,9 @@ public:
             else
             {
                 // skip unsupported address families
-                logger->template log<LogLevel::D>(
-                    "DnsResolver skipping unsupported address family: " +
-                    std::to_string(res->ai_family)
-                );
+                logger->template log<LogLevel::D>(std::format(
+                    "DnsResolver skipping unsupported address family: {}", res->ai_family
+                ));
                 continue;
             }
         }

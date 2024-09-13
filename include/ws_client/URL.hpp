@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstring>
+#include <format>
 #include <unordered_map>
 #include <expected>
 #include <charconv>
@@ -52,8 +53,9 @@ public:
     /**
      * Map of default ports for known protocols.
      */
-    inline static std::unordered_map<string, int, string_like_hash, std::equal_to<>> protocol_port_map = {
-        {"https", 443}, {"wss", 443}, {"http", 80}, {"ws", 80}, {"ftp", 21}, {"ssh", 22}
+    inline static std::unordered_map<string, int, string_like_hash, std::equal_to<>>
+        protocol_port_map = {
+            {"https", 443}, {"wss", 443}, {"http", 80}, {"ws", 80}, {"ftp", 21}, {"ssh", 22}
     };
 
     /**
@@ -139,7 +141,9 @@ public:
         else
         {
             return WS_ERROR(
-                url_error, "Invalid URL, protocol not found: " + string(url), close_code::not_set
+                url_error,
+                std::format("Invalid URL, protocol not found: {}", url),
+                close_code::not_set
             );
         }
 
@@ -159,7 +163,7 @@ public:
             {
                 return WS_ERROR(
                     url_error,
-                    "Invalid URL, closing bracket for IPv6 address not found: " + string(url),
+                    std::format("Invalid URL, closing bracket for IPv6 address not found: {}", url),
                     close_code::not_set
                 );
             }
@@ -231,7 +235,9 @@ public:
             return it->second;
 
         return WS_ERROR(
-            url_error, "Invalid URL, unknown protocol: " + string(protocol), close_code::not_set
+            url_error,
+            std::format("Invalid URL, unknown protocol: {}", protocol),
+            close_code::not_set
         );
     }
 
@@ -243,16 +249,18 @@ public:
         if (res.ec != std::errc{})
         {
             return WS_ERROR(
-                url_error, "Failed to parse port number form URL: " + string(input), close_code::not_set
+                url_error,
+                std::format("Failed to parse port number from URL: {}", input),
+                close_code::not_set
             );
         }
 
         return port;
     }
-
+    
     [[nodiscard]] string to_string() const noexcept
     {
-        return protocol_ + "://" + host_ + ":" + std::to_string(port_) + resource_;
+        return std::format("{}://{}:{}{}", protocol_, host_, port_, resource_);
     }
 
     // iostream support

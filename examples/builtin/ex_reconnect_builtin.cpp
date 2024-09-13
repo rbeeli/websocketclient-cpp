@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <format>
 #include <variant>
 #include <expected>
 #include <chrono>
@@ -96,7 +97,7 @@ expected<void, WSError> run()
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
@@ -112,7 +113,7 @@ expected<void, WSError> run()
             }
 
             // error occurred - must close connection
-            logger.log<LogLevel::E>("Error: " + err->message);
+            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
             WS_TRYV(client.close(err->close_with_code));
             return {};
         }

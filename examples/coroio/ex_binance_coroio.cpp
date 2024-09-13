@@ -1,6 +1,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string>
+#include <format>
 #include <chrono>
 
 #include "coroio/all.hpp"
@@ -25,7 +26,7 @@ std::string_view extract_json_property_value(
     const std::string_view& json, const std::string& property_name
 )
 {
-    std::string searchKey = "\"" + property_name + "\":";
+    std::string searchKey = std::format("\"{}\":", property_name);
     size_t startPos = json.find(searchKey);
     if (startPos != std::string::npos)
     {
@@ -206,7 +207,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
@@ -216,7 +217,7 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
         else if (auto err = std::get_if<WSError>(&var))
         {
             // error occurred - must close connection
-            logger.log<LogLevel::E>("Error: " + err->message);
+            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             co_return expected<void, WSError>{};
         }

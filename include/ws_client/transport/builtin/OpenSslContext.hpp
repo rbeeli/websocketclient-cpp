@@ -93,7 +93,7 @@ public:
             SSL_CTX_set_mode(this->ctx, SSL_MODE_AUTO_RETRY);
         else
             SSL_CTX_clear_mode(this->ctx, SSL_MODE_AUTO_RETRY);
-        logger->template log<LogLevel::D>("SSL_MODE_AUTO_RETRY=" + std::to_string(value));
+        logger->template log<LogLevel::D>(std::format("SSL_MODE_AUTO_RETRY={}", value));
         return {};
     }
 
@@ -108,30 +108,30 @@ public:
     [[nodiscard]] expected<void, WSError> load_verify_file(const string& path) noexcept
     {
         if (SSL_CTX_load_verify_file(this->ctx, path.c_str()) != 1)
-            return make_error("Unable to load CA file from: " + path);
-        logger->template log<LogLevel::I>("Loaded certificate file from: " + path);
+            return make_error(std::format("Unable to load CA file from: {}", path));
+        logger->template log<LogLevel::I>(std::format("Loaded certificate file from: {}", path));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_cipher_list(string cipher_list) noexcept
     {
         if (!SSL_CTX_set_cipher_list(this->ctx, cipher_list.c_str()))
-            return make_error("Unable to set cipher list to: " + cipher_list);
-        logger->template log<LogLevel::D>("cipher_list=" + cipher_list);
+            return make_error(std::format("Unable to set cipher list to: {}", cipher_list));
+        logger->template log<LogLevel::D>(std::format("cipher_list={}", cipher_list));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_options(uint64_t options) noexcept
     {
         SSL_CTX_set_options(this->ctx, options);
-        logger->template log<LogLevel::D>("set_options=" + std::to_string(options));
+        logger->template log<LogLevel::D>(std::format("set_options={}", options));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_session_cache_mode(int mode) noexcept
     {
         SSL_CTX_set_session_cache_mode(this->ctx, mode);
-        logger->template log<LogLevel::D>("session_cache_mode=" + std::to_string(mode));
+        logger->template log<LogLevel::D>(std::format("session_cache_mode={}", mode));
         return {};
     }
 
@@ -162,7 +162,9 @@ private:
     [[nodiscard]] static auto make_error(const string& msg) noexcept
     {
         auto errors = get_errors_as_string();
-        return std::unexpected(WSError(WSErrorCode::transport_error, msg + ": " + errors));
+        return std::unexpected(
+            WSError(WSErrorCode::transport_error, std::format("{}: {}", msg, errors))
+        );
     }
 };
 } // namespace ws_client

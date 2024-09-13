@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <format>
 #include <sstream>
 #include <span>
 #include <cstddef>
@@ -88,7 +89,9 @@ public:
             if (colon_pos == std::string::npos)
             {
                 return WS_ERROR(
-                    protocol_error, "Malformed HTTP header line: " + line, close_code::not_set
+                    protocol_error,
+                    std::format("Malformed HTTP header line: {}", line),
+                    close_code::not_set
                 );
             }
 
@@ -101,7 +104,9 @@ public:
             if (header_name.empty())
             {
                 return WS_ERROR(
-                    protocol_error, "Malformed HTTP header line: " + line, close_code::not_set
+                    protocol_error,
+                    std::format("Malformed HTTP header line: {}", line),
+                    close_code::not_set
                 );
             }
 

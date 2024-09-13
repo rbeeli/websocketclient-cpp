@@ -3,6 +3,7 @@
 #include <expected>
 #include <sstream>
 #include <string>
+#include <format>
 #include <map>
 #include <optional>
 
@@ -131,7 +132,7 @@ public:
         request_header_.request_line = {
             .method = "GET", .request_target = url_.resource(), .http_version = "HTTP/1.1"
         };
-        fields.add_if_missing("Host", url_.host() + ":" + std::to_string(url_.port()));
+        fields.add_if_missing("Host", std::format("{}:{}", url_.host(), url_.port()));
         fields.add_if_missing("Upgrade", "websocket");
         fields.add_if_missing("Connection", "Upgrade");
         fields.add_if_missing("Sec-WebSocket-Version", "13");
@@ -142,8 +143,7 @@ public:
         if (permessage_deflate_.has_value() && !fields.contains_key("Sec-WebSocket-Extensions"))
         {
             fields.set(
-                "Sec-WebSocket-Extensions",
-                permessage_deflate_->get_Sec_WebSocket_Extensions_value()
+                "Sec-WebSocket-Extensions", permessage_deflate_->get_SecWebSocketExtensions_value()
             );
         }
 
@@ -158,7 +158,7 @@ public:
         if (logger_->template is_enabled<LogLevel::I>())
         {
             logger_->template log<LogLevel::I>(
-                "Handshake HTTP request headers:\033[1;34m\n" + request + "\033[0m"
+                std::format("Handshake HTTP request headers:\033[1;34m\n{}\033[0m", request)
             );
         }
 #endif
@@ -172,7 +172,7 @@ public:
         if (logger_->template is_enabled<LogLevel::I>())
         {
             logger_->template log<LogLevel::I>(
-                "Handshake HTTP response headers:\033[1;35m\n" + header_str + "\033[0m"
+                std::format("Handshake HTTP response headers:\033[1;35m\n{}\033[0m", header_str)
             );
         }
 #endif
@@ -188,8 +188,11 @@ public:
         {
             return WS_ERROR(
                 protocol_error,
-                "HTTP error during WebSocket handshake response processing: " +
-                    std::to_string(status_line.status_code) + " " + status_line.reason,
+                std::format(
+                    "HTTP error during WebSocket handshake response processing: {} {}",
+                    status_line.status_code,
+                    status_line.reason
+                ),
                 close_code::not_set
             );
         }
@@ -234,7 +237,7 @@ protected:
         {
             return WS_ERROR(
                 protocol_error,
-                "Invalid 'Connection' header, expected: 'Upgrade', got: " + *h_con,
+                std::format("Invalid 'Connection' header, expected: 'Upgrade', got: {}", *h_con),
                 close_code::not_set
             );
         }
@@ -252,7 +255,9 @@ protected:
         {
             return WS_ERROR(
                 protocol_error,
-                "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: " + *h_ext,
+                std::format(
+                    "Invalid 'Sec-WebSocket-Version' header, expected: 13, got: {}", *h_ext
+                ),
                 close_code::not_set
             );
         }
@@ -282,8 +287,11 @@ protected:
         {
             return WS_ERROR(
                 protocol_error,
-                "Invalid 'Sec-WebSocket-Accept' header, expected: " + expected_accept +
-                    ", got: " + *h_ext,
+                std::format(
+                    "Invalid 'Sec-WebSocket-Accept' header, expected: {}, got: {}",
+                    expected_accept,
+                    *h_ext
+                ),
                 close_code::not_set
             );
         }

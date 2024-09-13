@@ -29,7 +29,7 @@ target_compile_definitions(ex_echo_asio PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
     WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
     WS_CLIENT_LOG_HANDSHAKE=1
-    WS_CLIENT_LOG_MSG_PAYLOADS=0
+    WS_CLIENT_LOG_MSG_PAYLOADS=1
     WS_CLIENT_LOG_MSG_SIZES=1
     WS_CLIENT_LOG_FRAMES=1
     WS_CLIENT_LOG_COMPRESSION=1
