@@ -250,11 +250,10 @@ public:
         std::string filename_loc = std::format(
             "{}:{}", extract_log_file_name(loc.file_name()), loc.line()
         );
-        msg << ' ' << std::left << std::setw(20) << filename_loc //
-            << color << " ";
+        msg << ' ' << std::left << std::setw(20) << filename_loc;
 
         // write message
-        msg << message << "\x1b[0m" << '\n';
+        msg << ": " << color << message << "\x1b[0m" << '\n';
 
         {
             // synchronize clog output
