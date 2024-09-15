@@ -1,4 +1,3 @@
-#include <iostream>
 #include <signal.h>
 #include <string>
 #include <format>
@@ -21,13 +20,25 @@ using namespace ws_client;
 
 asio::awaitable<expected<void, WSError>> run()
 {
+    auto executor = co_await asio::this_coro::executor;
+
+    // websocketclient logger
+    ConsoleLogger logger{LogLevel::D};
+    logger.set_level(LogTopic::DNS, LogLevel::D);
+    logger.set_level(LogTopic::TCP, LogLevel::D);
+    logger.set_level(LogTopic::Handshake, LogLevel::D);
+    logger.set_level(LogTopic::RecvFrame, LogLevel::D);
+    logger.set_level(LogTopic::RecvFramePayload, LogLevel::D);
+    logger.set_level(LogTopic::SendFrame, LogLevel::D);
+    logger.set_level(LogTopic::SendFramePayload, LogLevel::D);
+
     // parse URL
     WS_CO_TRY(url, URL::parse("wss://echo.websocket.org/"));
 
-    auto executor = co_await asio::this_coro::executor;
     asio::ip::tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
-
+    auto [ec1, endpoints] = co_await resolver.async_resolve(url->host(), "https", asio::as_tuple(asio::use_awaitable));
+    if (ec1)
+        co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
 
     asio::ssl::context ctx(asio::ssl::context::tlsv13);
     ctx.set_default_verify_paths();
@@ -38,24 +49,26 @@ asio::awaitable<expected<void, WSError>> run()
     ctx.set_verify_mode(asio::ssl::verify_peer);
     ctx.set_verify_callback(asio::ssl::host_name_verification(url->host()));
 
-    std::cout << "Connecting to " << url->host() << "... \n";
+    logger.log<LogLevel::I, LogTopic::TCP>(std::format("Connecting to {}", url->host()));
     asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
-    co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
-    std::cout << "Connected\n";
+    auto [ec2, addr] = co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::as_tuple(asio::use_awaitable));
+    if (ec2)
+        co_return WS_ERROR(transport_error, ec2.message(), close_code::not_set);
+    logger.log<LogLevel::I, LogTopic::TCP>(std::format("Connected to {}:{}", addr.address().to_string(), addr.port()));
 
     // Set SNI Hostname (many servers need this to handshake successfully)
-    if (!SSL_set_tlsext_host_name(socket.native_handle(), "echo.websocket.org"))
+    if (!SSL_set_tlsext_host_name(socket.native_handle(), url->host().c_str()))
     {
         asio::error_code ec{static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
         throw asio::system_error(ec);
     }
 
-    co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
-    std::cout << "Handshake ok\n";
+    auto [ec3] = co_await socket.async_handshake(asio::ssl::stream_base::client, asio::as_tuple(asio::use_awaitable));
+    if (ec3)
+        co_return WS_ERROR(transport_error, ec3.message(), close_code::not_set);
+    logger.log<LogLevel::I, LogTopic::SSL>("SSL handshake successful");
 
-    // websocketclient logger
-    ConsoleLogger<LogLevel::D> logger;
-
+    // wrap ASIO socket for websocketclient
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 
     // websocket client
@@ -87,32 +100,32 @@ asio::awaitable<expected<void, WSError>> run()
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
-            logger.log<LogLevel::D>("Ping frame received");
+            logger.log<LogLevel::D, LogTopic::RecvFrame>("Ping frame received");
             WS_CO_TRYV(co_await client.send_pong_frame(
                 ping_frame->payload_bytes(), std::chrono::seconds{10}
             ));
         }
         else if (std::get_if<PongFrame>(&var))
         {
-            logger.log<LogLevel::D>("Pong frame received");
+            logger.log<LogLevel::D, LogTopic::RecvFrame>("Pong frame received");
         }
         else if (auto close_frame = std::get_if<CloseFrame>(&var))
         {
             // server initiated close
             if (close_frame->has_reason())
             {
-                logger.log<LogLevel::I>(
+                logger.log<LogLevel::I, LogTopic::RecvFrame>(
                     std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
-                logger.log<LogLevel::I>("Close frame received");
+                logger.log<LogLevel::I, LogTopic::RecvFrame>("Close frame received");
             break;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
             // error occurred - must close connection
-            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
+            logger.log<LogLevel::E, LogTopic::RecvFrame>(std::format("Error: {}", err->message));
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             co_return expected<void, WSError>{};
         }

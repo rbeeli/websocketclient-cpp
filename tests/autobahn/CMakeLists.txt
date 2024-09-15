@@ -43,10 +43,10 @@ target_link_libraries(autobahn_asio_zlib_ng_utf_simd PRIVATE
     asio::asio
     websocketclient)
 target_compile_definitions(autobahn_asio_zlib_ng_utf_simd PRIVATE
-    WS_CLIENT_USE_ZLIB_NG=1 # use zlib-ng instead of zlib
-    WS_CLIENT_USE_SIMD_UTF8=1 # use simdutf for utf-8 validation
     ASIO_STANDALONE=1
     ASIO_NO_TYPEID=1
+    WS_CLIENT_USE_ZLIB_NG=1 # use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=1 # use simdutf for utf-8 validation
     WS_AUTOBAHN_AGENT_NAME="asio_zlib_ng_utf_simd"
 )
 

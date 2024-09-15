@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 
+#include "ws_client/config.hpp"
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
@@ -18,8 +19,8 @@ using std::byte;
  */
 TEST(PermessageDeflateContext, init)
 {
-    ConsoleLogger<LogLevel::D> logger;
-    PermessageDeflate<ConsoleLogger<LogLevel::D>> pd{
+    ConsoleLogger logger{LogLevel::D};
+    PermessageDeflate<decltype(logger)> pd{
         .logger = &logger,
         .server_max_window_bits = 15,
         .client_max_window_bits = 15,
@@ -29,14 +30,14 @@ TEST(PermessageDeflateContext, init)
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     };
 
-    PermessageDeflateContext<ConsoleLogger<LogLevel::D>> ctx{&logger, pd};
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
     EXPECT_TRUE(ctx.init().has_value());
 }
 
 TEST(PermessageDeflateContext, compress_empty)
 {
-    ConsoleLogger<LogLevel::D> logger;
-    PermessageDeflate<ConsoleLogger<LogLevel::D>> pd{
+    ConsoleLogger logger{LogLevel::D};
+    PermessageDeflate<decltype(logger)> pd{
         .logger = &logger,
         .server_max_window_bits = 15,
         .client_max_window_bits = 15,
@@ -46,7 +47,7 @@ TEST(PermessageDeflateContext, compress_empty)
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     };
 
-    PermessageDeflateContext<ConsoleLogger<LogLevel::D>> ctx{&logger, pd};
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
     EXPECT_TRUE(ctx.init().has_value());
 
     span<byte> payload{};
@@ -64,8 +65,8 @@ TEST(PermessageDeflateContext, compress_empty)
 
 TEST(PermessageDeflateContext, decompress_empty)
 {
-    ConsoleLogger<LogLevel::D> logger;
-    PermessageDeflate<ConsoleLogger<LogLevel::D>> pd{
+    ConsoleLogger logger{LogLevel::D};
+    PermessageDeflate<decltype(logger)> pd{
         .logger = &logger,
         .server_max_window_bits = 15,
         .client_max_window_bits = 15,
@@ -75,7 +76,7 @@ TEST(PermessageDeflateContext, decompress_empty)
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     };
 
-    PermessageDeflateContext<ConsoleLogger<LogLevel::D>> ctx{&logger, pd};
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
     EXPECT_TRUE(ctx.init().has_value());
 
     uint8_t buf[] = {0x02, 0x00, 0x00, 0x00, 0xff, 0xff};
@@ -93,8 +94,8 @@ TEST(PermessageDeflateContext, decompress_empty)
 
 TEST(PermessageDeflateContext, decompress_hello)
 {
-    ConsoleLogger<LogLevel::D> logger;
-    PermessageDeflate<ConsoleLogger<LogLevel::D>> pd{
+    ConsoleLogger logger{LogLevel::D};
+    PermessageDeflate<decltype(logger)> pd{
         .logger = &logger,
         .server_max_window_bits = 15,
         .client_max_window_bits = 15,
@@ -104,7 +105,7 @@ TEST(PermessageDeflateContext, decompress_hello)
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     };
 
-    PermessageDeflateContext<ConsoleLogger<LogLevel::D>> ctx{&logger, pd};
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
     EXPECT_TRUE(ctx.init().has_value());
 
     // Hello
@@ -125,8 +126,8 @@ TEST(PermessageDeflateContext, decompress_hello)
 
 TEST(PermessageDeflateContext, compress_decompress_loop)
 {
-    ConsoleLogger<LogLevel::D> logger;
-    PermessageDeflate<ConsoleLogger<LogLevel::D>> pd{
+    ConsoleLogger logger{LogLevel::D};
+    PermessageDeflate<decltype(logger)> pd{
         .logger = &logger,
         .server_max_window_bits = 15,
         .client_max_window_bits = 15,
@@ -136,7 +137,7 @@ TEST(PermessageDeflateContext, compress_decompress_loop)
         .compress_buffer_size = 100 * 1024 * 1024,   // 100 MB
     };
 
-    PermessageDeflateContext<ConsoleLogger<LogLevel::D>> ctx{&logger, pd};
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
     EXPECT_TRUE(ctx.init().has_value());
 
     uint8_t buf[] = {0xf2, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00};

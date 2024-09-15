@@ -10,7 +10,7 @@
 #include <span>
 #include <map>
 
-#ifdef WS_CLIENT_USE_ZLIB_NG
+#if WS_CLIENT_USE_ZLIB_NG > 0
 #include <zlib-ng.h>
 #define WS_CLIENT_USE_ZLIB_NG_BOOL true
 #define z_stream zng_stream
@@ -127,21 +127,22 @@ struct PermessageDeflate
      */
     [[nodiscard]] expected<bool, WSError> negotiate(const HttpResponseHeader& response)
     {
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
-        {
-            logger->template log<LogLevel::D>(
-                this->zlib_ng ? "Using zlib-ng compression library"
-                              : "Using standard zlib compression library"
-            );
-        }
+#if WS_CLIENT_LOG_COMPRESSION > 0
+        logger->template log<LogLevel::D, LogTopic::Compression>(
+            this->zlib_ng ? "Using zlib-ng compression library"
+                          : "Using standard zlib compression library"
+        );
+#endif
 
         auto h_ext = response.fields.get_first("Sec-WebSocket-Extensions");
         if (h_ext == std::nullopt)
         {
-            logger->template log<LogLevel::W>(
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            logger->template log<LogLevel::W, LogTopic::Handshake>(
                 "HTTP response without 'Sec-WebSocket-Extensions' header, disabling "
                 "permessage-deflate extension."
             );
+#endif
             return false;
         }
 
@@ -150,10 +151,12 @@ struct PermessageDeflate
         // verify permessage-deflate exists
         if (extensions.find("permessage-deflate") == extensions.end())
         {
-            logger->template log<LogLevel::W>(
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            logger->template log<LogLevel::W, LogTopic::Handshake>(
                 "permessage-deflate extension not in 'Sec-WebSocket-Extensions' header, "
                 "disabling extension."
             );
+#endif
             return false;
         }
 
@@ -162,10 +165,10 @@ struct PermessageDeflate
         WS_TRY(res3, this->negotiate_server_max_window_bits(extensions));
         WS_TRY(res4, this->negotiate_client_max_window_bits(extensions));
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-        if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+        if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>()) [[unlikely]]
         {
-            logger->template log<LogLevel::D>(std::format(
+            logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                 "Negotiated permessage-deflate parameters:\n"
                 " - server_max_window_bits:      {}\n"
                 " - client_max_window_bits:      {}\n"
@@ -200,10 +203,10 @@ struct PermessageDeflate
             {
                 this->server_no_context_takeover = false; // adjust configured value!
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-                if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+                if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>()) [[unlikely]]
                 {
-                    logger->template log<LogLevel::D>(std::format(
+                    logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                         "server_no_context_takeover adjusted from {:d} to 0",
                         this->server_no_context_takeover
                     ));
@@ -213,10 +216,10 @@ struct PermessageDeflate
         }
         else if (extensions.find("server_no_context_takeover") != extensions.end())
         {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-            if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>()) [[unlikely]]
             {
-                logger->template log<LogLevel::D>(std::format(
+                logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                     "server_no_context_takeover adjusted from {:d} to 1",
                     this->server_no_context_takeover
                 ));
@@ -246,10 +249,10 @@ struct PermessageDeflate
         }
         else if (extensions.find("client_no_context_takeover") != extensions.end())
         {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-            if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>()) [[unlikely]]
             {
-                logger->template log<LogLevel::D>(std::format(
+                logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                     "client_no_context_takeover adjusted from {:d} to 1",
                     this->client_no_context_takeover
                 ));
@@ -277,10 +280,10 @@ struct PermessageDeflate
         {
             if (extensions.find("server_max_window_bits") == extensions.end())
             {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-                if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+                if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>()) [[unlikely]]
                 {
-                    logger->template log<LogLevel::D>(std::format(
+                    logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                         "server_max_window_bits={} not acknowledged by server, use default value "
                         "{}",
                         this->server_max_window_bits,
@@ -323,10 +326,10 @@ struct PermessageDeflate
 
                 if (this->server_max_window_bits != res_value)
                 {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-                    if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+                    if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>())
                     {
-                        logger->template log<LogLevel::D>(std::format(
+                        logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                             "server_max_window_bits adjusted from {} to {}",
                             this->server_max_window_bits,
                             res_value
@@ -356,10 +359,10 @@ struct PermessageDeflate
 
             this->server_max_window_bits = res_value;
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-            if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>())
             {
-                logger->template log<LogLevel::D>(std::format(
+                logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                     "server_max_window_bits adjusted from {} to {}",
                     this->server_max_window_bits,
                     res_value
@@ -371,10 +374,10 @@ struct PermessageDeflate
         {
             this->server_max_window_bits = default_server_max_window_bits;
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-            if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            if (logger->template is_enabled<LogLevel::I, LogTopic::Handshake>())
             {
-                logger->template log<LogLevel::I>(std::format(
+                logger->template log<LogLevel::I, LogTopic::Handshake>(std::format(
                     "Using default server_max_window_bits: {}", this->server_max_window_bits
                 ));
             }
@@ -400,10 +403,10 @@ struct PermessageDeflate
         {
             if (extensions.find("client_max_window_bits") == extensions.end())
             {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-                if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+                if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>())
                 {
-                    logger->template log<LogLevel::D>(std::format(
+                    logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                         "client_max_window_bits={} not acknowledged by server, use default value "
                         "{}",
                         this->client_max_window_bits,
@@ -447,10 +450,10 @@ struct PermessageDeflate
 
                 if (this->client_max_window_bits != res_value)
                 {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-                    if (logger->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+                    if (logger->template is_enabled<LogLevel::D, LogTopic::Handshake>())
                     {
-                        logger->template log<LogLevel::D>(std::format(
+                        logger->template log<LogLevel::D, LogTopic::Handshake>(std::format(
                             "client_max_window_bits adjusted from {} to {}",
                             this->client_max_window_bits,
                             res_value
@@ -502,10 +505,10 @@ struct PermessageDeflate
         {
             this->client_max_window_bits = default_client_max_window_bits;
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-            if (logger->template is_enabled<LogLevel::I>()) [[unlikely]]
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+            if (logger->template is_enabled<LogLevel::I, LogTopic::Handshake>())
             {
-                logger->template log<LogLevel::I>(std::format(
+                logger->template log<LogLevel::I, LogTopic::Handshake>(std::format(
                     "Using default client_max_window_bits: {}", this->client_max_window_bits
                 ));
             }
@@ -766,10 +769,10 @@ public:
             size += avail.size() - istate_->avail_out;
         } while (istate_->avail_out == 0);
 
-#if WS_CLIENT_LOG_COMPRESSION == 1
-        if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_COMPRESSION > 0
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::Compression>())
         {
-            logger_->template log<LogLevel::D>(
+            logger_->template log<LogLevel::D, LogTopic::Compression>(
                 std::format("compression ratio: {:.3f}", static_cast<double>(size) / input.size())
             );
         }
@@ -840,10 +843,10 @@ public:
             output.discard_end(ostate_->avail_out);
         } while (ostate_->avail_out == 0);
 
-#if WS_CLIENT_LOG_COMPRESSION == 1
-        if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_COMPRESSION > 0
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::Compression>())
         {
-            logger_->template log<LogLevel::D>(
+            logger_->template log<LogLevel::D, LogTopic::Compression>(
                 std::format("compression ratio: {:.3f}", static_cast<double>(input.size()) / size)
             );
         }

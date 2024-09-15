@@ -138,14 +138,18 @@ public:
      */
     [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept
     {
-        logger_->template log<LogLevel::D>("Cancelling socket operations");
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>("Cancelling socket operations");
+#endif
 
         // cancel all outstanding asynchronous operations
         socket_.lowest_layer().cancel();
 
         if constexpr (std::is_same<SocketType, asio::ssl::stream<asio::ip::tcp::socket>>::value)
         {
-            logger_->template log<LogLevel::D>("SSL before async_shutdown");
+#if WS_CLIENT_LOG_SSL > 0
+            logger_->template log<LogLevel::D, LogTopic::SSL>("SSL before async_shutdown");
+#endif
 
             // asynchronously shut down the SSL connection, but don't wait.
             // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
@@ -159,17 +163,22 @@ public:
             );
             timer.cancel();
 
-            // check if timed out
+            // check if timed out (ignore error)
             if (res.index() == 1)
             {
-                logger_->template log<LogLevel::W>("SSL async_shutdown timed out");
+#if WS_CLIENT_LOG_SSL > 0
+                logger_->template log<LogLevel::W, LogTopic::SSL>("SSL async_shutdown timed out");
+
+#endif
             }
 
             if (ec1 && ec1 != asio::error::eof)
                 co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
         }
 
-        logger_->template log<LogLevel::D>("TCP before shutdown");
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>("TCP before shutdown");
+#endif
 
         // shut down the (underlying) TCP connection
         asio::error_code ec;
@@ -177,7 +186,9 @@ public:
         if (ec && ec != asio::error::eof)
             co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
-        logger_->template log<LogLevel::D>("TCP after shutdown");
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>("TCP after shutdown");
+#endif
 
         co_return expected<void, WSError>{};
     }
@@ -190,14 +201,18 @@ public:
     {
         asio::error_code ec;
 
-        logger_->template log<LogLevel::D>("TCP before close");
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>("TCP before close");
+#endif
 
         // close the underlying socket
         socket_.lowest_layer().close(ec);
         if (ec)
             co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
 
-        logger_->template log<LogLevel::I>("TCP connection closed");
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::I, LogTopic::TCP>("TCP connection closed");
+#endif
 
         co_return expected<void, WSError>{};
     }

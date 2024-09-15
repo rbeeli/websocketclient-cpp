@@ -102,10 +102,13 @@ public:
         if (fd_ != -1)
             return WS_ERROR(logic_error, "TCP socket already initialized", close_code::not_set);
 
-        // create a socket based on family (IPv4 or IPv6)
-        logger_->template log<LogLevel::D>(
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(
             std::format("Creating socket (family={})", address_.family())
         );
+#endif
+
+        // create a socket based on family (IPv4 or IPv6)
         fd_ = ::socket(address_.family(), SOCK_STREAM, 0);
         if (fd_ == -1)
         {
@@ -128,7 +131,10 @@ public:
         // enable quickack by default (if available on platform)
         WS_TRYV(this->set_TCP_QUICKACK(true));
 
-        logger_->template log<LogLevel::D>(std::format("Socket created (fd={})", fd_));
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(std::format("Socket created (fd={})", fd_)
+        );
+#endif
 
         return {};
     }
@@ -191,10 +197,11 @@ public:
 
         connected_ = true;
 
-        if (logger_->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_TCP > 0
+        if (logger_->template is_enabled<LogLevel::I, LogTopic::TCP>())
         {
             auto elapsed = timeout.template elapsed<std::chrono::microseconds>();
-            logger_->template log<LogLevel::I>(std::format(
+            logger_->template log<LogLevel::I, LogTopic::TCP>(std::format(
                 "Connected to {}:{} ({}) in {} µs",
                 address_.hostname(),
                 address_.port(),
@@ -202,6 +209,7 @@ public:
                 elapsed.count()
             ));
         }
+#endif
 
         return {};
     }
@@ -215,7 +223,9 @@ public:
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_error(ret, "set TCP_NODELAY"));
-        logger_->template log<LogLevel::D>(std::format("TCP_NODELAY={}", value));
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(std::format("TCP_NODELAY={}", value));
+#endif
         return {};
     }
 
@@ -238,7 +248,9 @@ public:
                 transport_error, "Failed to set socket to non-blocking", close_code::not_set
             );
 
-        logger_->template log<LogLevel::D>(std::format("O_NONBLOCK={}", value));
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(std::format("O_NONBLOCK={}", value));
+#endif
 
         return {};
     }
@@ -250,9 +262,11 @@ public:
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_RCVBUF"));
-        logger_->template log<LogLevel::D>(
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(
             std::format("socket receive buffer size SO_RCVBUF={}", buffer_size)
         );
+#endif
         return {};
     }
 
@@ -263,9 +277,11 @@ public:
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_SNDBUF"));
-        logger_->template log<LogLevel::D>(
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(
             std::format("socket send buffer size SO_SNDBUF={}", buffer_size)
         );
+#endif
         return {};
     }
 
@@ -283,7 +299,9 @@ public:
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_QUICKACK, (char*)&flag, sizeof(int));
         WS_TRYV(this->check_error(ret, "set TCP_QUICKACK"));
-        logger_->template log<LogLevel::D>(std::format("TCP_QUICKACK={}", value));
+#if WS_CLIENT_LOG_TCP > 0
+        logger_->template log<LogLevel::D, LogTopic::TCP>(std::format("TCP_QUICKACK={}", value));
+#endif
 #endif
         return {};
     }
@@ -464,12 +482,19 @@ public:
     {
         if (fd_ != -1)
         {
-            logger_->template log<LogLevel::D>(std::format("Shutting down socket (fd={})", fd_));
+#if WS_CLIENT_LOG_TCP > 0
+            logger_->template log<LogLevel::D, LogTopic::TCP>(
+                std::format("Shutting down socket (fd={})", fd_)
+            );
+#endif
+
             int ret = ::shutdown(fd_, SHUT_RDWR);
             if (ret != 0)
             {
                 auto err = make_error(ret, "Shutdown of socket failed");
-                logger_->template log<LogLevel::W>(err.error().message);
+#if WS_CLIENT_LOG_TCP > 0
+                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().message);
+#endif
                 return err;
             }
         }
@@ -484,12 +509,19 @@ public:
     {
         if (fd_ != -1)
         {
-            logger_->template log<LogLevel::D>(std::format("Closing socket (fd={})", fd_));
+#if WS_CLIENT_LOG_TCP > 0
+            logger_->template log<LogLevel::D, LogTopic::TCP>(
+                std::format("Closing socket (fd={})", fd_)
+            );
+#endif
+
             int ret = ::close(fd_);
             if (ret != 0)
             {
                 auto err = make_error(ret, "Socket close failed");
-                logger_->template log<LogLevel::W>(err.error().message);
+#if WS_CLIENT_LOG_TCP > 0
+                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().message);
+#endif
                 return err;
             }
             fd_ = -1;

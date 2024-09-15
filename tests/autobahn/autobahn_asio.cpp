@@ -14,11 +14,6 @@
 #include <asio/experimental/awaitable_operators.hpp>
 #include <asio/ssl.hpp>
 
-#define WS_CLIENT_LOG_HANDSHAKE 0
-#define WS_CLIENT_LOG_MSG_PAYLOADS 0
-#define WS_CLIENT_LOG_MSG_SIZES 0
-#define WS_CLIENT_LOG_FRAMES 0
-
 #include "ws_client/ws_client_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
 #include "ws_client/PermessageDeflate.hpp"
@@ -62,7 +57,7 @@ using asio::ip::tcp;
     tcp::socket socket1(executor);
     co_await asio::async_connect(socket1, endpoints, asio::use_awaitable);
 
-    ConsoleLogger<LogLevel::E> logger;
+    ConsoleLogger logger{LogLevel::E};
     auto socket = AsioSocket(&logger, std::move(socket1));
     auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(
         &logger, std::move(socket)
@@ -121,7 +116,7 @@ using asio::ip::tcp;
     co_await asio::async_connect(socket1, endpoints, asio::use_awaitable);
     socket1.lowest_layer().set_option(tcp::no_delay(true));
 
-    ConsoleLogger<LogLevel::E> logger;
+    ConsoleLogger logger{LogLevel::E};
     auto socket = AsioSocket(&logger, std::move(socket1));
     auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(socket)>(
         &logger, std::move(socket)

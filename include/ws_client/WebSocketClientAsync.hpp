@@ -428,28 +428,32 @@ public:
                 {
                     co_return WSError(
                         WSErrorCode::protocol_error,
-                        "Invalid UTF-8 in websocket text message.",
+                        "Invalid UTF-8 in websocket TEXT message.",
                         close_code::invalid_frame_payload_data
                     );
                 }
 #endif
 
-                if (logger_->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_RECV_FRAME > 0
+                if (logger_->template is_enabled<LogLevel::I, LogTopic::RecvFrame>())
                 {
-#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
-                    logger_->template log<LogLevel::I>(std::format(
-                        "Received text message ({} bytes):\033[1;35m\n{}\033[0m",
-                        payload_buffer.size(),
-                        string(
+                    logger_->template log<LogLevel::I, LogTopic::RecvFrame>(
+                        std::format("Received TEXT message with {} bytes", payload_buffer.size())
+                    );
+                }
+#endif
+
+#if WS_CLIENT_LOG_RECV_FRAME_PAYLOAD > 0
+                if (logger_->template is_enabled<LogLevel::I, LogTopic::RecvFramePayload>())
+                {
+                    logger_->template log<LogLevel::I, LogTopic::RecvFramePayload>(std::format(
+                        "Message payload:\033[1;35m\n{}\033[0m",
+                        std::string_view(
                             reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
                         )
                     ));
-#elif WS_CLIENT_LOG_MSG_SIZES == 1
-                    logger_->template log<LogLevel::I>(
-                        std::format("Received text message ({} bytes)", payload_buffer.size())
-                    );
-#endif
                 }
+#endif
 
                 auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
 
@@ -461,22 +465,27 @@ public:
 
             case opcode::binary:
             {
-                if (logger_->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_RECV_FRAME > 0
+                if (logger_->template is_enabled<LogLevel::I, LogTopic::RecvFrame>())
                 {
-#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
-                    logger_->template log<LogLevel::I>(std::format(
-                        "Received binary message ({} bytes):\033[1;35m\n{}\033[0m",
+                    logger_->template log<LogLevel::I, LogTopic::RecvFrame>(
+                        std::format("Received BINARY message with {} bytes", payload_buffer.size())
+                    );
+                }
+#endif
+
+#if WS_CLIENT_LOG_RECV_FRAME_PAYLOAD > 0
+                if (logger_->template is_enabled<LogLevel::I, LogTopic::RecvFramePayload>())
+                {
+                    logger_->template log<LogLevel::I, LogTopic::RecvFramePayload>(std::format(
+                        "Received BINARY message ({} bytes):\033[1;35m\n{}\033[0m",
                         payload_buffer.size(),
                         string(
                             reinterpret_cast<char*>(payload_buffer.data()), payload_buffer.size()
                         )
                     ));
-#elif WS_CLIENT_LOG_MSG_SIZES == 1
-                    logger_->template log<LogLevel::I>(
-                        std::format("Received binary message ({} bytes)", payload_buffer.size())
-                    );
-#endif
                 }
+#endif
 
                 auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
 
@@ -517,21 +526,23 @@ public:
             );
         }
 
-        if (logger_->template is_enabled<LogLevel::I>()) [[unlikely]]
+#if WS_CLIENT_LOG_SEND_FRAME > 0
+        if (logger_->template is_enabled<LogLevel::I, LogTopic::SendFrame>()) [[unlikely]]
         {
-#if WS_CLIENT_LOG_MSG_PAYLOADS == 1
-            logger_->template log<LogLevel::I>(std::format(
-                "Writing {} message ({} bytes):\033[1;34m\n{}\033[0m",
-                to_string(msg.type),
-                msg.data.size(),
-                msg.to_string_view()
+            logger_->template log<LogLevel::I, LogTopic::SendFrame>(std::format(
+                "Writing {} message with {} bytes", to_string(msg.type), msg.data.size()
             ));
-#elif WS_CLIENT_LOG_MSG_SIZES == 1
-            logger_->template log<LogLevel::I>(
-                std::format("Writing {} message ({} bytes)", to_string(msg.type), msg.data.size())
-            );
-#endif
         }
+#endif
+
+#if WS_CLIENT_LOG_SEND_FRAME_PAYLOAD > 0
+        if (logger_->template is_enabled<LogLevel::I, LogTopic::SendFramePayload>()) [[unlikely]]
+        {
+            logger_->template log<LogLevel::I, LogTopic::SendFramePayload>(
+                std::format("Message payload:\033[1;34m\n{}\033[0m", msg.to_string_view())
+            );
+        }
+#endif
 
         Frame frame;
         frame.set_opcode(static_cast<opcode>(msg.type));
@@ -609,9 +620,11 @@ public:
             auto res = co_await this->send_close_frame(code, timeout);
             if (!res.has_value())
             {
-                logger_->template log<LogLevel::W>(
+#if WS_CLIENT_LOG_SEND_FRAME > 0
+                logger_->template log<LogLevel::W, LogTopic::SendFrame>(
                     std::format("Failed to send close frame: {}", res.error().message)
                 );
+#endif
             }
         }
 
@@ -628,9 +641,11 @@ public:
             auto res = co_await this->socket_.underlying().close();
             if (!res.has_value())
             {
-                logger_->template log<LogLevel::W>(
+#if WS_CLIENT_LOG_TCP > 0
+                logger_->template log<LogLevel::W, LogTopic::TCP>(
                     std::format("Socket close failed: {}", res.error().message)
                 );
+#endif
                 co_return std::unexpected(res.error());
             }
         }
@@ -692,11 +707,12 @@ private:
             );
         }
 
-#if WS_CLIENT_LOG_FRAMES == 1
-        if (logger_->template is_enabled<LogLevel::D>()) [[unlikely]]
+#if WS_CLIENT_LOG_RECV_FRAME > 0
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::SendFrame>()) [[unlikely]]
         {
-            logger_->template log<LogLevel::D>(std::format(
-                "Received {} frame rsv={:d} {:d} {:d} control={:d} final={:d} masked={:d} payload_size={}",
+            logger_->template log<LogLevel::D, LogTopic::SendFrame>(std::format(
+                "Received {} frame rsv={:d} {:d} {:d} control={:d} final={:d} masked={:d} "
+                "payload_size={}",
                 to_string(frame.header.op_code()),
                 frame.header.rsv1_bit(),
                 frame.header.rsv2_bit(),
@@ -716,11 +732,12 @@ private:
         Frame& frame, span<byte> payload, Timeout<>& timeout
     ) noexcept
     {
-#if WS_CLIENT_LOG_FRAMES == 1
-        if (logger_->template is_enabled<LogLevel::D>())
+#if WS_CLIENT_LOG_SEND_FRAME > 0
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::SendFrame>())
         {
-            logger_->template log<LogLevel::D>(std::format(
-                "Writing {} frame rsv={:d} {:d} {:d} control={:d} final={:d} masked={:d} payload_size={}",
+            logger_->template log<LogLevel::D, LogTopic::SendFrame>(std::format(
+                "Writing {} frame rsv={:d} {:d} {:d} control={:d} final={:d} masked={:d} "
+                "payload_size={}",
                 to_string(frame.header.op_code()),
                 frame.header.rsv1_bit(),
                 frame.header.rsv2_bit(),
@@ -801,21 +818,27 @@ private:
             std::memcpy(this->write_buffer_.data() + 125, &status_code_n, sizeof(uint16_t));
             payload = this->write_buffer_.subspan(125, sizeof(uint16_t));
 
-            logger_->template log<LogLevel::I>(std::format(
+#if WS_CLIENT_LOG_SEND_FRAME > 0
+            logger_->template log<LogLevel::I, LogTopic::SendFrame>(std::format(
                 "Writing close frame with status {} {}", static_cast<int>(code), to_string(code)
             ));
+#endif
         }
         else
         {
+#if WS_CLIENT_LOG_SEND_FRAME > 0
             // close frame without status code
-            logger_->template log<LogLevel::I>("Writing close frame");
+            logger_->template log<LogLevel::I, LogTopic::SendFrame>("Writing close frame");
+#endif
         }
 
         frame.set_payload_size(payload.size());
 
         WS_CO_TRY(ret, co_await this->write_frame(frame, payload, timeout));
 
-        logger_->template log<LogLevel::D>("Close frame sent");
+#if WS_CLIENT_LOG_SEND_FRAME > 0
+        logger_->template log<LogLevel::D, LogTopic::SendFrame>("Close frame sent");
+#endif
 
         co_return expected<void, WSError>{};
     }
@@ -857,11 +880,15 @@ private:
         {
             case opcode::close:
             {
+#if WS_CLIENT_LOG_RECV_FRAME > 0
                 if (!this->closed_)
                 {
                     // close frame sent by server
-                    logger_->template log<LogLevel::W>("Unsolicited close frame received");
+                    logger_->template log<LogLevel::W, LogTopic::RecvFrame>(
+                        "Unsolicited close frame received"
+                    );
                 }
+#endif
 
                 CloseFrame close_frame(frame.payload_size);
 

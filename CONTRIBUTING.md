@@ -4,9 +4,12 @@ Pull requests and issues are welcome.
 
 ## TODOs
 
-- Git builds
-- auto fragmentation write
-- timeout for DnsResolver
+- Source location in logging seems off
+- More default logging of control frames
+- Do not call shutdown if connection is already closed/errored
+- Git automatic builds
+- Auto fragmentation when writing large messages?
+- Timeout support for DnsResolver
 
 ## Useful resources
 

@@ -176,7 +176,9 @@ public:
         if (ret != 1)
             return ssl_error(ret, "Unable to set hostname");
 
-        logger_->template log<LogLevel::I>(std::format("hostname={}", hostname));
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::I, LogTopic::SSL>(std::format("hostname={}", hostname));
+#endif
 
         return {};
     }
@@ -193,7 +195,9 @@ public:
         else
             SSL_set_verify(ssl_, SSL_VERIFY_NONE, nullptr);
 
-        logger_->template log<LogLevel::I>(std::format("verify_peer={}", value));
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::I, LogTopic::SSL>(std::format("verify_peer={}", value));
+#endif
 
         return {};
     }
@@ -210,7 +214,9 @@ public:
         if (ret != 1)
             return ssl_error(ret, "Unable to set cipher list");
 
-        logger_->template log<LogLevel::I>(std::format("cipher_list={}", ciphers));
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::I, LogTopic::SSL>(std::format("cipher_list={}", ciphers));
+#endif
 
         return {};
     }
@@ -235,9 +241,11 @@ public:
         if (ret != 1)
             return ssl_error(ret, std::format("Unable to set max. TLS version: {}", max_version));
 
-        logger_->template log<LogLevel::I>(
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::I, LogTopic::SSL>(
             std::format("tls_version_range={} to {}", min_version, max_version)
         );
+#endif
 
         return {};
     }
@@ -278,9 +286,14 @@ public:
         // regsiter info callback
         SSL_set_info_callback(ssl_, OpenSslSocket<TLogger>::ssl_info_callback<TLogger>);
 
-        logger_->template log<LogLevel::D>(
-            std::format("OpenSslSocket created (fd={})", socket_.fd())
-        );
+#if WS_CLIENT_LOG_SSL > 0
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::SSL>())
+        {
+            logger_->template log<LogLevel::D, LogTopic::SSL>(
+                std::format("OpenSslSocket created (fd={})", socket_.fd())
+            );
+        }
+#endif
 
         return {};
     }
@@ -575,9 +588,11 @@ public:
                         // use select() to wait for the socket to get ready
                         WS_TRY(ready, ssl_select(timeout, ssl_err));
                         if (!ready.value())
+                        {
                             return WS_ERROR(
                                 timeout_error, "SSL shutdown timed out", close_code::not_set
                             );
+                        }
                     }
                     else if (ssl_err == SSL_ERROR_SYSCALL)
                     {
@@ -588,13 +603,17 @@ public:
                     else
                     {
                         auto err = ssl_error(ssl_err, "SSL shutdown failed");
-                        logger_->template log<LogLevel::W>(err.error().message);
+#if WS_CLIENT_LOG_SSL > 0
+                        logger_->template log<LogLevel::W, LogTopic::SSL>(err.error().message);
+#endif
                         return err;
                     }
                 }
             } while (ret != 1 && !timeout.is_expired());
 
-            logger_->template log<LogLevel::D>("SSL layer shutdown successfully");
+#if WS_CLIENT_LOG_SSL > 0
+            logger_->template log<LogLevel::D, LogTopic::SSL>("SSL layer shutdown successfully");
+#endif
         }
 
         // shutdown the underlying TCP socket
@@ -614,7 +633,7 @@ public:
         {
             SSL_free(ssl_);
             ssl_ = nullptr;
-            logger_->template log<LogLevel::D>("SSL freed");
+            logger_->template log<LogLevel::D, LogTopic::SSL>("SSL freed");
         }
 
         // close the underlying TCP socket
@@ -634,17 +653,21 @@ private:
 
     void ssl_log_error(string_view msg) noexcept
     {
-        logger_->template log<LogLevel::E>(msg);
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::E, LogTopic::SSL>(msg);
+#endif
     }
 
     void ssl_log_debug(string_view msg) noexcept
     {
-        logger_->template log<LogLevel::D>(msg);
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::D, LogTopic::SSL>(msg);
+#endif
     }
 
     bool ssl_log_debug_enabled() const noexcept
     {
-        return logger_->template is_enabled<LogLevel::D>();
+        return logger_->template is_enabled<LogLevel::D, LogTopic::SSL>();
     }
 
     /**

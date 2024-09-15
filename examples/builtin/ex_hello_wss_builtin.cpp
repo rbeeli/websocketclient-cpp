@@ -23,7 +23,14 @@ expected<void, WSError> run()
     WS_TRY(url, URL::parse("wss://localhost:9443"));
 
     // websocketclient logger
-    ConsoleLogger<LogLevel::D> logger;
+    ConsoleLogger logger{LogLevel::D};
+    logger.set_level(LogTopic::DNS, LogLevel::D);
+    logger.set_level(LogTopic::TCP, LogLevel::D);
+    logger.set_level(LogTopic::Handshake, LogLevel::D);
+    logger.set_level(LogTopic::RecvFrame, LogLevel::D);
+    logger.set_level(LogTopic::RecvFramePayload, LogLevel::D);
+    logger.set_level(LogTopic::SendFrame, LogLevel::D);
+    logger.set_level(LogTopic::SendFramePayload, LogLevel::D);
 
     // resolve hostname
     DnsResolver dns(&logger);
@@ -77,30 +84,30 @@ expected<void, WSError> run()
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
-            logger.log<LogLevel::D>("Ping frame received");
+            logger.log<LogLevel::D, LogTopic::User>("Ping frame received");
             WS_TRYV(client.send_pong_frame(ping_frame->payload_bytes()));
         }
         else if (std::get_if<PongFrame>(&var))
         {
-            logger.log<LogLevel::D>("Pong frame received");
+            logger.log<LogLevel::D, LogTopic::User>("Pong frame received");
         }
         else if (auto close_frame = std::get_if<CloseFrame>(&var))
         {
             // server initiated close
             if (close_frame->has_reason())
             {
-                logger.log<LogLevel::I>(
+                logger.log<LogLevel::I, LogTopic::User>(
                     std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
-                logger.log<LogLevel::I>("Close frame received");
+                logger.log<LogLevel::I, LogTopic::User>("Close frame received");
             break;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
             // error occurred - must close connection
-            logger.log<LogLevel::E>(std::format("Error: {}", err->message));
+            logger.log<LogLevel::E, LogTopic::User>(std::format("Error: {}", err->message));
             WS_TRYV(client.close(err->close_with_code));
             return {};
         }

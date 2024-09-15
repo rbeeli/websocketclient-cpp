@@ -13,12 +13,6 @@
 #include <asio/experimental/awaitable_operators.hpp>
 #include <asio/ssl.hpp>
 
-#define WS_CLIENT_LOG_HANDSHAKE 1
-#define WS_CLIENT_LOG_MSG_PAYLOADS 1
-#define WS_CLIENT_LOG_MSG_SIZES 1
-#define WS_CLIENT_LOG_FRAMES 1
-#define WS_CLIENT_LOG_COMPRESSION 0
-
 #include "ws_client/ws_client_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
 #include "ws_client/PermessageDeflate.hpp"
@@ -52,7 +46,7 @@ asio::awaitable<expected<void, WSError>> run()
     std::cout << "Handshake ok\n";
 
     // websocketclient logger
-    ConsoleLogger<LogLevel::D> logger;
+    ConsoleLogger logger{LogLevel::D};
 
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 
@@ -103,7 +97,7 @@ asio::awaitable<expected<void, WSError>> run()
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
-            logger.log<LogLevel::D>("Ping frame received");
+            logger.log<LogLevel::D, LogTopic::User>("Ping frame received");
 
             // send pong in parallel
             asio::co_spawn(
@@ -124,19 +118,19 @@ asio::awaitable<expected<void, WSError>> run()
         }
         else if (std::get_if<PongFrame>(&var))
         {
-            logger.log<LogLevel::D>("Pong frame received");
+            logger.log<LogLevel::D, LogTopic::User>("Pong frame received");
         }
         else if (auto close_frame = std::get_if<CloseFrame>(&var))
         {
             // server initiated close
             if (close_frame->has_reason())
             {
-                logger.log<LogLevel::I>(
+                logger.log<LogLevel::I, LogTopic::User>(
                     "Close frame received: " + string(close_frame->get_reason())
                 );
             }
             else
-                logger.log<LogLevel::I>("Close frame received");
+                logger.log<LogLevel::I, LogTopic::User>("Close frame received");
             break;
         }
         else if (auto err = std::get_if<WSError>(&var))
@@ -146,18 +140,18 @@ asio::awaitable<expected<void, WSError>> run()
                 write_strand,
                 [&]() -> awaitable<void>
                 {
-                    logger.log<LogLevel::D>("Sending ping ...");
+                    logger.log<LogLevel::D, LogTopic::User>("Sending ping ...");
                     string ping_msg = R"({"op":"ping"})";
                     Message msg = Message(MessageType::text, ping_msg);
                     auto res = co_await client.send_message(msg, {.compress = false});
                     if (!res.has_value())
-                        logger.log<LogLevel::E>("WSError: " + err->message);
+                        logger.log<LogLevel::E, LogTopic::User>("WSError: " + err->message);
                 },
                 asio::detached
             );
 
             // error occurred - must close connection
-            logger.log<LogLevel::E>("WSError: " + err->message);
+            logger.log<LogLevel::E, LogTopic::User>("WSError: " + err->message);
 
             // co_await client.close(err->close_with_code);
             co_await asio::co_spawn(
@@ -183,7 +177,7 @@ asio::awaitable<expected<void, WSError>> run()
         {
             auto res = co_await client.close(close_code::normal_closure);
             if (!res.has_value())
-                logger.log<LogLevel::E>("Error closing websocket client: " + res.error().message);
+                logger.log<LogLevel::E, LogTopic::User>("Error closing websocket client: " + res.error().message);
         },
         asio::use_awaitable
     );

@@ -154,10 +154,10 @@ public:
         stream << request_header_;
         string request = stream.str();
 
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-        if (logger_->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+        if (logger_->template is_enabled<LogLevel::I, LogTopic::Handshake>())
         {
-            logger_->template log<LogLevel::I>(
+            logger_->template log<LogLevel::I, LogTopic::Handshake>(
                 std::format("Handshake HTTP request headers:\033[1;34m\n{}\033[0m", request)
             );
         }
@@ -168,10 +168,10 @@ public:
 
     [[nodiscard]] expected<void, WSError> process_response(const string& header_str)
     {
-#if WS_CLIENT_LOG_HANDSHAKE == 1
-        if (logger_->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_HANDSHAKE > 0
+        if (logger_->template is_enabled<LogLevel::I, LogTopic::Handshake>())
         {
-            logger_->template log<LogLevel::I>(
+            logger_->template log<LogLevel::I, LogTopic::Handshake>(
                 std::format("Handshake HTTP response headers:\033[1;35m\n{}\033[0m", header_str)
             );
         }

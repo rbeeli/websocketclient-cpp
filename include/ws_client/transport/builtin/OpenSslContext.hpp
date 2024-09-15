@@ -93,7 +93,7 @@ public:
             SSL_CTX_set_mode(this->ctx, SSL_MODE_AUTO_RETRY);
         else
             SSL_CTX_clear_mode(this->ctx, SSL_MODE_AUTO_RETRY);
-        logger->template log<LogLevel::D>(std::format("SSL_MODE_AUTO_RETRY={}", value));
+        logger->template log<LogLevel::D, LogTopic::SSL>(std::format("SSL_MODE_AUTO_RETRY={}", value));
         return {};
     }
 
@@ -101,7 +101,7 @@ public:
     {
         if (SSL_CTX_set_default_verify_paths(this->ctx) != 1)
             return make_error("Unable to load default CA certificates");
-        logger->template log<LogLevel::I>("Loaded default certificates");
+        logger->template log<LogLevel::I, LogTopic::SSL>("Loaded default certificates");
         return {};
     }
 
@@ -109,7 +109,7 @@ public:
     {
         if (SSL_CTX_load_verify_file(this->ctx, path.c_str()) != 1)
             return make_error(std::format("Unable to load CA file from: {}", path));
-        logger->template log<LogLevel::I>(std::format("Loaded certificate file from: {}", path));
+        logger->template log<LogLevel::I, LogTopic::SSL>(std::format("Loaded certificate file from: {}", path));
         return {};
     }
 
@@ -117,28 +117,28 @@ public:
     {
         if (!SSL_CTX_set_cipher_list(this->ctx, cipher_list.c_str()))
             return make_error(std::format("Unable to set cipher list to: {}", cipher_list));
-        logger->template log<LogLevel::D>(std::format("cipher_list={}", cipher_list));
+        logger->template log<LogLevel::D, LogTopic::SSL>(std::format("cipher_list={}", cipher_list));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_options(uint64_t options) noexcept
     {
         SSL_CTX_set_options(this->ctx, options);
-        logger->template log<LogLevel::D>(std::format("set_options={}", options));
+        logger->template log<LogLevel::D, LogTopic::SSL>(std::format("set_options={}", options));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_session_cache_mode(int mode) noexcept
     {
         SSL_CTX_set_session_cache_mode(this->ctx, mode);
-        logger->template log<LogLevel::D>(std::format("session_cache_mode={}", mode));
+        logger->template log<LogLevel::D, LogTopic::SSL>(std::format("session_cache_mode={}", mode));
         return {};
     }
 
     [[nodiscard]] expected<void, WSError> set_session_cache_mode_client() noexcept
     {
         WS_TRY(res, this->set_session_cache_mode(SSL_SESS_CACHE_CLIENT));
-        logger->template log<LogLevel::D>("SSL_SESS_CACHE_CLIENT=true");
+        logger->template log<LogLevel::D, LogTopic::SSL>("SSL_SESS_CACHE_CLIENT=true");
         return {};
     }
 

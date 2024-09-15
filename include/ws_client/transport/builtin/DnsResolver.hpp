@@ -79,9 +79,14 @@ public:
         if (resolve_canonname)
             hints.ai_flags = AI_CANONNAME;
 
-        logger->template log<LogLevel::D>(
-            std::format("Resolving hostname {} (type={})", hostname, to_string(type))
-        );
+#if WS_CLIENT_LOG_DNS > 0
+        if (logger->template is_enabled<LogLevel::D, LogTopic::DNS>())
+        {
+            logger->template log<LogLevel::D, LogTopic::DNS>(
+                std::format("Resolving hostname {} (type={})", hostname, to_string(type))
+            );
+        }
+#endif
 
         // resolve hostname to IP address using getaddrinfo POSIX function
         addrinfo* getaddrinfo_res;
@@ -95,9 +100,10 @@ public:
             );
         }
 
-        if (logger->template is_enabled<LogLevel::I>())
+#if WS_CLIENT_LOG_DNS > 0
+        if (logger->template is_enabled<LogLevel::I, LogTopic::DNS>())
         {
-            logger->template log<LogLevel::I>(std::format(
+            logger->template log<LogLevel::I, LogTopic::DNS>(std::format(
                 "Resolved hostname {} in {} µs",
                 hostname,
                 std::chrono::duration_cast<std::chrono::microseconds>(
@@ -106,6 +112,7 @@ public:
                     .count()
             ));
         }
+#endif
 
         vector<AddressInfo> result;
         for (auto res = getaddrinfo_res; res != nullptr; res = res->ai_next)
@@ -180,10 +187,15 @@ public:
             }
             else
             {
-                // skip unsupported address families
-                logger->template log<LogLevel::D>(std::format(
-                    "DnsResolver skipping unsupported address family: {}", res->ai_family
-                ));
+#if WS_CLIENT_LOG_DNS > 0
+                if (logger->template is_enabled<LogLevel::D, LogTopic::DNS>())
+                {
+                    // skip unsupported address families
+                    logger->template log<LogLevel::D, LogTopic::DNS>(std::format(
+                        "DnsResolver skipping unsupported address family: {}", res->ai_family
+                    ));
+                }
+#endif
                 continue;
             }
         }

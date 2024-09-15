@@ -1,16 +1,21 @@
 #pragma once
 
+#include <string>
 #include <string_view>
+#include <format>
+#include <cstdint>
+#include <cassert>
 #include <iostream>
 #include <sstream>
 #include <chrono>
 #include <iomanip>
 #include <source_location>
+#include <mutex>
+#include <atomic>
+#include <array>
 
 namespace ws_client
 {
-using std::string_view;
-
 // 0 = disabled, 1 = error, 2 = warning, 3 = info, 4 = debug
 enum class LogLevel : uint8_t
 {
@@ -21,69 +26,113 @@ enum class LogLevel : uint8_t
     D = 4  // Debug
 };
 
-inline std::ostream& operator<<(std::ostream& os, LogLevel level)
+static constexpr LogLevel log_level_from_int(int level)
 {
-    static const char buffer[] = {' ', 'E', 'W', 'I', 'D'};
-    return os << buffer[static_cast<int>(level)];
+    assert((level >= 0 && level <= 4) && "log level out of bounds");
+    return static_cast<LogLevel>(level);
 }
 
-template <LogLevel min_level>
+static constexpr std::string_view to_string(LogLevel level)
+{
+    switch (level)
+    {
+        case LogLevel::I:
+            return "I";
+        case LogLevel::D:
+            return "D";
+        case LogLevel::E:
+            return "E";
+        case LogLevel::W:
+            return "W";
+        default:
+            return "?";
+    }
+}
+
+inline std::ostream& operator<<(std::ostream& os, LogLevel level)
+{
+    return os << to_string(level);
+}
+
+enum class LogTopic : uint16_t
+{
+    None = 0,
+    DNS = 1,              // WS_CLIENT_LOG_DNS
+    TCP = 2,              // WS_CLIENT_LOG_TCP
+    SSL = 3,              // WS_CLIENT_LOG_SSL
+    Handshake = 4,        // WS_CLIENT_LOG_HANDSHAKE
+    Compression = 5,      // WS_CLIENT_LOG_COMPRESSION
+    SendFrame = 6,        // WS_CLIENT_LOG_SEND_FRAME
+    SendFramePayload = 7, // WS_CLIENT_LOG_SEND_FRAME_PAYLOAD
+    RecvFrame = 8,        // WS_CLIENT_LOG_RECV_FRAME
+    RecvFramePayload = 9, // WS_CLIENT_LOG_RECV_FRAME_PAYLOAD
+    User = 10             // WS_CLIENT_LOG_USER
+};
+
+constexpr size_t WS_LOG_TOPICS_COUNT = 11;
+
+static constexpr std::string_view to_string(LogTopic topic)
+{
+    switch (topic)
+    {
+        case LogTopic::None:
+            return "None";
+        case LogTopic::DNS:
+            return "DNS";
+        case LogTopic::TCP:
+            return "TCP";
+        case LogTopic::SSL:
+            return "SSL";
+        case LogTopic::Handshake:
+            return "Handshake";
+        case LogTopic::Compression:
+            return "Compression";
+        case LogTopic::SendFrame:
+            return "SendFrame";
+        case LogTopic::SendFramePayload:
+            return "SendFramePayload";
+        case LogTopic::RecvFrame:
+            return "RecvFrame";
+        case LogTopic::RecvFramePayload:
+            return "RecvFramePayload";
+        case LogTopic::User:
+            return "User";
+        default:
+            return "?";
+    }
+}
+
+inline std::ostream& operator<<(std::ostream& os, LogTopic topic)
+{
+    return os << to_string(topic);
+}
+
+inline constexpr const char* extract_log_file_name(const char* path) noexcept
+{
+    const char* last_separator = nullptr;
+    for (const char* p = path; *p; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            last_separator = p + 1;
+    }
+    if (last_separator)
+        return last_separator;
+    return path;
+}
+
+/**
+ * Default console logger.
+ * It supports logging by topics, and log levels per topic.
+ * The log level can be configured per topic at runtime, the operations are thread-safe.
+ */
 class ConsoleLogger
 {
 private:
-    static constexpr const char* extract_file_name(const char* path)
-    {
-        const char* last_slash = nullptr;
-        for (const char* p = path; *p; ++p)
-        {
-            if (*p == '/')
-                last_slash = p + 1;
-        }
-        if (last_slash)
-            return last_slash;
-        return path;
-    }
-
-    static constexpr char* extract_function_name(
-        const char* func_full_name, char* func_name, const long max_width, const long buf_size
-    )
-    {
-        const char* last_colon = nullptr;
-        const char* func_start = nullptr;
-        const char* func_end = nullptr;
-        for (const char* p = func_full_name; *p; ++p)
-        {
-            if (*p == ':' && *(p + 1) == ':')
-                last_colon = p + 2; // skip the "::"
-            if (*p == '(' && last_colon)
-            {
-                func_end = p;
-                break;
-            }
-        }
-        if (last_colon && func_end)
-            func_start = last_colon;
-        if (func_start && func_end)
-        {
-            long length = func_end - func_start;
-            if (length > 0 && length < buf_size)
-            {
-                bool truncated = length > max_width;
-                if (truncated)
-                    length = max_width;
-                for (long i = 0; i < length; ++i)
-                    func_name[i] = func_start[i];
-                if (truncated)
-                    func_name[length - 1] = '.';
-                func_name[length] = '\0';
-                return func_name;
-            }
-        }
-        return nullptr;
-    }
+    std::mutex clog_mutex;
+    std::array<std::atomic<LogLevel>, WS_LOG_TOPICS_COUNT> topic_levels;
 
     template <LogLevel level>
-    static constexpr std::string_view level_to_color()
+    static constexpr std::string_view level_to_color() noexcept
     {
         if constexpr (level == LogLevel::E)
             return "\033[1;91m";
@@ -97,76 +146,121 @@ private:
     }
 
 public:
-    ConsoleLogger() noexcept = default;
+    ConsoleLogger() noexcept //
+        : ConsoleLogger(LogLevel::D)
+    {
+    }
+
+    ConsoleLogger(LogLevel min_level) noexcept
+    {
+        // Configure defaults for log topics.
+        // Defaults can be overridden using compile-time defines.
+        set_level(LogTopic::DNS, log_level_from_int(WS_CLIENT_LOG_DNS));
+        set_level(LogTopic::TCP, log_level_from_int(WS_CLIENT_LOG_TCP));
+        set_level(LogTopic::SSL, log_level_from_int(WS_CLIENT_LOG_SSL));
+        set_level(LogTopic::Handshake, log_level_from_int(WS_CLIENT_LOG_HANDSHAKE));
+        set_level(LogTopic::Compression, log_level_from_int(WS_CLIENT_LOG_COMPRESSION));
+        set_level(LogTopic::SendFrame, log_level_from_int(WS_CLIENT_LOG_SEND_FRAME));
+        set_level(LogTopic::SendFramePayload, log_level_from_int(WS_CLIENT_LOG_SEND_FRAME_PAYLOAD));
+        set_level(LogTopic::RecvFrame, log_level_from_int(WS_CLIENT_LOG_RECV_FRAME));
+        set_level(LogTopic::RecvFramePayload, log_level_from_int(WS_CLIENT_LOG_RECV_FRAME_PAYLOAD));
+        set_level(LogTopic::User, log_level_from_int(WS_CLIENT_LOG_USER));
+
+        // set minimum log level
+        set_min_level(min_level);
+    }
 
     // disable copy
     ConsoleLogger(const ConsoleLogger&) = delete;
     ConsoleLogger& operator=(const ConsoleLogger&) = delete;
 
-    // enable move
-    ConsoleLogger(ConsoleLogger&&) noexcept = default;
-    ConsoleLogger& operator=(ConsoleLogger&&) noexcept = default;
+    // // enable move
+    // ConsoleLogger(ConsoleLogger&&) noexcept = default;
+    // ConsoleLogger& operator=(ConsoleLogger&&) noexcept = default;
+    // TODO move
+    ConsoleLogger(ConsoleLogger&&) = delete;
+    ConsoleLogger& operator=(ConsoleLogger&&) = delete;
 
     /**
-     * Check if the logger is enabled for the given log level.
+     * Check if the logger is enabled for the given log level and topic.
+     * This function is thread-safe.
      */
-    template <LogLevel level>
-    constexpr bool is_enabled() const noexcept
+    template <LogLevel level, LogTopic topic>
+    bool is_enabled() const noexcept
     {
-        return static_cast<int>(level) <= static_cast<int>(min_level);
+        size_t topic_ix = static_cast<size_t>(topic);
+        LogLevel topic_level = topic_levels[topic_ix].load(std::memory_order::relaxed);
+        return static_cast<int>(level) <= static_cast<int>(topic_level);
     }
 
     /**
-     * Log a message with the given log level.
+     * Sets the log level for a given topic.
+     * This method is thread-safe.
      */
-    template <LogLevel level>
-    constexpr void log(
-        string_view message, const std::source_location loc = std::source_location::current()
+    void set_level(LogTopic topic, LogLevel level) noexcept
+    {
+        topic_levels[static_cast<size_t>(topic)].store(level, std::memory_order::relaxed);
+    }
+
+    /**
+     * Set the minimum log level for all log topics.
+     * This overrides the compile-time defines per topic
+     * if the passed minimum log level is stricter.
+     */
+    void set_min_level(LogLevel min_level) noexcept
+    {
+        for (size_t i = 0; i < topic_levels.size(); ++i)
+        {
+            auto topic_level = topic_levels[i].load(std::memory_order::relaxed);
+            if (static_cast<int>(topic_level) > static_cast<int>(min_level))
+                topic_levels[i].store(min_level, std::memory_order::relaxed);
+        }
+    }
+
+    /**
+     * Log a message with the given log level and topic.
+     */
+    template <LogLevel level, LogTopic topic>
+    void log(
+        std::string_view message, const std::source_location loc = std::source_location::current()
     ) noexcept
     {
-        if (!is_enabled<level>())
+        if (!is_enabled<level, topic>())
             return;
 
         // time of day
         auto now = std::chrono::system_clock::now();
-        auto now_t = std::chrono::system_clock::to_time_t(now);
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) %
-                  std::chrono::seconds(1);
+        auto now_us = std::chrono::floor<std::chrono::microseconds>(now);
 
-        static thread_local std::ostringstream msg;
-
-        // extract function name / line number
-        char func_name[256];
-        constexpr int func_len = 20;
-        std::string filename_loc = extract_file_name(loc.file_name());
-        filename_loc.append(":");
-        filename_loc.append(std::to_string(loc.line()));
-
+        // get color for log level
         constexpr auto color = level_to_color<level>();
 
+        std::ostringstream msg;
+
         // write time
-        msg << color << std::put_time(std::localtime(&now_t), "%T") << '.' << std::setfill('0')
-            << std::setw(6) << us.count() << std::setfill(' ');
+        msg << color << std::format("{:%Y-%m-%d %H:%M:%S}", now_us);
 
         // write log level
-        msg << ' ' << level << ' ';
+        msg << ' ' << level;
 
-        // write location
-        msg << std::left << std::setw(20) << filename_loc //
-            << ":\033[1m" << std::left << std::setw(func_len)
-            << extract_function_name(loc.function_name(), func_name, func_len, 256) //
+        // write log topic
+        msg << ' ' << std::left << std::setw(17) << topic;
+
+        // write file name and line number
+        std::string filename_loc = std::format(
+            "{}:{}", extract_log_file_name(loc.file_name()), loc.line()
+        );
+        msg << ' ' << std::left << std::setw(20) << filename_loc //
             << color << " ";
 
         // write message
         msg << message << "\x1b[0m" << '\n';
 
-        std::clog << msg.str();
-
-        if (level == LogLevel::E || level == LogLevel::W)
-            std::flush(std::clog);
-
-        msg.str(""); // clear stream for reuse
+        {
+            // synchronize clog output
+            std::lock_guard<std::mutex> lock(clog_mutex);
+            std::clog << msg.str() << std::flush;
+        }
     }
 };
-
 } // namespace ws_client

@@ -3,11 +3,13 @@
 #include <span>
 #include <cstddef>
 #include <expected>
+#include <exception>
 
 #include <asio.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 
+#include "ws_client/config.hpp"
 #include "ws_client/errors_async.hpp"
 #include "ws_client/transport/AsioSocket.hpp"
 #include "ws_client/utils/Timeout.hpp"
@@ -22,7 +24,7 @@ using std::byte;
 
 asio::awaitable<void> http_get_request()
 {
-    ConsoleLogger<LogLevel::D> logger;
+    ConsoleLogger logger{LogLevel::D};
 
     string host = "httpbin.org";
 

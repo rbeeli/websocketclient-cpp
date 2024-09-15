@@ -25,7 +25,7 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
   - No callback hell and easier object liftime management when using C++20 coroutines
 - Pluggable logging (optional)
 - **GCC 13+** and **Clang 16+** compiler support
-- Tested on 64-bit **x86** and **ARM64** (**Ubuntu x86**, **MacOS M2 ARM64**) platforms (32-bit NOT supported)
+- Tested on **64 bit** **x86** and **ARM64** (**Ubuntu x86**, **MacOS M2 ARM64**) platforms (32-bit NOT supported)
 - Passes all [Autobahn Testsuite](https://github.com/crossbario/autobahn-testsuite) tests
 
 > **NOTE:**
@@ -81,11 +81,6 @@ The following compile-time configuration switches can be set:
 | `WS_CLIENT_USE_SIMD_UTF8`    | `1` or `0`  | Enable/disable SIMD instructions based UTF-8 validator for text messages payload validation. |
 | `WS_CLIENT_USE_ZLIB_NG`      | `1` or `0`  | Enable/disable `zlib-ng` instead of `zlib` library for permessage-deflate compression. |
 | `WS_CLIENT_VALIDATE_UTF8`    | `1` or `0`  | Enable/disable UTF-8 validation for text messages payload. |
-| `WS_CLIENT_LOG_HANDSHAKE`    | `1` or `0`  | Enable/disable handshake log messages. |
-| `WS_CLIENT_LOG_MSG_PAYLOADS` | `1` or `0`  | Enable/disable message payload log messages. |
-| `WS_CLIENT_LOG_MSG_SIZES`    | `1` or `0`  | Enable/disable message size log messages. |
-| `WS_CLIENT_LOG_FRAMES`       | `1` or `0`  | Enable/disable frame log messages. |
-| `WS_CLIENT_LOG_COMPRESSION`  | `1` or `0`  | Enable/disable compression log messages. |
 
 Example:
 
@@ -94,13 +89,10 @@ target_compile_definitions(my_binary PRIVATE
     WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
     WS_CLIENT_VALIDATE_UTF8=1 # Enable utf-8 validation
     WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
-    WS_CLIENT_LOG_HANDSHAKE=1
-    WS_CLIENT_LOG_MSG_PAYLOADS=0
-    WS_CLIENT_LOG_MSG_SIZES=1
-    WS_CLIENT_LOG_FRAMES=0
-    WS_CLIENT_LOG_COMPRESSION=0
 )
 ```
+
+For switches to enable/disable logging code compilation, see section **Logging** below.
 
 ### CMake options
 
@@ -176,76 +168,113 @@ For details, see the concepts `HasSocketOperations` in [HasSocketOperations.hpp]
 
 By default, the library logs directly to `std::clog`, hence there is no dependency to any logging library.
 
-The default implementation allows to set the log level at compile-time, which can be used to filter log messages.
+The default console logger implementation `ws_client::ConsoleLogger` allows to configure log levels per log topic.
+The level per topic can be configured at runtime (`set_level` is thread-safe):
 
 ```cpp
-ConsoleLogger<LogLevel::I> logger;
+ConsoleLogger logger{LogLevel::I};
+logger.set_level(LogTopic::DNS, LogLevel::D);
+logger.set_level(LogTopic::TCP, LogLevel::D);
+logger.set_level(LogTopic::Handshake, LogLevel::D);
+
 auto client = WebSocketClient(&logger, [...]);
 ```
 
-In this example, only log messages with log level `I` (info) and higher will be printed.
+In this example, the default minimum log level is set to `I` (INFO), and the topics `DNS`, `TCP`, and `Handshake` are set to `D` (DEBUG).
 The available log levels are:
 
 ```cpp
 enum class LogLevel : uint8_t
 {
-    N = 0, // Disabled
-    E = 1, // Error
-    W = 2, // Warning
-    I = 3, // Info
-    D = 4  // Debug
+    N = 0, // disabled
+    E = 1, // ERROR
+    W = 2, // WARN
+    I = 3, // INFO
+    D = 4  // DEBUG
 };
 ```
 
-You can implement a custom logger like the following. It logs all messages to `std::cout`:
+The available log topics are:
 
 ```cpp
-/**
- * Custom logger implementation.
- * Logs all messages to `std::cout`.
- */
+enum class LogTopic : uint16_t
+{
+    None = 0,
+    DNS = 1,              // WS_CLIENT_LOG_DNS
+    TCP = 2,              // WS_CLIENT_LOG_TCP
+    SSL = 3,              // WS_CLIENT_LOG_SSL
+    Handshake = 4,        // WS_CLIENT_LOG_HANDSHAKE
+    Compression = 5,      // WS_CLIENT_LOG_COMPRESSION
+    SendFrame = 6,        // WS_CLIENT_LOG_SEND_FRAME
+    SendFramePayload = 7, // WS_CLIENT_LOG_SEND_FRAME_PAYLOAD
+    RecvFrame = 8,        // WS_CLIENT_LOG_RECV_FRAME
+    RecvFramePayload = 9, // WS_CLIENT_LOG_RECV_FRAME_PAYLOAD
+    User = 10             // WS_CLIENT_LOG_USER
+};
+```
+
+Note that the log topic `User` is not used by the library itself, but can be used for user-supplied log messages.
+
+The default log level per topic is configurable using compile definitions, e.g. using CMake's compile definition function `target_compile_definitions`:
+
+| Option                             | Default   | Description |
+| ---------------------------------- | --------- | -------------------------------- |
+| `WS_CLIENT_LOG_DNS`                | `3` INFO  | Log level for DNS name resolution logging. |
+| `WS_CLIENT_LOG_TCP`                | `3` INFO  | Log level for TCP layer logging. |
+| `WS_CLIENT_LOG_SSL`                | `2` WARN  | Log level for SSL layer logging. |
+| `WS_CLIENT_LOG_HANDSHAKE`          | `3` INFO  | Log level for handshake / negotiation messages and HTTP headers. |
+| `WS_CLIENT_LOG_COMPRESSION`        | `2` WARN  | Log level for permessage-deflate and zlib compression related messages. |
+| `WS_CLIENT_LOG_SEND_FRAME`         | `2` WARN  | Log level for outgoing frame metadata logging. |
+| `WS_CLIENT_LOG_SEND_FRAME_PAYLOAD` | `2` WARN  | Log level for outgoing message payloads. |
+| `WS_CLIENT_LOG_RECV_FRAME`         | `2` WARN  | Log level for incoming frame metadata logging. |
+| `WS_CLIENT_LOG_RECV_FRAME_PAYLOAD` | `2` WARN  | Log level for incoming message payloads. |
+| `WS_CLIENT_LOG_USER`               | `3` INFO  | Log level for user-supplied log messages, topic not used by library itself. |
+
+The value of the defines must equal to one of the numeric values from `ws_client::LogLevel`.
+If set to `0`, the compiler will optimize out all logging code for the respective log topic to improve runtime performance and reduce binary size.
+Consequently, if set to `0`, the log topic cannot be enabled again at runtime.
+
+### Custom logger implementation example
+
+To implement a custom logger class, only the `is_enabled` and `log` functions need to be implemented.
+
+The `CustomLogger` below is a simple example that logs all messages to `std::cout`.
+It prints the log level, log topic, file name, line number, and message to the console.
+
+```cpp
 struct CustomLogger
 {
     /**
-     * Check if the logger is enabled for the given log level.
+     * Check if the logger is enabled for the given log level and topic.
      */
-    template <LogLevel level>
-    constexpr bool is_enabled() const noexcept
+    template <LogLevel level, LogTopic topic>
+    bool is_enabled() const noexcept
     {
         return true;
     }
 
     /**
-     * Log a message with the given log level.
+     * Log a message with the given log level and topic.
      */
-    template <LogLevel level>
-    constexpr void log(
+    template <LogLevel level, LogTopic topic>
+    void log(
         std::string_view message, const std::source_location loc = std::source_location::current()
     ) noexcept
     {
-        std::cout << "CustomLogger: " << loc.file_name() << ":" << loc.line() << " " << message
+        std::cout << std::format(
+                         "{} {} {}:{} | {}",
+                         to_string(topic),
+                         to_string(level),
+                         ws_client::extract_log_file_name(loc.file_name()),
+                         loc.line(),
+                         message
+                     )
                   << std::endl;
     }
 };
 ```
 
-Sometimes, changing the log-level will either show too many messages, or hide the ones of interest.
-In order to filter for specific implementation details, the following compile definitions are available (`0` = disabled, `1` = enabled):
-
-| Option                       | Values      | Description |
-| -------------------------    | ----------- | ------------------------------------------------------------------ |
-| `WS_CLIENT_LOG_HANDSHAKE`    | `1` or `0`  | Enable/disable handshake log messages. |
-| `WS_CLIENT_LOG_MSG_PAYLOADS` | `1` or `0`  | Enable/disable message payload log messages. |
-| `WS_CLIENT_LOG_MSG_SIZES`    | `1` or `0`  | Enable/disable message size log messages. |
-| `WS_CLIENT_LOG_FRAMES`       | `1` or `0`  | Enable/disable frame log messages. |
-| `WS_CLIENT_LOG_COMPRESSION`  | `1` or `0`  | Enable/disable compression log messages. |
-
-By setting a variable to `0` = disabled (`1` = enabled), the compiler will optimize out all logging code for maximum performance.
-
-For example, the handshake log messages are useful to inspect the HTTP headers sent and received during the WebSocket handshake.
-Among others, the negotiated parameters for the permessage-deflate compression extension can be inspected this way.
-
-Alternatively, use CMake's compile definition function `target_compile_definitions` to set the log levels (see above).
+See [examples/builtin/ex_custom_logger_builtin.cpp](examples/builtin/ex_custom_logger_builtin.cpp) for a complete example.
 
 ## Implementation details
 
@@ -264,7 +293,7 @@ By returning those frames to the user, the library enables the user to decide wh
 ### Timeouts
 
 All network operations have a timeout parameter to limit the time spent on a single operation,
-thus avoiding blocking the application indefinitely.
+thus avoiding blocking/waiting indefinitely.
 
 This includes the following functions in `WebSocketClient` and `WebSocketClientAsync`:
 
