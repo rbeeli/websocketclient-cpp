@@ -54,7 +54,7 @@ inline std::ostream& operator<<(std::ostream& os, LogLevel level)
     return os << to_string(level);
 }
 
-enum class LogTopic : uint16_t
+enum class LogTopic : uint8_t
 {
     None = 0,
     DNS = 1,              // WS_CLIENT_LOG_DNS
