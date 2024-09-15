@@ -7,3 +7,6 @@ out/
 tests/autobahn/reports/
 wstest/
 .DS_Store
+venv/
+.venv/
+env/
