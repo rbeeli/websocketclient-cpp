@@ -197,7 +197,7 @@ enum class LogLevel : uint8_t
 The available log topics are:
 
 ```cpp
-enum class LogTopic : uint16_t
+enum class LogTopic : uint8_t
 {
     None = 0,
     DNS = 1,              // WS_CLIENT_LOG_DNS
