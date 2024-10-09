@@ -622,7 +622,7 @@ public:
             {
 #if WS_CLIENT_LOG_SEND_FRAME > 0
                 logger_->template log<LogLevel::W, LogTopic::SendFrame>(
-                    std::format("Failed to send close frame: {}", res.error().message)
+                    std::format("Failed to send close frame: {}", res.error())
                 );
 #endif
             }
@@ -643,7 +643,7 @@ public:
             {
 #if WS_CLIENT_LOG_TCP > 0
                 logger_->template log<LogLevel::W, LogTopic::TCP>(
-                    std::format("Socket close failed: {}", res.error().message)
+                    std::format("Socket close failed: {}", res.error())
                 );
 #endif
                 co_return std::unexpected(res.error());

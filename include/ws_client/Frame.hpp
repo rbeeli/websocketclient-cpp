@@ -11,9 +11,9 @@
 #include "ws_client/utils/utf8.hpp"
 #endif
 
+#include "ws_client/errors.hpp"
 #include "ws_client/utils/networking.hpp"
 #include "ws_client/MaskKey.hpp"
-#include "ws_client/close_code.hpp"
 
 // Framing protocol for websockets
 // https://datatracker.ietf.org/doc/html/rfc6455

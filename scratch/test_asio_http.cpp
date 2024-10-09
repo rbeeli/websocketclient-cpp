@@ -57,7 +57,7 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
     );
     if (!res.has_value())
     {
-        std::cout << "Error write_some: " << res.error().message << "\n";
+        std::cout << "Error write_some: " << res.error() << "\n";
         co_return;
     }
 
@@ -70,7 +70,7 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
     );
     if (!read_res.has_value())
     {
-        std::cout << "Error read_some: " << read_res.error().message << "\n";
+        std::cout << "Error read_some: " << read_res.error() << "\n";
         co_return;
     }
     string str = string(data, *read_res);

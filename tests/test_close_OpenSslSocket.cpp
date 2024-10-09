@@ -125,7 +125,7 @@ int main()
     auto res = run();
     if (!res.has_value())
     {
-        std::cerr << "Error: " << res.error().message << std::endl;
+        std::cerr << "Error: " << res.error() << std::endl;
         return 2;
     }
     return 0;

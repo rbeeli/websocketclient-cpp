@@ -23,14 +23,17 @@ Lists all connections:
 
 ```bash
 sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)"
+sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)"
 ```
 
 Closes WebSocket connection at port 443 of process:
 
 ```bash
 sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)'
+sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)" | grep -oP '\s\K[^ ]+(?=:https)'
 
 sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
+sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
 
 sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_hello_ws_builtin)" | grep -oP '\s\K[^ ]+(?=:http)') dport = 8080
 

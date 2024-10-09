@@ -117,7 +117,8 @@
     "shared_mutex": "cpp",
     "__functional_03": "cpp",
     "forward_list": "cpp",
-    "print": "cpp"
+    "print": "cpp",
+    "format": "cpp"
   },
   "editor.defaultFormatter": "xaver.clang-format",
   "[cmake]": {

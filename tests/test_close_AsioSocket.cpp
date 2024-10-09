@@ -5,6 +5,7 @@
 #include <variant>
 #include <chrono>
 #include <exception>
+#include <format>
 
 #include <asio.hpp>
 #include <asio/read_until.hpp>
@@ -177,7 +178,7 @@ asio::awaitable<expected<void, WSError>> run()
         {
             auto res = co_await client.close(close_code::normal_closure);
             if (!res.has_value())
-                logger.log<LogLevel::E, LogTopic::User>("Error closing websocket client: " + res.error().message);
+                logger.log<LogLevel::E, LogTopic::User>(std::format("Error closing websocket client: {}", res.error()));
         },
         asio::use_awaitable
     );
@@ -204,7 +205,7 @@ int main()
         {
             auto res = co_await run();
             if (!res.has_value())
-                std::cerr << "run() returned error: " << res.error().message << std::endl;
+                std::cerr << "run() returned error: " << res.error() << std::endl;
         }
         catch (const std::exception& e)
         {

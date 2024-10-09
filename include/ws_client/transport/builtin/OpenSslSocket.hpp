@@ -604,7 +604,7 @@ public:
                     {
                         auto err = ssl_error(ssl_err, "SSL shutdown failed");
 #if WS_CLIENT_LOG_SSL > 0
-                        logger_->template log<LogLevel::W, LogTopic::SSL>(err.error().message);
+                        logger_->template log<LogLevel::W, LogTopic::SSL>(err.error().to_string());
 #endif
                         return err;
                     }

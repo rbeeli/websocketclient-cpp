@@ -164,7 +164,7 @@ int main()
             {
                 auto res = co_await run();
                 if (!res.has_value())
-                    std::cerr << "Error: " << res.error().message << std::endl;
+                    std::cerr << "Error: " << res.error() << std::endl;
             }
             catch (const std::exception& e)
             {

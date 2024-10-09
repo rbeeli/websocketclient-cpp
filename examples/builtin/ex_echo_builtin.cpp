@@ -117,7 +117,7 @@ int main()
         auto res = run();
         if (!res.has_value())
         {
-            std::cerr << "Error: " << res.error().message << std::endl;
+            std::cerr << "Error: " << res.error() << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(1));
             std::clog << "Reconnecting..." << std::endl;
         }

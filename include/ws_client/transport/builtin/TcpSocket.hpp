@@ -493,7 +493,7 @@ public:
             {
                 auto err = make_error(ret, "Shutdown of socket failed");
 #if WS_CLIENT_LOG_TCP > 0
-                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().message);
+                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
 #endif
                 return err;
             }
@@ -520,7 +520,7 @@ public:
             {
                 auto err = make_error(ret, "Socket close failed");
 #if WS_CLIENT_LOG_TCP > 0
-                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().message);
+                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
 #endif
                 return err;
             }
