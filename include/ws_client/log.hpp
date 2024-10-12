@@ -66,7 +66,7 @@ enum class LogTopic : uint8_t
     SendFramePayload = 7, // WS_CLIENT_LOG_SEND_FRAME_PAYLOAD
     RecvFrame = 8,        // WS_CLIENT_LOG_RECV_FRAME
     RecvFramePayload = 9, // WS_CLIENT_LOG_RECV_FRAME_PAYLOAD
-    User = 10             // WS_CLIENT_LOG_USER
+    User = 255            // WS_CLIENT_LOG_USER
 };
 
 constexpr size_t WS_LOG_TOPICS_COUNT = 11;
@@ -98,7 +98,7 @@ static constexpr std::string_view to_string(LogTopic topic)
         case LogTopic::User:
             return "User";
         default:
-            return "?";
+            return "unknown";
     }
 }
 
