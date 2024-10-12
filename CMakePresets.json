@@ -4,6 +4,7 @@
     {
       "name": "_common",
       "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
         "CMAKE_MAKE_PROGRAM": "make"
@@ -14,7 +15,6 @@
       "inherits": ["_common"],
       "description": "GCC C++ compiler.",
       "hidden": true,
-      "binaryDir": "${sourceDir}/build/gcc",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "/usr/bin/g++",
         "VCPKG_TARGET_TRIPLET": "x64-linux",
@@ -33,7 +33,6 @@
       "inherits": ["_common"],
       "description": "Clang C++ compiler.",
       "hidden": true,
-      "binaryDir": "${sourceDir}/build/clang",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_TOOLCHAIN_FILE": {
@@ -83,63 +82,63 @@
       }
     },
     {
-      "name": "gcc_debug examples",
+      "name": "gcc_debug_examples",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
       }
     },
     {
-      "name": "gcc_debug tests",
+      "name": "gcc_debug_tests",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_TESTS": "ON"
       }
     },
     {
-      "name": "gcc_debug bench",
+      "name": "gcc_debug_bench",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_BENCH": "ON"
       }
     },
     {
-      "name": "gcc_debug scratch",
+      "name": "gcc_debug_scratch",
       "inherits": ["gcc_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_SCRATCH": "ON"
       }
     },
     {
-      "name": "gcc_debug tests sanitized",
-      "inherits": ["gcc_debug tests"],
+      "name": "gcc_debug_tests_san",
+      "inherits": ["gcc_debug_tests"],
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined"
       }
     },
     {
-      "name": "gcc_debug examples sanitized",
-      "inherits": ["gcc_debug examples"],
+      "name": "gcc_debug_examples_san",
+      "inherits": ["gcc_debug_examples"],
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined"
       }
     },
     {
-      "name": "gcc_release bench",
+      "name": "gcc_release_bench",
       "inherits": ["gcc_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_BENCH": "ON"
       }
     },
     {
-      "name": "gcc_release examples",
+      "name": "gcc_release_examples",
       "inherits": ["gcc_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
       }
     },
     {
-      "name": "gcc_release tests",
+      "name": "gcc_release_tests",
       "inherits": ["gcc_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_TESTS": "ON"
@@ -154,58 +153,58 @@
       }
     },
     {
-      "name": "clang_debug examples",
+      "name": "clang_debug_examples",
       "inherits": ["clang_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
       }
     },
     {
-      "name": "clang_debug tests",
+      "name": "clang_debug_tests",
       "inherits": ["clang_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_TESTS": "ON"
       }
     },
     {
-      "name": "clang_debug bench",
+      "name": "clang_debug_bench",
       "inherits": ["clang_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_BENCH": "ON"
       }
     },
     {
-      "name": "clang_debug scratch",
+      "name": "clang_debug_scratch",
       "inherits": ["clang_debug"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_SCRATCH": "ON"
       }
     },
     {
-      "name": "clang_debug tests sanitized",
-      "inherits": ["clang_debug tests"],
+      "name": "clang_debug_tests_san",
+      "inherits": ["clang_debug_tests"],
       "cacheVariables": {
         "__DISABLED": "-fsanitize=leak",
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g -funwind-tables"
       }
     },
     {
-      "name": "clang_debug examples sanitized",
-      "inherits": ["clang_debug examples"],
+      "name": "clang_debug_examples_san",
+      "inherits": ["clang_debug_examples"],
       "cacheVariables": {
         "__DISABLED": "-fsanitize=leak",
         "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g -funwind-tables"
       }
     },
     {
-      "name": "clang_release bench",
+      "name": "clang_release_bench",
       "inherits": ["clang_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_BENCH": "ON"
       }
     },
     {
-      "name": "clang_release examples",
+      "name": "clang_release_examples",
       "inherits": ["clang_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"

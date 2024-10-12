@@ -2,13 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug main-autobahn",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/build/Debug/main-autobahn",
-            "args": []
-        },
-        {
             "type": "cmake",
             "request": "launch",
             "name": "Debug portfile(s)",
