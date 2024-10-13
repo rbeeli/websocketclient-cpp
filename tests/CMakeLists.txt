@@ -7,7 +7,6 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/certs/cert.pem
 find_package(GTest CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(asio CONFIG REQUIRED)
 
 enable_testing()
 
@@ -27,33 +26,4 @@ target_link_libraries(unit_tests PRIVATE
     websocketclient
 )
 
-# --------------------------------------
-add_executable(test_close_AsioSocket "./test_close_AsioSocket.cpp")
-# gtest_discover_tests(test_close_AsioSocket)
-target_link_libraries(test_close_AsioSocket PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ZLIB::ZLIB
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    asio::asio
-    websocketclient
-)
-target_compile_definitions(test_close_AsioSocket PRIVATE
-    ASIO_STANDALONE=1
-    ASIO_NO_TYPEID=1
-)
-
-# --------------------------------------
-add_executable(test_close_OpenSslSocket "./test_close_OpenSslSocket.cpp")
-# gtest_discover_tests(test_close_OpenSslSocket)
-target_link_libraries(test_close_OpenSslSocket PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ZLIB::ZLIB
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    websocketclient
-)
-
-# --------------------------------------
+add_subdirectory(close)

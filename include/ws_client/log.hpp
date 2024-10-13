@@ -66,7 +66,7 @@ enum class LogTopic : uint8_t
     SendFramePayload = 7, // WS_CLIENT_LOG_SEND_FRAME_PAYLOAD
     RecvFrame = 8,        // WS_CLIENT_LOG_RECV_FRAME
     RecvFramePayload = 9, // WS_CLIENT_LOG_RECV_FRAME_PAYLOAD
-    User = 255            // WS_CLIENT_LOG_USER
+    User = 10            // WS_CLIENT_LOG_USER
 };
 
 constexpr size_t WS_LOG_TOPICS_COUNT = 11;

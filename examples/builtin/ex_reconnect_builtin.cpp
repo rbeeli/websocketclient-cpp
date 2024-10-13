@@ -116,7 +116,7 @@ expected<void, WSError> run()
             }
 
             // error occurred - must close connection
-            logger.log<LogLevel::E, LogTopic::User>(std::format("Error: {}", err->message));
+            logger.log<LogLevel::E, LogTopic::User>(err->to_string());
             WS_TRYV(client.close(err->close_with_code));
             return {};
         }

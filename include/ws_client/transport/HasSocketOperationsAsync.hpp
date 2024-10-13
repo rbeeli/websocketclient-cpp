@@ -22,7 +22,7 @@ using std::byte;
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
 template <typename T, template <typename...> typename TTask>
-concept HasSocketOperationsAsync = requires(T t, span<byte> buffer, Timeout<>& timeout) {
+concept HasSocketOperationsAsync = requires(T t, span<byte> buffer, Timeout<>& timeout, bool fail_connection) {
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
@@ -45,14 +45,22 @@ concept HasSocketOperationsAsync = requires(T t, span<byte> buffer, Timeout<>& t
      * for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    { t.shutdown(timeout) } -> std::same_as<TTask<expected<void, WSError>>>;
+    { t.shutdown(fail_connection, timeout) } -> std::same_as<TTask<expected<void, WSError>>>;
 
     /**
      * Close the socket connection and all associated resources.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    { t.close() } -> std::same_as<TTask<expected<void, WSError>>>;
+    { t.close(fail_connection) } -> std::same_as<TTask<expected<void, WSError>>>;
 };
 
 } // namespace ws_client

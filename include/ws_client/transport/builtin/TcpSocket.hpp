@@ -45,6 +45,7 @@ public:
     /**
      * Create a TCP socket from a hostname and a port.
      * The socket will be closed when the object is destroyed.
+     * 
      * @param address       The address info of the server to connect to.
      */
     explicit TcpSocket(TLogger* logger, AddressInfo address) noexcept
@@ -55,7 +56,7 @@ public:
     ~TcpSocket() noexcept override
     {
         if (fd_ != -1)
-            this->close();
+            this->close(true);
     }
 
     // disable copy
@@ -477,25 +478,34 @@ public:
      * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual expected<void, WSError> shutdown(Timeout<>& timeout) noexcept override
+    virtual expected<void, WSError> shutdown(
+        bool fail_connection, Timeout<>& timeout
+    ) noexcept override
     {
-        if (fd_ != -1)
+        if (!fail_connection)
         {
+            if (fd_ != -1)
+            {
 #if WS_CLIENT_LOG_TCP > 0
-            logger_->template log<LogLevel::D, LogTopic::TCP>(
-                std::format("Shutting down socket (fd={})", fd_)
-            );
+                logger_->template log<LogLevel::D, LogTopic::TCP>(
+                    std::format("Shutting down socket (fd={})", fd_)
+                );
 #endif
 
-            int ret = ::shutdown(fd_, SHUT_RDWR);
-            if (ret != 0)
-            {
-                auto err = make_error(ret, "Shutdown of socket failed");
+                int ret = ::shutdown(fd_, SHUT_RDWR);
+                if (ret != 0)
+                {
+                    auto err = make_error(ret, "Shutdown of socket failed");
 #if WS_CLIENT_LOG_TCP > 0
-                logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
+                    logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
 #endif
-                return err;
+                    return err;
+                }
             }
         }
         return {};
@@ -504,8 +514,12 @@ public:
     /**
      * Close the socket connection and all associated resources.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual expected<void, WSError> close() noexcept override
+    virtual expected<void, WSError> close(bool fail_connection) noexcept override
     {
         if (fd_ != -1)
         {

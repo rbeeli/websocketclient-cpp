@@ -2,7 +2,7 @@
   "terminal.integrated.allowChords": false,
   "terminal.integrated.drawBoldTextInBrightColors": false,
   "terminal.integrated.gpuAcceleration": "on",
-  "terminal.integrated.scrollback": 1000,
+  "terminal.integrated.scrollback": 10000,
   "vcpkg.target.useManifest": true,
   "vcpkg.target.useStaticLib": false,
   "cmake.options.statusBarVisibility": "visible",

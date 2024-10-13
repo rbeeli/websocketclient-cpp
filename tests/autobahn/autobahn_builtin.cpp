@@ -66,7 +66,7 @@ using std::byte;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            std::cerr << "Error: " << err->message << std::endl;
+            std::cerr << err << std::endl;
         }
         else
             throw std::runtime_error("Unexpected message type");
@@ -144,7 +144,7 @@ using std::byte;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            std::cerr << "Error: " << err->message << std::endl;
+            std::cerr << err << std::endl;
             WS_TRYV(client.close(err->close_with_code));
             break;
         }

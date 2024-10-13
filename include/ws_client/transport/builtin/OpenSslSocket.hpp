@@ -75,7 +75,7 @@ public:
     ~OpenSslSocket() noexcept override
     {
         if (ssl_ != nullptr)
-            this->close();
+            this->close(true);
     }
 
     // disable copy
@@ -564,60 +564,71 @@ public:
      * for a clean shutdown of the SSL layer.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual expected<void, WSError> shutdown(Timeout<>& timeout) noexcept override
+    virtual expected<void, WSError> shutdown(
+        bool fail_connection, Timeout<>& timeout
+    ) noexcept override
     {
-        // shutdown the SSL layer
-        // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
-        if (ssl_)
+        if (!fail_connection)
         {
-            int ret;
-            do
+            // shutdown the SSL layer
+            // https://stackoverflow.com/questions/28056056/handling-ssl-shutdown-correctly
+            if (ssl_)
             {
-                ret = SSL_shutdown(ssl_);
-                if (ret == 0)
+                int ret;
+                do
                 {
-                    // wait for the peer's close_notify alert
-                    continue;
-                }
-                else if (ret < 0)
-                {
-                    int ssl_err = SSL_get_error(ssl_, ret);
-                    if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
+                    ret = SSL_shutdown(ssl_);
+                    if (ret == 0)
                     {
-                        // use select() to wait for the socket to get ready
-                        WS_TRY(ready, ssl_select(timeout, ssl_err));
-                        if (!ready.value())
+                        // wait for the peer's close_notify alert
+                        continue;
+                    }
+                    else if (ret < 0)
+                    {
+                        int ssl_err = SSL_get_error(ssl_, ret);
+                        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                         {
-                            return WS_ERROR(
-                                timeout_error, "SSL shutdown timed out", close_code::not_set
-                            );
+                            // use select() to wait for the socket to get ready
+                            WS_TRY(ready, ssl_select(timeout, ssl_err));
+                            if (!ready.value())
+                            {
+                                return WS_ERROR(
+                                    timeout_error, "SSL shutdown timed out", close_code::not_set
+                                );
+                            }
+                        }
+                        else if (ssl_err == SSL_ERROR_SYSCALL)
+                        {
+                            if (errno == EINTR)
+                                continue; // interrupted, retry immediately
+                            return syscall_error(-1, "SSL syscall error during shutdown");
+                        }
+                        else
+                        {
+                            auto err = ssl_error(ssl_err, "SSL shutdown failed");
+#if WS_CLIENT_LOG_SSL > 0
+                            logger_->template log<LogLevel::W, LogTopic::SSL>(err.error().to_string(
+                            ));
+#endif
+                            return err;
                         }
                     }
-                    else if (ssl_err == SSL_ERROR_SYSCALL)
-                    {
-                        if (errno == EINTR)
-                            continue; // interrupted, retry immediately
-                        return syscall_error(-1, "SSL syscall error during shutdown");
-                    }
-                    else
-                    {
-                        auto err = ssl_error(ssl_err, "SSL shutdown failed");
-#if WS_CLIENT_LOG_SSL > 0
-                        logger_->template log<LogLevel::W, LogTopic::SSL>(err.error().to_string());
-#endif
-                        return err;
-                    }
-                }
-            } while (ret != 1 && !timeout.is_expired());
+                } while (ret != 1 && !timeout.is_expired());
 
 #if WS_CLIENT_LOG_SSL > 0
-            logger_->template log<LogLevel::D, LogTopic::SSL>("SSL layer shutdown successfully");
+                logger_->template log<LogLevel::D, LogTopic::SSL>("SSL layer shutdown successfully"
+                );
 #endif
+            }
         }
 
         // shutdown the underlying TCP socket
-        socket_.shutdown(timeout);
+        socket_.shutdown(fail_connection, timeout);
 
         return {};
     }
@@ -625,8 +636,12 @@ public:
     /**
      * Close the socket connection and all associated resources.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual expected<void, WSError> close() noexcept override
+    virtual expected<void, WSError> close(bool fail_connection) noexcept override
     {
         // free the SSL structure
         if (ssl_)
@@ -637,7 +652,7 @@ public:
         }
 
         // close the underlying TCP socket
-        socket_.close();
+        socket_.close(fail_connection);
 
         return {};
     }
@@ -655,6 +670,13 @@ private:
     {
 #if WS_CLIENT_LOG_SSL > 0
         logger_->template log<LogLevel::E, LogTopic::SSL>(msg);
+#endif
+    }
+
+    void ssl_log_warning(string_view msg) noexcept
+    {
+#if WS_CLIENT_LOG_SSL > 0
+        logger_->template log<LogLevel::W, LogTopic::SSL>(msg);
 #endif
     }
 
@@ -755,18 +777,22 @@ private:
 
             case X509_V_ERR_CERT_NOT_YET_VALID:
                 if (cert)
-                    this_->ssl_log_error(std::format(
-                        "Certificate not valid yet for subject: {}", get_cert_subject(cert)
-                    ));
+                    this_->ssl_log_error(
+                        std::format(
+                            "Certificate not valid yet for subject: {}", get_cert_subject(cert)
+                        )
+                    );
                 else
                     this_->ssl_log_error("Certificate not valid yet.");
                 break;
 
             case X509_V_ERR_CERT_HAS_EXPIRED:
                 if (cert)
-                    this_->ssl_log_error(std::format(
-                        "Certificate has expired for subject: {}", get_cert_subject(cert)
-                    ));
+                    this_->ssl_log_error(
+                        std::format(
+                            "Certificate has expired for subject: {}", get_cert_subject(cert)
+                        )
+                    );
                 else
                     this_->ssl_log_error("Certificate has expired.");
                 break;
@@ -825,9 +851,24 @@ private:
             string direction = (where & SSL_CB_READ) ? "read" : "write";
             string alert_type = SSL_alert_type_string_long(ret);
             string alert_desc = SSL_alert_desc_string_long(ret);
-            this_->ssl_log_error(
-                std::format("SSL alert {} {}: {}", direction, alert_type, alert_desc)
-            );
+            if (alert_type == "warning")
+            {
+                this_->ssl_log_warning(
+                    std::format("SSL alert {} {}: {}", direction, alert_type, alert_desc)
+                );
+            }
+            else if (alert_type == "fatal")
+            {
+                this_->ssl_log_error(
+                    std::format("SSL alert {} {}: {}", direction, alert_type, alert_desc)
+                );
+            }
+            else
+            {
+                this_->ssl_log_debug(
+                    std::format("SSL alert {} {}: {}", direction, alert_type, alert_desc)
+                );
+            }
         }
         else if (where & SSL_CB_EXIT)
         {
@@ -842,9 +883,11 @@ private:
                 int err = SSL_get_error(ssl, ret);
                 if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
                 {
-                    this_->ssl_log_error(std::format(
-                        "SSL {} error in {} (code {})", str, SSL_state_string_long(ssl), err
-                    ));
+                    this_->ssl_log_error(
+                        std::format(
+                            "SSL {} error in {} (code {})", str, SSL_state_string_long(ssl), err
+                        )
+                    );
                 }
             }
         }

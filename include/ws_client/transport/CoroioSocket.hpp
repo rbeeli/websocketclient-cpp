@@ -100,9 +100,13 @@ public:
      * This function should be called before closing the socket
      * for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept
+    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(bool fail_connection, Timeout<>& timeout) noexcept
     {
         // TODO: Not implemented in coroio
         co_return expected<void, WSError>{};
@@ -111,8 +115,12 @@ public:
     /**
      * Close the socket connection and all associated resources.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> close() noexcept
+    [[nodiscard]] inline TValueTask<expected<void, WSError>> close(bool fail_connection) noexcept
     {
         try
         {

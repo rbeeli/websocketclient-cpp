@@ -52,6 +52,23 @@ target_compile_definitions(autobahn_asio_zlib_ng_utf_simd PRIVATE
 
 # --------------------------------------
 
+add_executable(autobahn_asio_zlib_utf_naive autobahn_asio.cpp ${SOURCES})
+target_link_libraries(autobahn_asio_zlib_utf_naive PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ZLIB::ZLIB
+    asio::asio
+    websocketclient)
+target_compile_definitions(autobahn_asio_zlib_utf_naive PRIVATE
+    ASIO_STANDALONE=1
+    ASIO_NO_TYPEID=1
+    WS_CLIENT_USE_ZLIB_NG=0 # use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=0 # use simdutf for utf-8 validation
+    WS_AUTOBAHN_AGENT_NAME="autobahn_asio_zlib_utf_naive"
+)
+
+# --------------------------------------
+
 # file(GLOB_RECURSE SOURCES "../../include/*.cpp")
 # add_executable(autobahn_coroio autobahn_coroio.cpp ${SOURCES})
 # target_link_libraries(autobahn_coroio PRIVATE

@@ -5,22 +5,34 @@ find_package(ZLIB REQUIRED)
 
 # --------------------------------------
 
-add_executable(test_asio_http test_asio_http.cpp)
-target_link_libraries(test_asio_http PRIVATE
+add_executable(scratch_asio_http asio_http.cpp)
+target_link_libraries(scratch_asio_http PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     ZLIB::ZLIB
     simdutf::simdutf
     asio::asio
     websocketclient)
-target_compile_definitions(test_asio_http PRIVATE
+target_compile_definitions(scratch_asio_http PRIVATE
     ASIO_STANDALONE=1
     ASIO_NO_TYPEID=1)
 
 # --------------------------------------
 
-add_executable(test_openssl test_openssl.cpp)
-target_link_libraries(test_openssl PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+add_executable(scratch_asio_seq_strand asio_seq_strand.cpp)
+target_link_libraries(scratch_asio_seq_strand PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    asio::asio)
+target_compile_definitions(scratch_asio_seq_strand PRIVATE
+    ASIO_STANDALONE=1
+    ASIO_NO_TYPEID=1)
+
+# --------------------------------------
+
+add_executable(scratch_openssl openssl.cpp)
+target_link_libraries(scratch_openssl PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
 
 # --------------------------------------
 

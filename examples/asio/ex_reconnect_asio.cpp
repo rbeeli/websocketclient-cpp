@@ -132,7 +132,7 @@ awaitable<expected<void, WSError>> run()
             }
 
             // error occurred - must close connection
-            logger.log<LogLevel::E, LogTopic::User>(std::format("Error: {}", err->message));
+            logger.log<LogLevel::E, LogTopic::User>(err->to_string());
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             co_return expected<void, WSError>{};
         }

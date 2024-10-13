@@ -67,6 +67,8 @@ static constexpr string_view to_string(close_code code) noexcept
 {
     switch (code)
     {
+        case close_code::not_set:
+            return "not_set";
         case close_code::normal_closure:
             return "normal_closure";
         case close_code::going_away:

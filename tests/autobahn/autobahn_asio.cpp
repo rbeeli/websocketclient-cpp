@@ -91,7 +91,7 @@ using asio::ip::tcp;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            std::cerr << "Error: " << err->message << std::endl;
+            std::cerr << err << std::endl;
         }
         else
             throw std::runtime_error("Unexpected message type");
@@ -167,7 +167,7 @@ using asio::ip::tcp;
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            std::cerr << "Error: " << err->message << std::endl;
+            std::cerr << err << std::endl;
             WS_CO_TRYV(co_await client.close(err->close_with_code));
             break;
         }

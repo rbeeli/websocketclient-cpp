@@ -68,15 +68,13 @@ using namespace std::chrono_literals;
  *                      -  `DefaultMaskKeyGen` (default), based on `xoshiro128p`
  */
 template <
-    template <typename...>
-    typename TTask,
+    template <typename...> typename TTask,
     typename TLogger,
     typename TSocket,
     typename TMaskKeyGen = DefaultMaskKeyGen>
     requires HasSocketOperationsAsync<TSocket, TTask> && HasMaskKeyOperator<TMaskKeyGen>
 class WebSocketClientAsync
 {
-private:
     bool closed_ = true;
 
     BufferedSocketAsync<TSocket, TTask> socket_;
@@ -331,7 +329,7 @@ public:
                 {
                     co_return WSError(
                         WSErrorCode::protocol_error,
-                        "RSV2 or rsv3 bit set, but not supported.",
+                        "RSV2 or RSV3 bit set, but not supported.",
                         close_code::protocol_error
                     );
                 }
@@ -601,13 +599,31 @@ public:
     /**
      * Closes the WebSocket connection.
      * 
-     * This method sends a CLOSE frame to the server,
+     * This method sends a `CLOSE` frame to the server,
      * shuts down the socket communication, and closes the underlying socket connection.
      * 
+     * Under a normal closure, the client sends a `CLOSE` frame to the server,
+     * and performs a graceful shutdown of the connection before closing the socket.
+     * 
+     * If the client has to fail the connection, is immediately closes the connection
+     * without sending a `CLOSE` frame or performing a graceful shutdown.
+     * 
+     * The following `ws_client::close_code` codes result in a connection failure:
+     * - 1002 protocol_error
+     * - 1003 unacceptable_data_type
+     * - 1007 invalid_frame_payload_data
+     * - 1008 policy_violation
+     * - 1009 message_too_big
+     * - 1010 missing_extension
+     * - 1011 unexpected_condition
+     * 
      * This method can be called multiple times.
+     * 
+     * References:
+     * - https://www.rfc-editor.org/rfc/rfc6455#section-7.1.7
      */
     [[nodiscard]] inline TTask<expected<void, WSError>> close(
-        const close_code code, std::chrono::milliseconds timeout_ms = 5s
+        close_code code, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)
@@ -615,30 +631,62 @@ public:
 
         Timeout timeout(timeout_ms);
 
-        // send close frame
+        // determine if to fail connection and close it immediately
+        bool fail_conn = code == close_code::not_set || //
+                         code == close_code::protocol_error ||
+                         code == close_code::unacceptable_data_type ||
+                         code == close_code::invalid_frame_payload_data ||
+                         code == close_code::policy_violation ||
+                         code == close_code::message_too_big ||
+                         code == close_code::missing_extension ||
+                         code == close_code::unexpected_condition;
+
+        if (!fail_conn)
         {
+            // client in error state, close connection immediately
+            logger_->template log<LogLevel::D, LogTopic::TCP>(
+                std::format("Graceful close with error code: {}", to_string(code))
+            );
+
+            // send close frame
             auto res = co_await this->send_close_frame(code, timeout);
             if (!res.has_value())
             {
 #if WS_CLIENT_LOG_SEND_FRAME > 0
-                logger_->template log<LogLevel::W, LogTopic::SendFrame>(
-                    std::format("Failed to send close frame: {}", res.error())
-                );
+                logger_->template log<LogLevel::E, LogTopic::SendFrame>(std::format(
+                    "Failed to send close frame with close code {}: {}",
+                    to_string(code),
+                    res.error()
+                ));
 #endif
+                // indicate that the connection should be failed due to error
+                fail_conn = true;
+                code = close_code::not_set;
             }
+        }
+
+        if (fail_conn)
+        {
+            // client in error state, close connection immediately
+            logger_->template log<LogLevel::E, LogTopic::TCP>(
+                std::format("Failing connection with close code: {}", to_string(code))
+            );
         }
 
         // mark as closed
         this->closed_ = true;
 
-        // shutdown socket communication (ignore errors, close socket anyway).
-        // often times, the server will close the connection after receiving the close frame,
+        // Shutdown socket communication (ignore errors, close socket anyway).
+        // Often times, the server will close the connection after receiving the close frame,
         // which will result in an error when trying to shutdown the socket.
-        co_await this->socket_.underlying().shutdown(timeout);
+        // This call is required to ensure all ASIO operations are cancelled
+        // before closing the socket, even if the server has already closed the connection
+        // in the non-graceful case.
+        co_await this->socket_.underlying().shutdown(fail_conn, timeout);
 
         // close underlying socket connection
         {
-            auto res = co_await this->socket_.underlying().close();
+            auto res = co_await this->socket_.underlying().close(fail_conn);
             if (!res.has_value())
             {
 #if WS_CLIENT_LOG_TCP > 0
@@ -682,18 +730,22 @@ private:
         {
             // 16 bit payload size
             uint16_t tmp2;
-            WS_CO_TRYV(co_await this->socket_.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
-            ));
+            WS_CO_TRYV(
+                co_await this->socket_.read_exact(
+                    span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
+                )
+            );
             payload_size = network_to_host(tmp2);
         }
         else
         {
             // 64 bit payload size
             uint64_t tmp3;
-            WS_CO_TRYV(co_await this->socket_.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
-            ));
+            WS_CO_TRYV(
+                co_await this->socket_.read_exact(
+                    span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
+                )
+            );
             payload_size = network_to_host(tmp3);
         }
 

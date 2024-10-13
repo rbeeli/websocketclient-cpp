@@ -135,8 +135,14 @@ public:
      * This function should be called before closing the socket for a clean shutdown.
      * The return value in case of error may be ignored by the caller.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept
+    [[nodiscard]] inline awaitable<expected<void, WSError>> shutdown(
+        bool fail_connection, Timeout<>& timeout
+    ) noexcept
     {
 #if WS_CLIENT_LOG_TCP > 0
         logger_->template log<LogLevel::D, LogTopic::TCP>("Cancelling socket operations");
@@ -145,50 +151,60 @@ public:
         // cancel all outstanding asynchronous operations
         socket_.lowest_layer().cancel();
 
-        if constexpr (std::is_same<SocketType, asio::ssl::stream<asio::ip::tcp::socket>>::value)
+        if (!fail_connection)
         {
-#if WS_CLIENT_LOG_SSL > 0
-            logger_->template log<LogLevel::D, LogTopic::SSL>("SSL before async_shutdown");
-#endif
-
-            // asynchronously shut down the SSL connection, but don't wait.
-            // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
-            asio::error_code ec1;
-            asio::error_code ec2;
-            asio::steady_timer timer{socket_.get_executor()};
-            timer.expires_after(timeout.remaining());
-            auto res = co_await (
-                socket_.async_shutdown(asio::redirect_error(asio::use_awaitable, ec1)) ||
-                timer.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
-            );
-            timer.cancel();
-
-            // check if timed out (ignore error)
-            if (res.index() == 1)
+            if constexpr (std::is_same<SocketType, asio::ssl::stream<asio::ip::tcp::socket>>::value)
             {
+                // shut down the SSL layer gracefully.
+                // we must do this in ASIO even for failed connections, to ensure all operations are cancelled,
+                // otherwise the socket will be closed immediately, but the operations will still be running
+                // and may cause a crash.
+
 #if WS_CLIENT_LOG_SSL > 0
-                logger_->template log<LogLevel::W, LogTopic::SSL>("SSL async_shutdown timed out");
+                logger_->template log<LogLevel::D, LogTopic::SSL>("SSL before async_shutdown");
+#endif
+
+                // asynchronously shut down the SSL connection, but don't wait.
+                // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
+                asio::error_code ec1;
+                asio::error_code ec2;
+                asio::steady_timer timer{socket_.get_executor()};
+                timer.expires_after(timeout.remaining());
+                auto res = co_await (
+                    socket_.async_shutdown(asio::redirect_error(asio::use_awaitable, ec1)) ||
+                    timer.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
+                );
+                timer.cancel();
+
+                // check if timed out (ignore error)
+                if (res.index() == 1)
+                {
+#if WS_CLIENT_LOG_SSL > 0
+                    logger_->template log<LogLevel::W, LogTopic::SSL>("SSL async_shutdown timed out"
+                    );
 
 #endif
+                }
+
+                // shutdown failed
+                if (ec1 && ec1 != asio::error::eof)
+                    co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
             }
 
-            if (ec1 && ec1 != asio::error::eof)
-                co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
+#if WS_CLIENT_LOG_TCP > 0
+            logger_->template log<LogLevel::D, LogTopic::TCP>("TCP before shutdown");
+#endif
+
+            // shut down the (underlying) TCP connection
+            asio::error_code ec;
+            socket_.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            if (ec && ec != asio::error::eof)
+                co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
+
+#if WS_CLIENT_LOG_TCP > 0
+            logger_->template log<LogLevel::D, LogTopic::TCP>("TCP after shutdown");
+#endif
         }
-
-#if WS_CLIENT_LOG_TCP > 0
-        logger_->template log<LogLevel::D, LogTopic::TCP>("TCP before shutdown");
-#endif
-
-        // shut down the (underlying) TCP connection
-        asio::error_code ec;
-        socket_.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-        if (ec && ec != asio::error::eof)
-            co_return WS_ERROR(transport_error, ec.message(), close_code::not_set);
-
-#if WS_CLIENT_LOG_TCP > 0
-        logger_->template log<LogLevel::D, LogTopic::TCP>("TCP after shutdown");
-#endif
 
         co_return expected<void, WSError>{};
     }
@@ -196,8 +212,12 @@ public:
     /**
      * Close the socket connection and all associated resources.
      * Safe to call multiple times.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    [[nodiscard]] inline awaitable<expected<void, WSError>> close() noexcept
+    [[nodiscard]] inline awaitable<expected<void, WSError>> close(bool fail_connection) noexcept
     {
         asio::error_code ec;
 

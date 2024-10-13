@@ -41,8 +41,8 @@
         }
       },
       "environment": {
-        "__DISABLED": "-fno-exceptions -Wfatal-errors -Wunused -Wconversion",
-        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -Wall -Wpedantic -Wextra -fno-rtti -Wno-unused-parameter -Wno-unused-function -Werror=return-type -Woverloaded-virtual -Wnon-virtual-dtor -Wno-ignored-attributes"
+        "__DISABLED": "-stdlib=libc++  -fno-exceptions -Wfatal-errors -Wunused -Wconversion",
+        "CMAKE_CXX_FLAGS": "-Wall -Wpedantic -Wextra -fno-rtti -Wno-unused-parameter -Wno-unused-function -Werror=return-type -Woverloaded-virtual -Wnon-virtual-dtor -Wno-ignored-attributes"
       }
     },
     {
@@ -117,10 +117,24 @@
       }
     },
     {
-      "name": "gcc_debug_examples_san",
+      "name": "gcc_debug_examples_san_leak",
       "inherits": ["gcc_debug_examples"],
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak -fsanitize=address -fsanitize=undefined"
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=leak"
+      }
+    },
+    {
+      "name": "gcc_debug_examples_san_address",
+      "inherits": ["gcc_debug_examples"],
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=address"
+      }
+    },
+    {
+      "name": "gcc_debug_examples_san_undefined",
+      "inherits": ["gcc_debug_examples"],
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "$env{CMAKE_CXX_FLAGS} -fsanitize=undefined"
       }
     },
     {
@@ -208,6 +222,13 @@
       "inherits": ["clang_release"],
       "cacheVariables": {
         "WS_CLIENT_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "clang_release_tests",
+      "inherits": ["clang_release"],
+      "cacheVariables": {
+        "WS_CLIENT_BUILD_TESTS": "ON"
       }
     },
     {

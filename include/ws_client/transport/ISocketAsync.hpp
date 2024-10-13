@@ -55,13 +55,23 @@ public:
      * This function should be called before closing the socket
      * for a clean shutdown of the SSL layer.
      * The return value in case of error may be ignored by the caller.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual TTask<expected<void, WSError>> shutdown(Timeout<>& timeout) noexcept = 0;
+    virtual TTask<expected<void, WSError>> shutdown(
+        bool fail_connection, Timeout<>& timeout
+    ) noexcept = 0;
 
     /**
      * Close underlying socket.
+     * 
+     * @param fail_connection  If `true`, the connection is failed immediately,
+     *                         e.g. in case of an error. If `false`, the connection
+     *                         is gracefully closed.
      */
-    virtual TTask<expected<void, WSError>> close() noexcept = 0;
+    virtual TTask<expected<void, WSError>> close(bool fail_connection) noexcept = 0;
 };
 
 } // namespace ws_client

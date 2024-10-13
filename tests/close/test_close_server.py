@@ -5,6 +5,7 @@ import asyncio
 import socket
 import sys
 import websockets
+from websockets.server import WebSocketServerProtocol
 import ssl
 import logging
 
@@ -13,6 +14,13 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 
+class CustomWebSocketServerProtocol(WebSocketServerProtocol):
+    async def send_invalid_frame(self):
+        # Create an invalid frame (this example uses an undefined opcode)
+        invalid_frame = b'\x0c\x00'  # Opcode 0xC is undefined
+        
+        # Send the invalid frame directly, bypassing websockets' frame handling
+        self.transport.write(invalid_frame)
 
 async def wss_server(websocket, path):
     global close_mode
@@ -39,6 +47,9 @@ async def wss_server(websocket, path):
     elif close_mode == "transport_close":
         websocket.transport.close()
         await asyncio.sleep(2)
+    elif close_mode == "invalid_frame":
+        await websocket.send_invalid_frame()
+        await asyncio.sleep(2)
     else:
         print("Invalid close mode: ", close_mode)
         sys.exit(1)
@@ -60,8 +71,8 @@ if __name__ == "__main__":
     # set up SSL context
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(
-        os.path.join(os.path.dirname(__file__), "certs/cert.pem"),
-        os.path.join(os.path.dirname(__file__), "certs/key.pem"),
+        os.path.join(os.path.dirname(__file__), "../certs/cert.pem"),
+        os.path.join(os.path.dirname(__file__), "../certs/key.pem"),
     )
 
     start_server = websockets.serve(
@@ -71,6 +82,7 @@ if __name__ == "__main__":
         ping_interval=5,
         ssl=ssl_context,
         logger=logging.getLogger("websockets.server"),
+        create_protocol=CustomWebSocketServerProtocol
     )
 
     asyncio.get_event_loop().run_until_complete(start_server)

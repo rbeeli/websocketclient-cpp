@@ -6,7 +6,6 @@ Pull requests and issues are welcome.
 
 - Source location in logging seems off
 - More default logging of control frames
-- Do not call shutdown if connection is already closed/errored
 - Git automatic builds
 - Auto fragmentation when writing large messages?
 - Timeout support for DnsResolver
@@ -22,17 +21,17 @@ Pull requests and issues are welcome.
 Lists all connections:
 
 ```bash
-sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)"
+sudo ss -tp | grep "pid=$(pidof ex_reconnect_asio)"
 sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)"
 ```
 
 Closes WebSocket connection at port 443 of process:
 
 ```bash
-sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)'
+sudo ss -tp | grep "pid=$(pidof ex_reconnect_asio)" | grep -oP '\s\K[^ ]+(?=:https)'
 sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)" | grep -oP '\s\K[^ ]+(?=:https)'
 
-sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_reconnect_builtin)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
+sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_reconnect_asio)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
 sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_binance_builtin)" | grep -oP '\s\K[^ ]+(?=:https)') dport = 443
 
 sudo ss -K dst $(sudo ss -tp | grep "pid=$(pidof ex_hello_ws_builtin)" | grep -oP '\s\K[^ ]+(?=:http)') dport = 8080
