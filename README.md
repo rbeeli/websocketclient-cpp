@@ -41,6 +41,10 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
 - [Contribute](#contribute)
 - [License](#license)
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Dependencies
 
 | Dependency                                       | Description                                                                        | Required |
