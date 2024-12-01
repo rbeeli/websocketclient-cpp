@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.15)
 
 # Set the C++ standard and related settings
 set(CMAKE_CXX_STANDARD 23)
@@ -6,14 +6,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(websocketclient
-    VERSION 0.1
+    VERSION 0.3
     LANGUAGES CXX)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 add_library(${PROJECT_NAME} INTERFACE)
 
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>)
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
 option(WS_CLIENT_BUILD_EXAMPLES "Build example programs in ./examples directory" OFF)
 option(WS_CLIENT_BUILD_TESTS "Build tests in ./test directory" OFF)
@@ -41,42 +45,32 @@ if(WS_CLIENT_BUILD_SCRATCH)
 endif()
 
 # --------------------------------------------------
-
 # Install
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
+# --------------------------------------------------
 
+# Install the library
+install(TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}Targets
+)
+
+# Install header files
+install(DIRECTORY include/ DESTINATION include)
+
+# Export the library target
+install(EXPORT ${PROJECT_NAME}Targets
+    FILE ${PROJECT_NAME}Config.cmake
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION lib/cmake/${PROJECT_NAME}
+)
+
+# Generate a package config file for find_package
+include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
     COMPATIBILITY SameMajorVersion
 )
 
-export(
-    TARGETS ${PROJECT_NAME}
-    NAMESPACE ${PROJECT_NAME}::
-    FILE "${PROJECT_NAME}Config.cmake"
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    DESTINATION lib/cmake/${PROJECT_NAME}
 )
-
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    install(
-        DIRECTORY "include/"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-
-    install(
-        TARGETS ${PROJECT_NAME}
-        EXPORT "${PROJECT_NAME}Config"
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-
-    install(
-        EXPORT "${PROJECT_NAME}Config"
-        NAMESPACE ${PROJECT_NAME}::
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
-    )
-
-    install(
-        FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
-    )
-endif()
