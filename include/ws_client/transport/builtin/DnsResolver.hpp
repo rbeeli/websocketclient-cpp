@@ -19,9 +19,6 @@
 
 namespace ws_client
 {
-using std::string;
-using std::vector;
-
 /**
  * Resolves hostname to IP address.
  * Supports IPv4 (`AF_INET`) and IPv6 (`AF_INET6`) address families.
@@ -51,9 +48,9 @@ public:
      * 
      * @return Vector of `AddressInfo` objects, each containing resolved IP address and other info.
      */
-    expected<vector<AddressInfo>, WSError> resolve(
-        const string& hostname,
-        const string& service,
+    std::expected<std::vector<AddressInfo>, WSError> resolve(
+        const std::string& hostname,
+        const std::string& service,
         AddrType type = AddrType::unspecified,
         bool resolve_canonname = false
     ) const noexcept
@@ -114,7 +111,7 @@ public:
         }
 #endif
 
-        vector<AddressInfo> result;
+        std::vector<AddressInfo> result;
         for (auto res = getaddrinfo_res; res != nullptr; res = res->ai_next)
         {
             if (res->ai_family == AF_INET &&
@@ -130,11 +127,11 @@ public:
                     result.emplace_back(
                         hostname,
                         AddrType::ipv4,
-                        string(ipCStr),
+                        std::string(ipCStr),
                         res->ai_family,
                         res->ai_addrlen,
                         res->ai_addr,
-                        string(res->ai_canonname ? res->ai_canonname : "")
+                        std::string(res->ai_canonname ? res->ai_canonname : "")
                     );
                 }
                 else
@@ -143,7 +140,7 @@ public:
                     return WS_ERROR(
                         transport_error,
                         std::format(
-                            "Failed to convert IPv4 address to string: {} ({})",
+                            "Failed to convert IPv4 address to string: {} (errno={})",
                             std::strerror(error_code),
                             error_code
                         ),
@@ -164,11 +161,11 @@ public:
                     result.emplace_back(
                         hostname,
                         AddrType::ipv6,
-                        string(ipCStr),
+                        std::string(ipCStr),
                         res->ai_family,
                         res->ai_addrlen,
                         res->ai_addr,
-                        string(res->ai_canonname ? res->ai_canonname : "")
+                        std::string(res->ai_canonname ? res->ai_canonname : "")
                     );
                 }
                 else
@@ -177,7 +174,7 @@ public:
                     return WS_ERROR(
                         transport_error,
                         std::format(
-                            "Failed to convert IPv6 address to string: {} ({})",
+                            "Failed to convert IPv6 address to string: {} (errno={})",
                             std::strerror(error_code),
                             error_code
                         ),

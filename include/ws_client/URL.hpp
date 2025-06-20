@@ -13,9 +13,6 @@
 
 namespace ws_client
 {
-using std::string;
-using std::string_view;
-
 /**
  * URL parser.
  * 
@@ -37,13 +34,16 @@ using std::string_view;
 class URL
 {
 private:
-    string protocol_;
-    string host_;
+    std::string protocol_;
+    std::string host_;
     int port_;
-    string resource_;
+    std::string resource_;
 
     explicit URL(
-        const string& protocol, const string& host, const int port, const string& resource
+        const std::string& protocol,
+        const std::string& host,
+        const int port,
+        const std::string& resource
     ) noexcept
         : protocol_(protocol), host_(host), port_(port), resource_(resource)
     {
@@ -53,7 +53,7 @@ public:
     /**
      * Map of default ports for known protocols.
      */
-    inline static std::unordered_map<string, int, string_like_hash, std::equal_to<>>
+    inline static std::unordered_map<std::string, int, string_like_hash, std::equal_to<>>
         protocol_port_map = {
             {"https", 443}, {"wss", 443}, {"http", 80}, {"ws", 80}, {"ftp", 21}, {"ssh", 22}
     };
@@ -64,7 +64,7 @@ public:
      * Examples:
      *      "http", "https", "ws", "wss", "ftp"
      */
-    [[nodiscard]] inline const string& protocol() const noexcept
+    [[nodiscard]] inline const std::string& protocol() const noexcept
     {
         return protocol_;
     }
@@ -75,7 +75,7 @@ public:
      * Examples:
      *      "subdomain.domain.tld", "localhost"
      */
-    [[nodiscard]] inline const string& host() const noexcept
+    [[nodiscard]] inline const std::string& host() const noexcept
     {
         return host_;
     }
@@ -101,7 +101,7 @@ public:
      * Examples:
      *      "80", "443", "21"
      */
-    [[nodiscard]] inline string port_str() const noexcept
+    [[nodiscard]] inline std::string port_str() const noexcept
     {
         return std::to_string(port_);
     }
@@ -113,7 +113,8 @@ public:
      * Examples:
      *      "/mail/?a=b&c=b", "/index.html", "/"
      */
-    [[nodiscard]] inline const string& resource() const noexcept
+#pragma once
+    [[nodiscard]] inline const std::string& resource() const noexcept
     {
         return resource_;
     }
@@ -124,16 +125,16 @@ public:
      * The constructor is private, so this is the only way to create an `URL` object
      * in order to return an error if the URL is invalid without using exceptions.
      */
-    [[nodiscard]] static expected<URL, WSError> parse(string_view url) noexcept
+    [[nodiscard]] static std::expected<URL, WSError> parse(std::string_view url) noexcept
     {
-        string protocol;
-        string host;
+        std::string protocol;
+        std::string host;
         int port = 0;
-        string resource;
+        std::string resource;
 
         // extract protocol
         size_t protocol_end_pos = url.find("://");
-        if (protocol_end_pos != string::npos)
+        if (protocol_end_pos != std::string::npos)
         {
             protocol = url.substr(0, protocol_end_pos);
             std::transform(protocol.begin(), protocol.end(), protocol.begin(), ::tolower);
@@ -159,7 +160,7 @@ public:
         {
             // find the closing bracket for IPv6 address
             size_t ipv6_end_pos = url.find(']', offset);
-            if (ipv6_end_pos == string::npos)
+            if (ipv6_end_pos == std::string::npos)
             {
                 return WS_ERROR(
                     url_error,
@@ -176,7 +177,9 @@ public:
             size_t port_start = ipv6_end_pos + 1;
             if (url[port_start] == ':')
             {
-                string_view port_str = url.substr(port_start + 1, host_end_pos - port_start - 1);
+                std::string_view port_str = url.substr(
+                    port_start + 1, host_end_pos - port_start - 1
+                );
                 if (port_str.empty())
                 {
                     port = defaultport_;
@@ -196,11 +199,11 @@ public:
         {
             host_end_pos = url.find_first_of('/', offset);
             size_t colon_pos = url.find(':', offset);
-            if (colon_pos != string::npos &&
-                (host_end_pos == string::npos || colon_pos < host_end_pos))
+            if (colon_pos != std::string::npos &&
+                (host_end_pos == std::string::npos || colon_pos < host_end_pos))
             {
                 host = url.substr(offset, colon_pos - offset);
-                string_view port_str = url.substr(colon_pos + 1, host_end_pos - colon_pos - 1);
+                std::string_view port_str = url.substr(colon_pos + 1, host_end_pos - colon_pos - 1);
                 if (port_str.empty())
                 {
                     port = defaultport_;
@@ -219,7 +222,7 @@ public:
         }
 
         // extract resource (everything after host/port)
-        resource = (host_end_pos != string::npos ? url.substr(host_end_pos) : "/");
+        resource = (host_end_pos != std::string::npos ? url.substr(host_end_pos) : "/");
 
         return URL(protocol, host, port, resource);
     }
@@ -228,7 +231,9 @@ public:
      * Returns the default port for the specified protocol.
      * The string must be lowercase.
      */
-    [[nodiscard]] static expected<int, WSError> get_default_port(string_view protocol) noexcept
+    [[nodiscard]] static std::expected<int, WSError> get_default_port(
+        std::string_view protocol
+    ) noexcept
     {
         auto it = protocol_port_map.find(protocol);
         if (it != protocol_port_map.end())
@@ -241,7 +246,7 @@ public:
         );
     }
 
-    [[nodiscard]] static inline expected<int, WSError> parse_port(string_view input)
+    [[nodiscard]] static inline std::expected<int, WSError> parse_port(std::string_view input)
     {
         int port;
         auto const res = std::from_chars(input.data(), input.data() + input.size(), port);
@@ -257,8 +262,8 @@ public:
 
         return port;
     }
-    
-    [[nodiscard]] string to_string() const noexcept
+
+    [[nodiscard]] std::string to_string() const noexcept
     {
         return std::format("{}://{}:{}{}", protocol_, host_, port_, resource_);
     }

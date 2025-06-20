@@ -24,8 +24,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::byte;
+using byte = std::byte;
 using namespace std::chrono_literals;
 
 /**
@@ -98,7 +97,7 @@ public:
      * Initialize the socket and set options.
      * This function must be called before `connect`.
      */
-    [[nodiscard]] expected<void, WSError> init() noexcept
+    [[nodiscard]] std::expected<void, WSError> init() noexcept
     {
         if (fd_ != -1)
             return WS_ERROR(logic_error, "TCP socket already initialized", close_code::not_set);
@@ -117,7 +116,9 @@ public:
             return WS_ERROR(
                 transport_error,
                 std::format(
-                    "Error creating TCP socket: {} ({})", std::strerror(error_code), error_code
+                    "Error creating TCP socket: {} (errno={})",
+                    std::strerror(error_code),
+                    error_code
                 ),
                 close_code::not_set
             );
@@ -143,7 +144,7 @@ public:
     /**
      * Establish a connection to the server.
      */
-    [[nodiscard]] expected<void, WSError> connect(
+    [[nodiscard]] std::expected<void, WSError> connect(
         std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
@@ -166,8 +167,9 @@ public:
         }
 
         // check if connection is in progress due to non-blocking mode
-        if (errno != EINPROGRESS)
-            return std::unexpected(make_error(-1, "connecting to the server"));
+        const int errno_ = errno;
+        if (errno_ != EINPROGRESS)
+            return std::unexpected(make_error(errno_, "connecting to the server"));
 
         // use select to wait for the connection or timeout
         WS_TRY(connected, this->wait_writeable(timeout));
@@ -219,7 +221,7 @@ public:
      * Enable or disable TCP_NODELAY option (Nagle's algorithm).
      * Disabling Nagle's algorithm can reduce latency due to reduced buffering.
      */
-    [[nodiscard]] expected<void, WSError> set_TCP_NODELAY(bool value) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_TCP_NODELAY(bool value) noexcept
     {
         int flag = value ? 1 : 0;
         int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
@@ -233,7 +235,7 @@ public:
     /**
      * Enable or disable O_NONBLOCK option (non-blocking mode).
      */
-    [[nodiscard]] expected<void, WSError> set_O_NONBLOCK(bool value) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_O_NONBLOCK(bool value) noexcept
     {
         int flags = fcntl(fd_, F_GETFL, 0);
         if (flags == -1)
@@ -259,7 +261,7 @@ public:
     /**
      * Set SO_RCVBUF option (receive buffer size).
      */
-    [[nodiscard]] expected<void, WSError> set_SO_RCVBUF(int buffer_size) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_SO_RCVBUF(int buffer_size) noexcept
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_RCVBUF"));
@@ -274,7 +276,7 @@ public:
     /**
      * Set SO_SNDBUF option (send buffer size).
      */
-    [[nodiscard]] expected<void, WSError> set_SO_SNDBUF(int buffer_size) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_SO_SNDBUF(int buffer_size) noexcept
     {
         int ret = setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
         WS_TRYV(this->check_error(ret, "set SO_SNDBUF"));
@@ -292,7 +294,7 @@ public:
      * 
      * Note: TCP_QUICKACK is not available on macOS, hence a no-op on that platform.
      */
-    [[nodiscard]] expected<void, WSError> set_TCP_QUICKACK(bool value) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_TCP_QUICKACK(bool value) noexcept
     {
         // suppress unused parameter warning in case TCP_QUICKACK is not available
         (void)value;
@@ -311,7 +313,7 @@ public:
      * Waits for the socket to become readable, without consuming any data.
      * Readable is defined as having data application available to read.
      */
-    inline expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
+    inline std::expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
     {
         // create fd_set for select with timeout
         fd_set read_fds;
@@ -335,9 +337,10 @@ public:
             }
             else
             {
-                if (errno == EINTR)
+                const int errno_ = errno;
+                if (errno_ == EINTR)
                     continue; // interrupted, retry immediately
-                return make_error(ret, "Unexpected error in wait_readable");
+                return make_error(errno_, "Unexpected error in wait_readable");
             }
         }
     }
@@ -346,7 +349,7 @@ public:
      * Waits for the socket to become writable.
      * Writable is defined as being able to write data to the socket.
      */
-    inline expected<bool, WSError> wait_writeable(Timeout<>& timeout) noexcept
+    inline std::expected<bool, WSError> wait_writeable(Timeout<>& timeout) noexcept
     {
         // create fd_set for select with timeout
         fd_set write_fds;
@@ -370,9 +373,10 @@ public:
             }
             else
             {
-                if (errno == EINTR)
+                const int errno_ = errno;
+                if (errno_ == EINTR)
                     continue; // interrupted, retry immediately
-                return make_error(ret, "Unexpected error in wait_writeable");
+                return make_error(errno_, "Unexpected error in wait_writeable");
             }
         }
     }
@@ -383,8 +387,8 @@ public:
      * 
      * @return The number of bytes read, or an error.
      */
-    [[nodiscard]] inline expected<size_t, WSError> read_some(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline std::expected<size_t, WSError> read_some(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept override
     {
         while (true)
@@ -406,7 +410,8 @@ public:
             }
             else
             {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) [[likely]]
+                const int errno_ = errno;
+                if (errno_ == EAGAIN || errno_ == EWOULDBLOCK) [[likely]]
                 {
                     // would block, wait for readability, then try recv again
                     WS_TRY(readable, this->wait_readable(timeout));
@@ -417,10 +422,14 @@ public:
                         );
                     }
                 }
-                else if (errno == EINTR)
+                else if (errno_ == EINTR)
+                {
                     continue; // interrupted, retry immediately
+                }
                 else
-                    return make_error(ret, "Unexpected recv error in socket read operation");
+                {
+                    return make_error(errno_, "Unexpected recv error in socket read operation");
+                }
             }
         }
     }
@@ -431,8 +440,8 @@ public:
      * 
      * @return The number of bytes written, or an error.
      */
-    [[nodiscard]] inline expected<size_t, WSError> write_some(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline std::expected<size_t, WSError> write_some(
+        const std::span<const byte> buffer, Timeout<>& timeout
     ) noexcept override
     {
         while (true)
@@ -454,7 +463,8 @@ public:
             }
             else
             {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) [[likely]]
+                const int errno_ = errno;
+                if (errno_ == EAGAIN || errno_ == EWOULDBLOCK) [[likely]]
                 {
                     // would block, wait for writeability, then try send again
                     WS_TRY(readable, this->wait_writeable(timeout));
@@ -465,10 +475,14 @@ public:
                         );
                     }
                 }
-                else if (errno == EINTR)
+                else if (errno_ == EINTR)
+                {
                     continue; // interrupted, retry immediately
+                }
                 else
-                    return make_error(ret, "Unexpected send error in socket write operation");
+                {
+                    return make_error(errno_, "Unexpected send error in socket write operation");
+                }
             }
         }
     }
@@ -483,7 +497,7 @@ public:
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    virtual expected<void, WSError> shutdown(
+    virtual std::expected<void, WSError> shutdown(
         bool fail_connection, Timeout<>& timeout
     ) noexcept override
     {
@@ -500,7 +514,7 @@ public:
                 int ret = ::shutdown(fd_, SHUT_RDWR);
                 if (ret != 0)
                 {
-                    auto err = make_error(ret, "Shutdown of socket failed");
+                    auto err = make_error(errno, "Shutdown of socket failed");
 #if WS_CLIENT_LOG_TCP > 0
                     logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
 #endif
@@ -519,7 +533,7 @@ public:
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    virtual expected<void, WSError> close(bool fail_connection) noexcept override
+    virtual std::expected<void, WSError> close(bool fail_connection) noexcept override
     {
         if (fd_ != -1)
         {
@@ -532,7 +546,7 @@ public:
             int ret = ::close(fd_);
             if (ret != 0)
             {
-                auto err = make_error(ret, "Socket close failed");
+                auto err = make_error(errno, "Socket close failed");
 #if WS_CLIENT_LOG_TCP > 0
                 logger_->template log<LogLevel::W, LogTopic::TCP>(err.error().to_string());
 #endif
@@ -544,20 +558,24 @@ public:
     }
 
 private:
-    [[nodiscard]] std::unexpected<WSError> make_error(ssize_t ret_code, const string& desc) noexcept
+    /* ===================
+    * Error handling code
+    * =================== */
+
+    [[nodiscard]] std::unexpected<WSError> make_error(int errno_, std::string_view desc) noexcept
     {
-        int errno_ = errno;
-        string msg = std::format(
-            "{} (return code {}): {} ({})", desc, ret_code, std::strerror(errno_), errno_
-        );
+        std::string errno_msg = std::system_category().message(errno_);
+        std::string msg = std::format("{}: {} (errno={})", desc, errno_msg, errno_);
         return WS_ERROR(transport_error, std::move(msg), close_code::not_set);
     }
 
-    [[nodiscard]] expected<void, WSError> check_error(ssize_t ret_code, const string& desc) noexcept
+    [[nodiscard]] std::expected<void, WSError> check_error(
+        int ret_code, std::string_view desc
+    ) noexcept
     {
         if (ret_code != -1)
             return {};
-        return make_error(ret_code, desc);
+        return make_error(errno, desc);
     }
 };
 

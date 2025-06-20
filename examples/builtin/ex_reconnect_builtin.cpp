@@ -6,6 +6,7 @@
 #include <chrono>
 #include <algorithm>
 #include <iomanip>
+#include <thread>
 
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
@@ -15,7 +16,7 @@
 using namespace ws_client;
 using namespace std::chrono;
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     // parse URL
     WS_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
@@ -78,8 +79,8 @@ expected<void, WSError> run()
 
     while (true)
     {
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(*buffer, 5s);                              // 5 sec timeout
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(*buffer, 5s);                                  // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {
@@ -135,6 +136,7 @@ int main()
         if (!res.has_value())
         {
             std::cerr << "Error: " << res.error() << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     }
     return 0;

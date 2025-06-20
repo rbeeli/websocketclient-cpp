@@ -50,7 +50,7 @@ struct CustomLogger
     }
 };
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     // parse URL
     WS_TRY(url, URL::parse("wss://echo.websocket.org/"));
@@ -90,13 +90,13 @@ expected<void, WSError> run()
     for (int i = 0;; i++)
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(*buffer, 60s);                            // 60 sec timeout
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(*buffer, 60s);                                 // 60 sec timeout
 
         if (std::get_if<Message>(&var))
         {
             // write message back to server
-            string text = std::format("This is the {}th message", i);
+            std::string text = std::format("This is the {}th message", i);
             Message msg2(MessageType::text, text);
             WS_TRYV(client.send_message(msg2));
         }

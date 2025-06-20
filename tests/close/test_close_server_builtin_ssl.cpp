@@ -1,9 +1,12 @@
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <expected>
+#include <variant>
 #include <algorithm>
 #include <iomanip>
 #include <thread>
+#include <format>
 
 #include "ws_client/ws_client.hpp"
 #include "ws_client/transport/builtin/TcpSocket.hpp"
@@ -14,7 +17,7 @@
 using namespace ws_client;
 using namespace std::chrono_literals;
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     WS_TRY(url_res, URL::parse("wss://localhost:9443"));
     URL& url = *url_res;
@@ -60,7 +63,7 @@ expected<void, WSError> run()
     WS_TRYV(client.handshake(handshake));
 
     // send message
-    string payload = "test";
+    std::string payload = "test";
     Message msg(MessageType::text, payload);
     WS_TRYV(client.send_message(msg));
     
@@ -70,7 +73,7 @@ expected<void, WSError> run()
     while (true)
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
             client.read_message(*buffer, 60s);
 
         if (auto msg = std::get_if<Message>(&var))
@@ -92,7 +95,7 @@ expected<void, WSError> run()
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I, LogTopic::User>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else

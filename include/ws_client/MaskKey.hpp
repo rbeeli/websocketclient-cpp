@@ -21,8 +21,7 @@
 
 namespace ws_client
 {
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 /**
  * Masking key for masking and unmasking WebSocket frame payloads.
@@ -49,7 +48,7 @@ struct MaskKey
      * This implementation is up to 100x faster than a naive byte-by-byte
      * implementation for large payloads.
      */
-    inline void mask(span<byte> data) const
+    inline void mask(std::span<byte> data) const
     {
         mask_fn(data.data(), data.size(), this->key);
     }

@@ -16,10 +16,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::byte;
-using std::span;
-using std::optional;
+using byte = std::byte;
 
 template <class TSocket>
     requires HasSocketOperations<TSocket>
@@ -54,7 +51,7 @@ public:
      * Waits for the socket to become readable, without consuming any data.
      * Readable is defined as having data application available to read.
      */
-    [[nodiscard]] expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
+    [[nodiscard]] std::expected<bool, WSError> wait_readable(Timeout<>& timeout) noexcept
     {
         return socket_.wait_readable(timeout);
     }
@@ -64,8 +61,8 @@ public:
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] inline expected<size_t, WSError> read_some(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline std::expected<size_t, WSError> read_some(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         return socket_.read_some(buffer, timeout);
@@ -76,8 +73,8 @@ public:
      * Reads exactly 'length' bytes, unless an error occurs, usually due to
      * connection closure by peer.
      */
-    [[nodiscard]] expected<size_t, WSError> read_exact(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] std::expected<size_t, WSError> read_exact(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         size_t total_read = 0;
@@ -102,8 +99,8 @@ public:
      * The delimiter is not included in the buffer.
      */
     template <HasBufferOperations TBuffer>
-    [[nodiscard]] expected<void, WSError> read_until(
-        TBuffer& buffer, const span<byte> delimiter, Timeout<>& timeout
+    [[nodiscard]] std::expected<void, WSError> read_until(
+        TBuffer& buffer, const std::span<byte> delimiter, Timeout<>& timeout
     ) noexcept
     {
         size_t search_offset = 0;
@@ -114,7 +111,7 @@ public:
 
             // append circular buffer data to buffer
             WS_TRY(cb_read_span_res, buffer.append(read_buffer_.size()));
-            span<byte> cb_read_span = *cb_read_span_res;
+            std::span<byte> cb_read_span = *cb_read_span_res;
             read_buffer_.pop(cb_read_span);
 
             // std::cout << string_from_bytes(cb_read_span) << std::endl;
@@ -134,7 +131,7 @@ public:
                 // remove data starting from delimiter from buffer
                 WS_TRYV(buffer.resize(res - buffer_start));
 
-                return expected<void, WSError>{};
+                return std::expected<void, WSError>{};
             }
             else
             {
@@ -150,8 +147,8 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] inline expected<size_t, WSError> write_some(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline std::expected<size_t, WSError> write_some(
+        const std::span<const byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         return socket_.write_some(buffer, timeout);
@@ -161,8 +158,8 @@ public:
      * Writes all data in `buffer` to underlying socket, or returns an error.
      * Does not perform partial writes unless an error occurs.
      */
-    [[nodiscard]] inline expected<void, WSError> write(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline std::expected<void, WSError> write(
+        const std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         size_t total_written = 0;
@@ -175,11 +172,11 @@ public:
             remaining -= written;
         }
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
 private:
-    [[nodiscard]] expected<size_t, WSError> fill_read_buffer(
+    [[nodiscard]] std::expected<size_t, WSError> fill_read_buffer(
         const size_t desired_bytes, Timeout<>& timeout
     ) noexcept
     {
@@ -193,7 +190,7 @@ private:
         // available_as_contiguous_span might return a span that's shorter
         // than the available space in the buffer, because it can only return
         // a single continguous span (from head to end of buffer or from start to tail).
-        span<byte> buf_span = read_buffer_.available_as_contiguous_span();
+        std::span<byte> buf_span = read_buffer_.available_as_contiguous_span();
         WS_TRY(read_bytes_res, socket_.read_some(buf_span, timeout));
 
         // move head by the number of bytes read into buffer

@@ -16,24 +16,21 @@
 
 namespace ws_client
 {
-using std::string;
-using std::string_view;
-
 class HttpParser
 {
 public:
-    static constexpr string_view header_terminator = "\r\n\r\n";
+    static constexpr std::string_view header_terminator = "\r\n\r\n";
 
     /**
      * Parse HTTP status code, protocol version and message from headers.
      * Example: "HTTP/1.1 200 OK"
      */
-    [[nodiscard]] static expected<HttpStatusLine, WSError> parse_request_status_line(
+    [[nodiscard]] static std::expected<HttpStatusLine, WSError> parse_request_status_line(
         std::istringstream& stream
     ) noexcept
     {
         HttpStatusLine result;
-        string temp_status_code;
+        std::string temp_status_code;
 
         if (!(stream >> result.protocol_version >> temp_status_code))
         {
@@ -70,13 +67,13 @@ public:
      * The passed headers string must start with the HTTP status line, followed by
      * one or more header lines.
      */
-    [[nodiscard]] static expected<HttpHeaderFields, WSError> parse_header_fields(
+    [[nodiscard]] static std::expected<HttpHeaderFields, WSError> parse_header_fields(
         std::istringstream& stream
     ) noexcept
     {
         HttpHeaderFields result;
 
-        string line;
+        std::string line;
         while (std::getline(stream, line))
         {
             trim(line);
@@ -95,8 +92,9 @@ public:
                 );
             }
 
-            string header_name = line.substr(0, colon_pos);
-            string header_value = colon_pos < line.size() - 1 ? line.substr(colon_pos + 1) : "";
+            std::string header_name = line.substr(0, colon_pos);
+            std::string header_value = colon_pos < line.size() - 1 ? line.substr(colon_pos + 1)
+                                                                   : "";
 
             // trim whitespace from header value
             trim(header_value);
@@ -122,8 +120,8 @@ public:
      * The passed headers string must start with the HTTP status line, followed by
      * one or more header lines.
      */
-    [[nodiscard]] static expected<HttpHeaderFields, WSError> parse_header_fields(
-        const string& stream
+    [[nodiscard]] static std::expected<HttpHeaderFields, WSError> parse_header_fields(
+        const std::string& stream
     )
     {
         std::istringstream ss(stream);
@@ -131,8 +129,8 @@ public:
     }
 
 
-    [[nodiscard]] static expected<HttpStatusLine, WSError> parse_request_status_line(
-        const string& stream
+    [[nodiscard]] static std::expected<HttpStatusLine, WSError> parse_request_status_line(
+        const std::string& stream
     ) noexcept
     {
         std::istringstream ss(stream);

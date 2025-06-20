@@ -28,22 +28,22 @@ using std::byte;
 using asio::awaitable;
 using asio::ip::tcp;
 
-[[nodiscard]] expected<void, WSError> check_errno(ssize_t error_code, const string& desc) noexcept
+[[nodiscard]] std::expected<void, WSError> check_errno(ssize_t error_code, const string& desc) noexcept
 {
     if (error_code == -1)
     {
         int errno_ = errno;
         return WS_ERROR(
             uncategorized_error,
-            std::format("Error during {}: {} ({})", desc, std::strerror(errno_), errno_),
+            std::format("Error during {}: {} (errno={})", desc, std::strerror(errno_), errno_),
             close_code::not_set
         );
     }
     return {};
 }
 
-[[nodiscard]] static awaitable<expected<string, WSError>> send_request(
-    string url_str, bool read_response
+[[nodiscard]] static awaitable<std::expected<std::string, WSError>> send_request(
+    std::string url_str, bool read_response
 )
 {
     WS_CO_TRY(url_res, URL::parse(url_str));
@@ -102,7 +102,7 @@ using asio::ip::tcp;
     co_return response;
 }
 
-[[nodiscard]] static awaitable<expected<void, WSError>> run_case(string url_str)
+[[nodiscard]] static awaitable<std::expected<void, WSError>> run_case(string url_str)
 {
     WS_CO_TRY(url_res, URL::parse(url_str));
     const URL& url = *url_res;
@@ -177,7 +177,7 @@ using asio::ip::tcp;
 
     WS_CO_TRYV(co_await client.close(close_code::normal_closure));
 
-    co_return expected<void, WSError>{};
+    co_return std::expected<void, WSError>{};
 }
 
 awaitable<void> client()

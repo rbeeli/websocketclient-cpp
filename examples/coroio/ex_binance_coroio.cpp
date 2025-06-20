@@ -51,7 +51,7 @@ struct msg_stats
     }
 };
 
-TValueTask<expected<void, WSError>> client(Loop* loop)
+TValueTask<std::expected<void, WSError>> client(Loop* loop)
 {
     // parse URL
     WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
@@ -219,11 +219,11 @@ TValueTask<expected<void, WSError>> client(Loop* loop)
             // error occurred - must close connection
             logger.log<LogLevel::E, LogTopic::User>(err->to_string());
             WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return expected<void, WSError>{};
+            co_return std::expected<void, WSError>{};
         }
     }
 
-    co_return expected<void, WSError>{};
+    co_return std::expected<void, WSError>{};
 };
 
 

@@ -17,10 +17,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::byte;
-using std::span;
-using std::optional;
+using byte = std::byte;
 
 template <typename TSocket, template <typename...> typename TTask>
     requires HasSocketOperationsAsync<TSocket, TTask>
@@ -52,12 +49,24 @@ public:
     }
 
     /**
+     * Checks if there is data available to be read from the socket without consuming it.
+     * For SSL sockets, this checks for actual application data, not just SSL protocol bytes.
+     * 
+     * @return true if there is data available to read, false if not,
+     *         or WSError in case of any unexpected errors.
+     */
+    [[nodiscard]] inline std::expected<bool, WSError> can_read() noexcept
+    {
+        return socket_.can_read();
+    }
+
+    /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] inline TTask<expected<size_t, WSError>> read_some(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline TTask<std::expected<size_t, WSError>> read_some(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         co_return co_await socket_.read_some(buffer, timeout);
@@ -68,8 +77,8 @@ public:
      * Reads exactly 'length' bytes, unless an error occurs, usually due to
      * connection closure by peer.
      */
-    [[nodiscard]] TTask<expected<size_t, WSError>> read_exact(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] TTask<std::expected<size_t, WSError>> read_exact(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         size_t total_read = 0;
@@ -94,8 +103,8 @@ public:
      * The delimiter is not included in the buffer.
      */
     template <HasBufferOperations TBuffer>
-    [[nodiscard]] TTask<expected<void, WSError>> read_until(
-        TBuffer& buffer, const span<byte> delimiter, Timeout<>& timeout
+    [[nodiscard]] TTask<std::expected<void, WSError>> read_until(
+        TBuffer& buffer, const std::span<byte> delimiter, Timeout<>& timeout
     ) noexcept
     {
         size_t search_offset = 0;
@@ -106,7 +115,7 @@ public:
 
             // append circular buffer data to buffer
             WS_CO_TRY(cb_read_span_res, buffer.append(read_buffer_.size()));
-            span<byte> cb_read_span = *cb_read_span_res;
+            std::span<byte> cb_read_span = *cb_read_span_res;
             read_buffer_.pop(cb_read_span);
 
             // std::cout << string_from_bytes(cb_read_span) << std::endl;
@@ -126,7 +135,7 @@ public:
                 // remove data starting from delimiter from buffer
                 WS_CO_TRYV(buffer.resize(res - buffer_start));
 
-                co_return expected<void, WSError>{};
+                co_return std::expected<void, WSError>{};
             }
             else
             {
@@ -142,8 +151,8 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] inline TTask<expected<size_t, WSError>> write_some(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline TTask<std::expected<size_t, WSError>> write_some(
+        const std::span<const byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         co_return co_await socket_.write_some(buffer.data(), buffer.size(), timeout);
@@ -153,15 +162,15 @@ public:
      * Writes all data in `buffer` to underlying socket, or returns an error.
      * Does not perform partial writes unless an error occurs.
      */
-    [[nodiscard]] inline TTask<expected<void, WSError>> write(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline TTask<std::expected<void, WSError>> write(
+        const std::span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         size_t size = buffer.size();
         byte* p = buffer.data();
         while (size != 0)
         {
-            WS_CO_TRY(ret_res, co_await socket_.write_some(span<byte>(p, size), timeout));
+            WS_CO_TRY(ret_res, co_await socket_.write_some(std::span<byte>(p, size), timeout));
             auto ret = *ret_res;
 
             if (ret == 0) [[unlikely]]
@@ -173,11 +182,11 @@ public:
             p += ret;
             size -= ret;
         }
-        co_return expected<void, WSError>{};
+        co_return std::expected<void, WSError>{};
     }
 
 private:
-    [[nodiscard]] TTask<expected<size_t, WSError>> fill_read_buffer(
+    [[nodiscard]] TTask<std::expected<size_t, WSError>> fill_read_buffer(
         const size_t desired_bytes, Timeout<>& timeout
     ) noexcept
     {
@@ -191,7 +200,7 @@ private:
         // available_as_contiguous_span might return a span that's shorter
         // than the available space in the buffer, because it can only return
         // a single continguous span (from head to end of buffer or from start to tail).
-        span<byte> buf_span = read_buffer_.available_as_contiguous_span();
+        std::span<byte> buf_span = read_buffer_.available_as_contiguous_span();
         WS_CO_TRY(res, co_await this->read_some(buf_span, timeout));
 
         // move head by the number of bytes read into buffer

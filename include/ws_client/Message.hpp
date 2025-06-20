@@ -1,19 +1,17 @@
 #pragma once
 
+#include <cstddef>
 #include <ostream>
 #include <string>
 #include <string_view>
-#include <cstddef>
 #include <span>
+#include <chrono>
 
 #include "ws_client/Frame.hpp"
 
 namespace ws_client
 {
-using std::string;
-using std::string_view;
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 enum class MessageType : uint8_t
 {
@@ -21,7 +19,7 @@ enum class MessageType : uint8_t
     binary = static_cast<uint8_t>(opcode::binary)
 };
 
-static constexpr string_view to_string(MessageType v)
+static constexpr std::string_view to_string(MessageType v)
 {
     switch (v)
     {
@@ -57,13 +55,13 @@ struct MessageReadState
 struct Message
 {
     MessageType type;
-    span<byte> data;
+    std::span<byte> data;
 
     /**
      * Creates a Message from a buffer, without copying the data.
      * The passed buffer MUST remain valid for the lifetime of this `Message` instance.
      */
-    explicit Message(MessageType type, span<byte> data) noexcept //
+    explicit Message(MessageType type, std::span<byte> data) noexcept //
         : type(type), data(data)
     {
     }
@@ -72,7 +70,7 @@ struct Message
      * Creates a Message from a buffer, without copying the data.
      * The passed buffer MUST remain valid for the lifetime of this `Message` instance.
      */
-    explicit Message(MessageType type, span<const byte> data) noexcept //
+    explicit Message(MessageType type, std::span<const byte> data) noexcept //
         : type(type), data(const_cast<byte*>(data.data()), data.size())
     {
     }
@@ -82,9 +80,9 @@ struct Message
      * The string underlying the passed `string_view` MUST remain valid
      * for the lifetime of this `Message` instance.
      */
-    explicit Message(MessageType type, string_view data) noexcept
+    explicit Message(MessageType type, std::string_view data) noexcept
         : type(type),
-          data(span<byte>(reinterpret_cast<byte*>(const_cast<char*>(data.data())), data.size()))
+          data(std::span<byte>(reinterpret_cast<byte*>(const_cast<char*>(data.data())), data.size()))
     {
     }
 
@@ -93,17 +91,17 @@ struct Message
      * The returned `string_view` is valid as long as the underlying
      * `Message` buffer is valid.
      */
-    [[nodiscard]] inline string_view to_string_view() const noexcept
+    [[nodiscard]] inline std::string_view to_string_view() const noexcept
     {
-        return string_view(reinterpret_cast<const char*>(data.data()), data.size());
+        return std::string_view(reinterpret_cast<const char*>(data.data()), data.size());
     }
 
     /**
      * Returns a `string` copy of the message payload.
      */
-    [[nodiscard]] inline string to_string() const noexcept
+    [[nodiscard]] inline std::string to_string() const noexcept
     {
-        return string(reinterpret_cast<const char*>(data.data()), data.size());
+        return std::string(reinterpret_cast<const char*>(data.data()), data.size());
     }
 };
 

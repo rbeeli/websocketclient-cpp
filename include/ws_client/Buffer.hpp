@@ -14,8 +14,7 @@
 
 namespace ws_client
 {
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 /**
  * A simple buffer class for storing binary data, similar to `std::vector<byte>`.
@@ -42,7 +41,7 @@ public:
     /**
      * Factory method to create a new buffer with an initial size and maximum size.
      */
-    [[nodiscard]] static expected<Buffer, WSError> create(
+    [[nodiscard]] static std::expected<Buffer, WSError> create(
         size_t initial_size, size_t max_size
     ) noexcept
     {
@@ -177,7 +176,7 @@ public:
      * Reserve space for at least `size` bytes in the buffer.
      * Only performs allocation if the requested size is greater than the current capacity.
      */
-    [[nodiscard]] inline expected<void, WSError> reserve(size_t size) noexcept
+    [[nodiscard]] inline std::expected<void, WSError> reserve(size_t size) noexcept
     {
         if (size > capacity_)
             WS_TRYV(internal_reserve(size));
@@ -189,7 +188,7 @@ public:
      * The buffer data can then be accessed using the `data` method.
      * The allocated space is exactly `size` bytes after this operation.
      */
-    [[nodiscard]] inline expected<void, WSError> resize(size_t size) noexcept
+    [[nodiscard]] inline std::expected<void, WSError> resize(size_t size) noexcept
     {
         if (size != capacity_)
             WS_TRYV(internal_reserve(size));
@@ -214,7 +213,7 @@ public:
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    inline expected<span<byte>, WSError> append(const byte* data, size_t size) noexcept
+    inline std::expected<std::span<byte>, WSError> append(const byte* data, size_t size) noexcept
     {
         auto pos = this->size();
         auto new_pos = pos + size;
@@ -222,7 +221,7 @@ public:
             WS_TRYV(internal_reserve(new_pos));
         std::memcpy(buffer_ + pos, data, size);
         used_ = new_pos;
-        return span<byte>(buffer_ + pos, size);
+        return std::span<byte>(buffer_ + pos, size);
     }
 
     /**
@@ -231,28 +230,28 @@ public:
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    inline expected<span<byte>, WSError> append(size_t size) noexcept
+    inline std::expected<std::span<byte>, WSError> append(size_t size) noexcept
     {
         auto pos = this->size();
         auto new_pos = pos + size;
         if (new_pos > capacity_)
             WS_TRYV(internal_reserve(new_pos));
         used_ = new_pos;
-        return span<byte>(buffer_ + pos, size);
+        return std::span<byte>(buffer_ + pos, size);
     }
 
     /**
      * Returns a span of bytes over the data written to the buffer.
      */
-    [[nodiscard]] inline span<byte> data() noexcept
+    [[nodiscard]] inline std::span<byte> data() noexcept
     {
         if (buffer_ == nullptr)
             return {};
-        return span<byte>(buffer_, used_);
+        return std::span<byte>(buffer_, used_);
     }
 
 private:
-    [[nodiscard]] expected<void, WSError> internal_reserve(size_t size) noexcept
+    [[nodiscard]] std::expected<void, WSError> internal_reserve(size_t size) noexcept
     {
         if (size > max_size_)
         {

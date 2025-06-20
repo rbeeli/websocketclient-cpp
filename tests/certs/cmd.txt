@@ -1,1 +1,1 @@
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/C=US/ST=State/L=City/O=Organization/OU=OrganizationUnit/CN=localhost"
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 10000 -nodes -subj "/C=US/ST=State/L=City/O=Organization/OU=OrganizationUnit/CN=localhost"

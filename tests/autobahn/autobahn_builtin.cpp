@@ -16,7 +16,7 @@ using std::variant;
 using std::span;
 using std::byte;
 
-[[nodiscard]] static expected<string, WSError> send_request(string url_str, bool read_response)
+[[nodiscard]] static std::expected<string, WSError> send_request(string url_str, bool read_response)
 {
     WS_TRY(url_res, URL::parse(url_str));
     const URL& url = *url_res;
@@ -77,7 +77,7 @@ using std::byte;
     return response;
 }
 
-[[nodiscard]] static expected<void, WSError> run_case(string url_str)
+[[nodiscard]] static std::expected<void, WSError> run_case(string url_str)
 {
     WS_TRY(url_res, URL::parse(url_str));
     const URL& url = *url_res;

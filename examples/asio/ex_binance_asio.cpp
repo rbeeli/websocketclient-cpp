@@ -54,7 +54,7 @@ struct msg_stats
     }
 };
 
-asio::awaitable<expected<void, WSError>> run()
+asio::awaitable<std::expected<void, WSError>> run()
 {
     // websocketclient logger
     ConsoleLogger logger{LogLevel::D};
@@ -68,7 +68,7 @@ asio::awaitable<expected<void, WSError>> run()
 
     std::cout << "Connecting to " << url->host() << "... \n";
 
-    asio::ssl::context ctx(asio::ssl::context::sslv23);
+    asio::ssl::context ctx(asio::ssl::context::tls);
     ctx.set_default_verify_paths();
     asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
 
@@ -76,9 +76,18 @@ asio::awaitable<expected<void, WSError>> run()
 
     std::cout << "Connected\n";
 
+    // disable Nagle's algorithm
     socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
+
+    // enable verification of the server certificate
     socket.set_verify_mode(asio::ssl::verify_peer);
+
+    // enable host name verification
     socket.set_verify_callback(asio::ssl::host_name_verification(url->host()));
+
+    // tell server the vhost (many hosts need this to handshake successfully)
+    SSL_set_tlsext_host_name(socket.native_handle(), url->host().c_str());
+
     co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
     std::cout << "Handshake ok\n";
@@ -134,7 +143,7 @@ asio::awaitable<expected<void, WSError>> run()
         ++stats.counter;
 
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
             co_await client.read_message(*buffer, 5s); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
@@ -186,11 +195,11 @@ asio::awaitable<expected<void, WSError>> run()
             // error occurred - must close connection
             logger.log<LogLevel::E, LogTopic::User>(err->to_string());
             WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return expected<void, WSError>{};
+            co_return std::expected<void, WSError>{};
         }
     }
 
-    co_return expected<void, WSError>{};
+    co_return std::expected<void, WSError>{};
 };
 
 

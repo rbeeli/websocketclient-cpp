@@ -19,15 +19,12 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
-using namespace asio;
 using namespace std::literals::chrono_literals;
 using namespace asio::experimental::awaitable_operators;
 
 
-awaitable<expected<void, WSError>> run()
+asio::awaitable<std::expected<void, WSError>> run()
 {
-    auto executor = co_await asio::this_coro::executor;
-
     // websocketclient logger
     ConsoleLogger logger{LogLevel::D};
     logger.set_level(LogTopic::DNS, LogLevel::D);
@@ -36,29 +33,40 @@ awaitable<expected<void, WSError>> run()
 
     WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
-    ip::tcp::resolver resolver(executor);
-    auto endpoints = co_await resolver.async_resolve(url->host(), "https", use_awaitable);
+    auto executor = co_await asio::this_coro::executor;
+    asio::ip::tcp::resolver resolver(executor);
+    auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
 
     std::cout << "Connecting to " << url->host() << "... \n";
 
-    ssl::context ctx(ssl::context::sslv23);
+    asio::ssl::context ctx(asio::ssl::context::tls);
     ctx.set_default_verify_paths();
-    ssl::stream<ip::tcp::socket> socket(executor, ctx);
+    asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
+
+    co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
 
     std::cout << "Connected\n";
 
-    co_await asio::async_connect(socket.lowest_layer(), endpoints, use_awaitable);
-    socket.lowest_layer().set_option(ip::tcp::no_delay(true));
-    socket.set_verify_mode(ssl::verify_peer);
-    socket.set_verify_callback(ssl::host_name_verification(url->host()));
-    co_await socket.async_handshake(ssl::stream_base::client, use_awaitable);
+    // disable Nagle's algorithm
+    socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
+
+    // enable verification of the server certificate
+    socket.set_verify_mode(asio::ssl::verify_peer);
+
+    // enable host name verification
+    socket.set_verify_callback(asio::ssl::host_name_verification(url->host()));
+
+    // tell server the vhost (many hosts need this to handshake successfully)
+    SSL_set_tlsext_host_name(socket.native_handle(), url->host().c_str());
+
+    co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
     std::cout << "Handshake ok\n";
 
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 
     // websocket client
-    auto client = WebSocketClientAsync<awaitable, decltype(logger), decltype(asio_socket)>(
+    auto client = WebSocketClientAsync<asio::awaitable, decltype(logger), decltype(asio_socket)>(
         &logger, std::move(asio_socket)
     );
 
@@ -94,7 +102,7 @@ awaitable<expected<void, WSError>> run()
     while (client.is_open())
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
             co_await client.read_message(*buffer, 5s); // 5 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
@@ -134,13 +142,13 @@ awaitable<expected<void, WSError>> run()
             // error occurred - must close connection
             logger.log<LogLevel::E, LogTopic::User>(err->to_string());
             WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return expected<void, WSError>{};
+            co_return std::expected<void, WSError>{};
         }
     }
 
     co_await client.close(close_code::normal_closure);
 
-    co_return expected<void, WSError>{};
+    co_return std::expected<void, WSError>{};
 };
 
 
@@ -155,7 +163,7 @@ int main()
             std::rethrow_exception(e_ptr);
     };
 
-    auto client = []() -> awaitable<void>
+    auto client = []() -> asio::awaitable<void>
     {
         // loop to restart the client after an error
         while (true)
@@ -177,7 +185,7 @@ int main()
         }
     };
 
-    co_spawn(ctx, client, std::move(exception_handler));
+    asio::co_spawn(ctx, client, std::move(exception_handler));
     ctx.run();
 
     std::cout << "Done\n";

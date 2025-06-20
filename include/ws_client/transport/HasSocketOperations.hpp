@@ -13,8 +13,7 @@
 
 namespace ws_client
 {
-using std::span;
-using std::byte;
+using byte = std::byte;
 
 /**
  * Concept for socket template type parameters.
@@ -22,14 +21,14 @@ using std::byte;
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
 template <typename T>
-concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeout, bool fail_connection) {
+concept HasSocketOperations = requires(T t, std::span<byte> buffer, Timeout<>& timeout, bool fail_connection) {
     /**
      * Reads data from socket into `buffer`.
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * 
      * @return The number of bytes read, or an error.
      */
-    { t.read_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
+    { t.read_some(buffer, timeout) } -> std::same_as<std::expected<size_t, WSError>>;
 
     /**
      * Writes `buffer` to underlying socket.
@@ -37,13 +36,13 @@ concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeou
      * 
      * @return The number of bytes written, or an error.
      */
-    { t.write_some(buffer, timeout) } -> std::same_as<expected<size_t, WSError>>;
+    { t.write_some(buffer, timeout) } -> std::same_as<std::expected<size_t, WSError>>;
 
     /**
      * Waits for the socket to become readable, without consuming any data.
      * Readable is defined as having data application available to read.
      */
-    { t.wait_readable(timeout) } -> std::same_as<expected<bool, WSError>>;
+    { t.wait_readable(timeout) } -> std::same_as<std::expected<bool, WSError>>;
 
     /**
      * Shuts down socket communication.
@@ -55,7 +54,7 @@ concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeou
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    { t.shutdown(fail_connection, timeout) } -> std::same_as<expected<void, WSError>>;
+    { t.shutdown(fail_connection, timeout) } -> std::same_as<std::expected<void, WSError>>;
 
     /**
      * Close the socket connection and all associated resources.
@@ -65,7 +64,7 @@ concept HasSocketOperations = requires(T t, span<byte> buffer, Timeout<>& timeou
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    { t.close(fail_connection) } -> std::same_as<expected<void, WSError>>;
+    { t.close(fail_connection) } -> std::same_as<std::expected<void, WSError>>;
 };
 
 } // namespace ws_client

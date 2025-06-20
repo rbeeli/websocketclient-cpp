@@ -14,8 +14,7 @@
 
 namespace ws_client
 {
-using std::span;
-using std::byte;
+using byte = std::byte;
 using NNet::TValueTask;
 
 template <typename TLogger, typename SocketType>
@@ -50,7 +49,7 @@ public:
      * 
      * @return The number of bytes read, or an error.
      */
-    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> read_some(
+    [[nodiscard]] inline TValueTask<std::expected<size_t, WSError>> read_some(
         span<byte> buffer, Timeout<>& timeout
     ) noexcept
     {
@@ -75,8 +74,8 @@ public:
      * 
      * @return The number of bytes written, or an error.
      */
-    [[nodiscard]] inline TValueTask<expected<size_t, WSError>> write_some(
-        const span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] inline TValueTask<std::expected<size_t, WSError>> write_some(
+        const std::span<const byte> buffer, Timeout<>& timeout
     ) noexcept
     {
         // TODO: Implement timeout
@@ -106,10 +105,10 @@ public:
      *                         is gracefully closed.
      * Safe to call multiple times.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> shutdown(bool fail_connection, Timeout<>& timeout) noexcept
+    [[nodiscard]] inline TValueTask<std::expected<void, WSError>> shutdown(bool fail_connection, Timeout<>& timeout) noexcept
     {
         // TODO: Not implemented in coroio
-        co_return expected<void, WSError>{};
+        co_return std::expected<void, WSError>{};
     }
 
     /**
@@ -120,7 +119,7 @@ public:
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    [[nodiscard]] inline TValueTask<expected<void, WSError>> close(bool fail_connection) noexcept
+    [[nodiscard]] inline TValueTask<std::expected<void, WSError>> close(bool fail_connection) noexcept
     {
         try
         {
@@ -130,7 +129,7 @@ public:
         {
             co_return WS_ERROR(transport_error, e.what(), close_code::not_set);
         }
-        co_return expected<void, WSError>{};
+        co_return std::expected<void, WSError>{};
     }
 };
 } // namespace ws_client

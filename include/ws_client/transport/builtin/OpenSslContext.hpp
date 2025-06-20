@@ -14,8 +14,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::byte;
+using byte = std::byte;
 
 template <typename TLogger>
 class OpenSslContext
@@ -71,7 +70,7 @@ public:
         return this->ctx;
     }
 
-    [[nodiscard]] expected<void, WSError> init() noexcept
+    [[nodiscard]] std::expected<void, WSError> init() noexcept
     {
         // create SSL context
         this->ctx = SSL_CTX_new(TLS_client_method());
@@ -87,7 +86,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_mode_auto_retry(const bool value) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_mode_auto_retry(const bool value) noexcept
     {
         if (value)
             SSL_CTX_set_mode(this->ctx, SSL_MODE_AUTO_RETRY);
@@ -97,7 +96,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_default_verify_paths() noexcept
+    [[nodiscard]] std::expected<void, WSError> set_default_verify_paths() noexcept
     {
         if (SSL_CTX_set_default_verify_paths(this->ctx) != 1)
             return make_error("Unable to load default CA certificates");
@@ -105,7 +104,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> load_verify_file(const string& path) noexcept
+    [[nodiscard]] std::expected<void, WSError> load_verify_file(const std::string& path) noexcept
     {
         if (SSL_CTX_load_verify_file(this->ctx, path.c_str()) != 1)
             return make_error(std::format("Unable to load CA file from: {}", path));
@@ -113,7 +112,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_cipher_list(string cipher_list) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_cipher_list(std::string cipher_list) noexcept
     {
         if (!SSL_CTX_set_cipher_list(this->ctx, cipher_list.c_str()))
             return make_error(std::format("Unable to set cipher list to: {}", cipher_list));
@@ -121,21 +120,21 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_options(uint64_t options) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_options(uint64_t options) noexcept
     {
         SSL_CTX_set_options(this->ctx, options);
         logger->template log<LogLevel::D, LogTopic::SSL>(std::format("set_options={}", options));
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_session_cache_mode(int mode) noexcept
+    [[nodiscard]] std::expected<void, WSError> set_session_cache_mode(int mode) noexcept
     {
         SSL_CTX_set_session_cache_mode(this->ctx, mode);
         logger->template log<LogLevel::D, LogTopic::SSL>(std::format("session_cache_mode={}", mode));
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> set_session_cache_mode_client() noexcept
+    [[nodiscard]] std::expected<void, WSError> set_session_cache_mode_client() noexcept
     {
         WS_TRY(res, this->set_session_cache_mode(SSL_SESS_CACHE_CLIENT));
         logger->template log<LogLevel::D, LogTopic::SSL>("SSL_SESS_CACHE_CLIENT=true");
@@ -143,7 +142,7 @@ public:
     }
 
 private:
-    [[nodiscard]] static string get_errors_as_string() noexcept
+    [[nodiscard]] static std::string get_errors_as_string() noexcept
     {
         BIO* bio = BIO_new(BIO_s_mem());
         ERR_print_errors(bio);
@@ -154,12 +153,12 @@ private:
             BIO_free(bio);
             return "";
         }
-        string ret(buf, static_cast<size_t>(len));
+        std::string ret(buf, static_cast<size_t>(len));
         BIO_free(bio);
         return ret;
     }
 
-    [[nodiscard]] static auto make_error(const string& msg) noexcept
+    [[nodiscard]] static auto make_error(const std::string& msg) noexcept
     {
         auto errors = get_errors_as_string();
         return std::unexpected(

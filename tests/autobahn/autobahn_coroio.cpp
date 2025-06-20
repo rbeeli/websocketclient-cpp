@@ -16,14 +16,14 @@ using Loop = NNet::TLoop<TDefaultPoller>;
 using NNet::TValueTask;
 using std::string;
 
-[[nodiscard]] expected<void, WSError> check_errno(ssize_t error_code, const string& desc) noexcept
+[[nodiscard]] std::expected<void, WSError> check_errno(ssize_t error_code, const string& desc) noexcept
 {
     if (error_code == -1)
     {
         int errno_ = errno;
         return WS_ERROR(
             uncategorized_error,
-            std::format("Error during {}: {} ({})", desc, std::strerror(errno_), errno_),
+            std::format("Error during {}: {} (errno={})", desc, std::strerror(errno_), errno_),
             close_code::not_set
         );
     }
@@ -31,7 +31,7 @@ using std::string;
 }
 
 template <typename TPoller>
-[[nodiscard]] static TValueTask<expected<string, WSError>> send_request(
+[[nodiscard]] static TValueTask<std::expected<string, WSError>> send_request(
     string url_str, bool read_response, TPoller& poller
 )
 {
@@ -61,7 +61,7 @@ template <typename TPoller>
 }
 
 template <typename TPoller>
-[[nodiscard]] static TValueTask<expected<void, WSError>> run_case(string url_str, TPoller& poller)
+[[nodiscard]] static TValueTask<std::expected<void, WSError>> run_case(string url_str, TPoller& poller)
 {
     WS_CO_TRY(url_res, URL::parse(url_str));
     const URL& url = *url_res;

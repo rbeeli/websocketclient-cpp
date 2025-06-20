@@ -15,7 +15,7 @@
 using namespace ws_client;
 using namespace std::chrono;
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     // parse URL
     WS_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
@@ -81,11 +81,13 @@ expected<void, WSError> run()
         {
             WS_TRY(read_res, client.wait_message(2s));
             if (!(readable = read_res.value()))
-                logger.log<LogLevel::W, LogTopic::User>("No message received within 2 sec, continue waiting...");
+                logger.log<LogLevel::W, LogTopic::User>(
+                    "No message received within 2 sec, continue waiting..."
+                );
         } while (!readable);
 
         // read message (only 1 sec timeout since we know socket is readable)
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
             client.read_message(*buffer, 1s);
 
         if (auto msg = std::get_if<Message>(&var))

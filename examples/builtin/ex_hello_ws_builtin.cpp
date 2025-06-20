@@ -19,7 +19,7 @@
 using namespace ws_client;
 using namespace std::chrono_literals;
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     WS_TRY(url, URL::parse("wss://localhost:8080"));
 
@@ -67,8 +67,8 @@ expected<void, WSError> run()
     while (true)
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(*buffer, 30s);                            // 30 sec timeout
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(*buffer, 30s);                                 // 30 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

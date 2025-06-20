@@ -1,7 +1,7 @@
 # C++ WebSocket client (`websocketclient-cpp`)
 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-![Maintenance](https://img.shields.io/maintenance/yes/2024)
+![Maintenance](https://img.shields.io/maintenance/yes/2025)
 
 A transport-agnostic, high-performance, header-only C++23 WebSocket client library with minimal dependencies.
 

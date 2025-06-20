@@ -19,8 +19,6 @@
 
 namespace ws_client
 {
-using std::string;
-
 template <typename TLogger>
 class Handshake
 {
@@ -28,7 +26,7 @@ protected:
     TLogger* logger_;
     URL url_;
     xoshiro128p rnd_;
-    string request_SecWebSocketKey_;
+    std::string request_SecWebSocketKey_;
     HttpRequestHeader request_header_;
     HttpResponseHeader response_header_;
     std::optional<PermessageDeflate<TLogger>> permessage_deflate_{std::nullopt};
@@ -126,7 +124,7 @@ public:
      * modify the request_header object before calling this method,
      * see `get_request_header()`.
     */
-    string get_request_message()
+    std::string get_request_message()
     {
         auto& fields = request_header_.fields;
         request_header_.request_line = {
@@ -152,7 +150,7 @@ public:
         // write request headers to string
         std::ostringstream stream;
         stream << request_header_;
-        string request = stream.str();
+        std::string request = stream.str();
 
 #if WS_CLIENT_LOG_HANDSHAKE > 0
         if (logger_->template is_enabled<LogLevel::I, LogTopic::Handshake>())
@@ -166,7 +164,7 @@ public:
         return request;
     }
 
-    [[nodiscard]] expected<void, WSError> process_response(const string& header_str)
+    [[nodiscard]] std::expected<void, WSError> process_response(const std::string& header_str)
     {
 #if WS_CLIENT_LOG_HANDSHAKE > 0
         if (logger_->template is_enabled<LogLevel::I, LogTopic::Handshake>())
@@ -223,7 +221,7 @@ public:
     }
 
 protected:
-    [[nodiscard]] expected<void, WSError> validate_ConnectionUpgrade()
+    [[nodiscard]] std::expected<void, WSError> validate_ConnectionUpgrade()
     {
         auto h_con = response_header_.fields.get_first("Connection");
         if (!h_con.has_value())
@@ -245,7 +243,7 @@ protected:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> validate_SecWebSocketVersion()
+    [[nodiscard]] std::expected<void, WSError> validate_SecWebSocketVersion()
     {
         auto h_ext = response_header_.fields.get_first("Sec-WebSocket-Version");
         if (!h_ext.has_value())
@@ -265,7 +263,7 @@ protected:
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> validate_SecWebSocketAccept()
+    [[nodiscard]] std::expected<void, WSError> validate_SecWebSocketAccept()
     {
         auto h_ext = response_header_.fields.get_first("Sec-WebSocket-Accept");
         if (!h_ext.has_value())
@@ -282,7 +280,7 @@ protected:
         checksum.update(request_SecWebSocketKey_ + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
         auto sha1_bytes = checksum.final_bytes();
 
-        string expected_accept = base64_encode(sha1_bytes.data(), sha1_bytes.size());
+        std::string expected_accept = base64_encode(sha1_bytes.data(), sha1_bytes.size());
         if (*h_ext != expected_accept)
         {
             return WS_ERROR(
@@ -299,7 +297,7 @@ protected:
         return {};
     }
 
-    inline string generate_SecWebSocketKey()
+    inline std::string generate_SecWebSocketKey()
     {
         unsigned char key[16];
         uint64_t part = rnd_.next();

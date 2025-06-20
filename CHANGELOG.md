@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4] - 2025-06-20
+
+### Added
+
+- New method `std::expected<bool, WSError> can_read()` in `WebSocketClientAsync`, `ISocketAsync`, `BufferedSocketAsync`, and `AsioSocket`
+
+### Changed
+
+- Removed all `using`s of `std` types within `ws_client` namespace, now fully qualified use everywhere
+- Improved error handling and messages for SSL and sys calls
+  - SSL error queue always cleared before SSL calls
+
+### Fixed
+
+- Error in macro `WS_ERROR` if used outside of `ws_client` namespace due to unqualified use of `WSError` and `WSErrorCode` if no `using namespace ws_client` at call site was present
+- Fix examples/tests where ASIO SSL hostname verification fails by adding call to `SSL_set_tlsext_host_name`
+
 ## [0.3] - 2024-10-13
 
 ### Added

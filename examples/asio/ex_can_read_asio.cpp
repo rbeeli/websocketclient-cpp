@@ -17,66 +17,47 @@
 #include "ws_client/PermessageDeflate.hpp"
 
 using namespace ws_client;
+using namespace std::chrono;
 
 asio::awaitable<std::expected<void, WSError>> run()
 {
-    auto executor = co_await asio::this_coro::executor;
-
     // websocketclient logger
     ConsoleLogger logger{LogLevel::D};
-    logger.set_level(LogTopic::DNS, LogLevel::D);
-    logger.set_level(LogTopic::TCP, LogLevel::D);
-    logger.set_level(LogTopic::Handshake, LogLevel::D);
     logger.set_level(LogTopic::RecvFrame, LogLevel::D);
-    logger.set_level(LogTopic::RecvFramePayload, LogLevel::D);
-    logger.set_level(LogTopic::SendFrame, LogLevel::D);
-    logger.set_level(LogTopic::SendFramePayload, LogLevel::D);
 
     // parse URL
-    WS_CO_TRY(url, URL::parse("wss://echo.websocket.org/"));
+    WS_CO_TRY(url, URL::parse("wss://fstream.binance.com/ws"));
 
+    auto executor = co_await asio::this_coro::executor;
     asio::ip::tcp::resolver resolver(executor);
-    auto [ec1, endpoints] = co_await resolver.async_resolve(
-        url->host(), "https", asio::as_tuple(asio::use_awaitable)
-    );
-    if (ec1)
-        co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
+    auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
+
+    std::cout << "Connecting to " << url->host() << "... \n";
 
     asio::ssl::context ctx(asio::ssl::context::tls);
     ctx.set_default_verify_paths();
-    ctx.set_options(
-        asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
-        asio::ssl::context::no_sslv3
-    );
-    ctx.set_verify_mode(asio::ssl::verify_peer);
-    ctx.set_verify_callback(asio::ssl::host_name_verification(url->host()));
-
-    logger.log<LogLevel::I, LogTopic::TCP>(std::format("Connecting to {}", url->host()));
     asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
-    auto [ec2, addr] = co_await asio::async_connect(
-        socket.lowest_layer(), endpoints, asio::as_tuple(asio::use_awaitable)
-    );
-    if (ec2)
-        co_return WS_ERROR(transport_error, ec2.message(), close_code::not_set);
-    logger.log<LogLevel::I, LogTopic::TCP>(
-        std::format("Connected to {}:{}", addr.address().to_string(), addr.port())
-    );
 
-    // Set SNI Hostname (many servers need this to handshake successfully)
-    if (!SSL_set_tlsext_host_name(socket.native_handle(), url->host().c_str()))
-    {
-        asio::error_code ec{static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
-        throw asio::system_error(ec);
-    }
+    co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
 
-    auto [ec3] = co_await socket.async_handshake(
-        asio::ssl::stream_base::client, asio::as_tuple(asio::use_awaitable)
-    );
-    if (ec3)
-        co_return WS_ERROR(transport_error, ec3.message(), close_code::not_set);
-    logger.log<LogLevel::I, LogTopic::SSL>("SSL handshake successful");
+    std::cout << "Connected\n";
 
-    // wrap ASIO socket for websocketclient
+    // disable Nagle's algorithm
+    socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
+
+    // enable verification of the server certificate
+    socket.set_verify_mode(asio::ssl::verify_peer);
+
+    // enable host name verification
+    socket.set_verify_callback(asio::ssl::host_name_verification(url->host()));
+
+    // tell server the vhost (many hosts need this to handshake successfully)
+    SSL_set_tlsext_host_name(socket.native_handle(), url->host().c_str());
+
+    co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
+
+    std::cout << "Handshake ok\n";
+
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 
     // websocket client
@@ -87,24 +68,65 @@ asio::awaitable<std::expected<void, WSError>> run()
     // handshake handler
     auto handshake = Handshake(&logger, *url);
 
+    // enable compression (permessage-deflate extension)
+    handshake.set_permessage_deflate({
+        .logger = &logger,
+        .server_max_window_bits = 15,
+        .client_max_window_bits = 15,
+        .server_no_context_takeover = true,
+        .client_no_context_takeover = true,
+        .decompress_buffer_size = 2 * 1024 * 1024, // 2 MB
+        .compress_buffer_size = 2 * 1024 * 1024    // 2 MB
+    });
+
     // perform handshake
     WS_CO_TRYV(co_await client.handshake(handshake, 5s)); // 5 sec timeout
+
+    // subscribe
+    std::string sub_msg = R"({
+        "method": "SUBSCRIBE",
+        "params": [
+            "dogeusdt@aggTrade"
+        ],
+        "id": 1
+    })";
+    Message msg(MessageType::text, sub_msg);
+    WS_CO_TRYV(co_await client.send_message(msg, {.compress = false}));
+
+    time_point<system_clock> last_msg;
 
     // allocate message buffer with 4 KiB initial size and 1 MiB max size
     WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
 
-    for (int i = 0;; i++)
+    while (true)
     {
+        // for illustration, poll read state of socket until it can be read
+        while (!client.can_read())
+        {
+            logger.log<LogLevel::D, LogTopic::TCP>("Waiting for data to read");
+            co_await asio::steady_timer(executor, 500ms).async_wait(asio::use_awaitable);
+        }
+
+        auto t = std::chrono::steady_clock::now();
+
         // read message from server into buffer
         std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(*buffer, 5s); // 5 sec timeout
+            co_await client.read_message(
+                *buffer, 5s
+            ); // timeout is only for actually reading, we know there is data
 
-        if (std::get_if<Message>(&var))
+        std::cout << "Read took "
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::steady_clock::now() - t
+                     )
+                         .count()
+                  << " ms\n";
+
+        if (auto msg = std::get_if<Message>(&var))
         {
-            // write message back to server
-            std::string text = std::format("This is the {}th message", i);
-            Message msg2(MessageType::text, text);
-            WS_CO_TRYV(co_await client.send_message(msg2));
+            logger.log<LogLevel::I, LogTopic::RecvFrame>(
+                std::format("Received {} bytes", msg->data.size())
+            );
         }
         else if (auto ping_frame = std::get_if<PingFrame>(&var))
         {
@@ -134,10 +156,21 @@ asio::awaitable<std::expected<void, WSError>> run()
         }
         else if (auto err = std::get_if<WSError>(&var))
         {
-            // error occurred - must close connection
-            logger.log<LogLevel::E, LogTopic::RecvFrame>(err->to_string());
-            WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return std::expected<void, WSError>{};
+            // check not timeout
+            if (err->code == WSErrorCode::timeout_error)
+            {
+                logger.log<LogLevel::E, LogTopic::RecvFrame>(
+                    "Timeout reading message, this should NOT happen!"
+                );
+                continue;
+            }
+            else
+            {
+                // error occurred - must close connection
+                logger.log<LogLevel::E, LogTopic::RecvFrame>(err->to_string());
+                WS_CO_TRYV(co_await client.close(err->close_with_code));
+                co_return std::expected<void, WSError>{};
+            }
         }
     }
 

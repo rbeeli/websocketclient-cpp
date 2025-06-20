@@ -10,8 +10,7 @@
 
 namespace ws_client
 {
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 /**
  * Base class for blocking socket implementations (raw TCP, SSL, etc.).
@@ -36,8 +35,8 @@ public:
      * Does not guarantee to fill buffer completely, partial reads are possible.
      * Returns the number of bytes read.
      */
-    [[nodiscard]] virtual expected<size_t, WSError> read_some(
-        span<byte> buffer, Timeout<>& timeout
+    [[nodiscard]] virtual std::expected<size_t, WSError> read_some(
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept = 0;
 
     /**
@@ -45,8 +44,8 @@ public:
      * Does not guarantee to write complete `buffer` to socket, partial writes are possible.
      * Returns the number of bytes written.
      */
-    [[nodiscard]] virtual expected<size_t, WSError> write_some(
-        const span<byte> data, Timeout<>& timeout
+    [[nodiscard]] virtual std::expected<size_t, WSError> write_some(
+        const std::span<const byte> data, Timeout<>& timeout
     ) noexcept = 0;
 
     /**
@@ -59,7 +58,7 @@ public:
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    virtual expected<void, WSError> shutdown(bool fail_connection, Timeout<>& timeout) noexcept = 0;
+    virtual std::expected<void, WSError> shutdown(bool fail_connection, Timeout<>& timeout) noexcept = 0;
 
     /**
      * Close underlying socket.
@@ -68,7 +67,7 @@ public:
      *                         e.g. in case of an error. If `false`, the connection
      *                         is gracefully closed.
      */
-    virtual expected<void, WSError> close(bool fail_connection) noexcept = 0;
+    virtual std::expected<void, WSError> close(bool fail_connection) noexcept = 0;
 };
 
 } // namespace ws_client

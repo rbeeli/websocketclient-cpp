@@ -6,7 +6,7 @@
 
 namespace ws_client
 {
-using namespace std::chrono;
+using namespace std::chrono_literals;
 
 /**
  * Utility class to update a timeout by incorporating the elapsed time.
@@ -17,8 +17,8 @@ using namespace std::chrono;
  * ClockT - Clock type, defaults to steady_clock for monotonic time measurement
  */
 template <
-    class DT = milliseconds, //
-    class ClockT = steady_clock>
+    class DT = std::chrono::milliseconds, //
+    class ClockT = std::chrono::steady_clock>
 class Timeout
 {
     const ClockT::time_point start_;
@@ -88,8 +88,9 @@ public:
     {
         auto rem = remaining();
         struct timeval tv;
-        tv.tv_sec = duration_cast<seconds>(rem).count();
-        tv.tv_usec = duration_cast<microseconds>(rem % seconds(1)).count();
+        tv.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(rem).count();
+        tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(rem % 1s)
+                         .count();
         return tv;
     }
 

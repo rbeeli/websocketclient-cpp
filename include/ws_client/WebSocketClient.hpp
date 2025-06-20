@@ -30,12 +30,7 @@
 
 namespace ws_client
 {
-using std::array;
-using std::string;
-using std::variant;
-using std::optional;
-using std::byte;
-using std::span;
+using byte = std::byte;
 using namespace std::chrono_literals;
 
 /**
@@ -83,14 +78,14 @@ class WebSocketClient
     TMaskKeyGen mask_key_gen_;
 
     // negotiation handshake
-    optional<PermessageDeflateContext<TLogger>> permessage_deflate_ctx_ = std::nullopt;
+    std::optional<PermessageDeflateContext<TLogger>> permessage_deflate_ctx_ = std::nullopt;
 
     // buffers for header data and control frame payloads
-    alignas(64) array<byte, 128> write_buffer_storage_;
-    span<byte> write_buffer_ = span(write_buffer_storage_);
+    alignas(64) std::array<byte, 128> write_buffer_storage_;
+    std::span<byte> write_buffer_ = std::span(write_buffer_storage_);
 
-    alignas(64) array<byte, 128> read_buffer_storage_;
-    span<byte> read_buffer_ = span(read_buffer_storage_);
+    alignas(64) std::array<byte, 128> read_buffer_storage_;
+    std::span<byte> read_buffer_ = std::span(read_buffer_storage_);
 
     // maintain state for reading messages.
     // message reading might get interrupted with control frames,
@@ -128,9 +123,9 @@ public:
           read_state_(other.read_state_)
     {
         this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
-        this->write_buffer_ = span(this->write_buffer_storage_);
+        this->write_buffer_ = std::span(this->write_buffer_storage_);
         this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
-        this->read_buffer_ = span(this->read_buffer_storage_);
+        this->read_buffer_ = std::span(this->read_buffer_storage_);
     }
     WebSocketClient& operator=(WebSocketClient&& other) noexcept
     {
@@ -142,9 +137,9 @@ public:
             this->mask_key_gen_ = std::move(other.mask_key_gen_);
             this->permessage_deflate_ctx_ = std::move(other.permessage_deflate_ctx_);
             this->write_buffer_storage_ = std::move(other.write_buffer_storage_);
-            this->write_buffer_ = span(this->write_buffer_storage_);
+            this->write_buffer_ = std::span(this->write_buffer_storage_);
             this->read_buffer_storage_ = std::move(other.read_buffer_storage_);
-            this->read_buffer_ = span(this->read_buffer_storage_);
+            this->read_buffer_ = std::span(this->read_buffer_storage_);
             this->read_state_ = other.read_state_;
         }
         return *this;
@@ -192,7 +187,7 @@ public:
      * 
      * User needs to ensure this method is called only once.
      */
-    [[nodiscard]] expected<void, WSError> handshake(
+    [[nodiscard]] std::expected<void, WSError> handshake(
         Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
@@ -203,13 +198,15 @@ public:
 
         // send HTTP request for websocket upgrade
         auto req_str = handshake.get_request_message();
-        span<byte> req_data = span(reinterpret_cast<byte*>(req_str.data()), req_str.size());
+        std::span<byte> req_data = std::span(
+            reinterpret_cast<byte*>(req_str.data()), req_str.size()
+        );
         WS_TRYV(socket_.write(req_data, timeout));
 
         // read HTTP response
         WS_TRY(headers_buffer, Buffer::create(1024, 1024 * 1024)); // 1 KB to 1 MB
         byte delim[4] = {byte{'\r'}, byte{'\n'}, byte{'\r'}, byte{'\n'}};
-        span<byte> delim_span = span(delim);
+        std::span<byte> delim_span = std::span(delim);
         WS_TRYV(socket_.read_until(*headers_buffer, delim_span, timeout));
 
         // read and discard header terminator bytes \r\n\r\n
@@ -228,7 +225,7 @@ public:
 
         this->closed_ = false;
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
     /**
@@ -239,7 +236,7 @@ public:
      * 
      * @returns `true` if a message is available to read, `false` if timeout expires.
      */
-    [[nodiscard]] inline expected<bool, WSError> wait_message(
+    [[nodiscard]] inline std::expected<bool, WSError> wait_message(
         std::chrono::milliseconds timeout_ms
     ) noexcept
     {
@@ -260,7 +257,7 @@ public:
      * Upon receiving any error, the connection must be closed using `close()` method, this includes timeouts.
      */
     template <HasBufferOperations TBuffer>
-    [[nodiscard]] variant<Message, PingFrame, PongFrame, CloseFrame, WSError> read_message(
+    [[nodiscard]] std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> read_message(
         TBuffer& buffer, std::chrono::milliseconds timeout_ms
     ) noexcept
     {
@@ -293,7 +290,8 @@ public:
                 // convert to outer variant
                 return std::visit(
                     [](auto&& arg) //
-                    -> variant<Message, PingFrame, PongFrame, CloseFrame, WSError> { return arg; },
+                    -> std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError>
+                    { return arg; },
                     res
                 );
             }
@@ -359,8 +357,10 @@ public:
                 {
                     return WSError(
                         WSErrorCode::protocol_error,
-                        std::move(string("Expected continuation frame, but received ")
-                                      .append(to_string(frame.header.op_code()))),
+                        std::move(
+                            std::string("Expected continuation frame, but received ")
+                                .append(to_string(frame.header.op_code()))
+                        ),
                         close_code::protocol_error
                     );
                 }
@@ -381,8 +381,10 @@ public:
             {
                 return WSError(
                     WSErrorCode::protocol_error,
-                    std::move(string("Unexpected opcode in websocket frame received: ")
-                                  .append(to_string(read_state_.op_code))),
+                    std::move(
+                        std::string("Unexpected opcode in websocket frame received: ")
+                            .append(to_string(read_state_.op_code))
+                    ),
                     close_code::protocol_error
                 );
             }
@@ -416,7 +418,7 @@ public:
         if (timeout.is_expired())
             return WSError(WSErrorCode::timeout_error, "Timeout while reading WebSocket message.");
 
-        span<byte> payload_buffer;
+        std::span<byte> payload_buffer;
 
         // handle permessage-deflate compression
         if (read_state_.is_compressed)
@@ -523,7 +525,7 @@ public:
      * 
      * NOTE: The message is always sent as a single frame, fragmentation is currently not supported.
      */
-    [[nodiscard]] expected<void, WSError> send_message(
+    [[nodiscard]] std::expected<void, WSError> send_message(
         const Message& msg, SendOptions options = {}
     ) noexcept
     {
@@ -554,7 +556,7 @@ public:
         frame.set_is_masked(true);
         frame.mask_key = this->mask_key_gen_();
 
-        span<byte> payload;
+        std::span<byte> payload;
         if (this->permessage_deflate_ctx_ != std::nullopt && options.compress)
         {
             frame.set_is_compressed(true);
@@ -572,14 +574,14 @@ public:
         Timeout timeout(options.timeout);
         WS_TRYV(this->write_frame(frame, payload, timeout));
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
     /**
      * Sends a PONG frame to the server in response to a PING frame.
      */
-    [[nodiscard]] expected<void, WSError> send_pong_frame(
-        span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
+    [[nodiscard]] std::expected<void, WSError> send_pong_frame(
+        std::span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)
@@ -595,7 +597,7 @@ public:
         Timeout timeout(timeout_ms);
         WS_TRYV(this->write_frame(frame, payload, timeout));
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
     /**
@@ -624,12 +626,12 @@ public:
      * References:
      * - https://www.rfc-editor.org/rfc/rfc6455#section-7.1.7
      */
-    [[nodiscard]] inline expected<void, WSError> close(
+    [[nodiscard]] inline std::expected<void, WSError> close(
         close_code code, std::chrono::milliseconds timeout_ms = 5s
     ) noexcept
     {
         if (this->closed_)
-            return expected<void, WSError>{};
+            return std::expected<void, WSError>{};
 
         Timeout timeout(timeout_ms);
 
@@ -692,17 +694,17 @@ public:
             }
         }
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
 private:
-    [[nodiscard]] expected<Frame, WSError> read_frame(Timeout<>& timeout)
+    [[nodiscard]] std::expected<Frame, WSError> read_frame(Timeout<>& timeout)
     {
         Frame frame;
 
         // read frame header (2 bytes)
         byte tmp1[2];
-        WS_TRYV(this->socket_.read_exact(span<byte>(tmp1, 2), timeout));
+        WS_TRYV(this->socket_.read_exact(std::span<byte>(tmp1, 2), timeout));
 
         frame.header.b0 = tmp1[0];
         frame.header.b1 = tmp1[1];
@@ -725,7 +727,7 @@ private:
             // 16 bit payload size
             uint16_t tmp2;
             WS_TRYV(this->socket_.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
+                std::span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
             ));
             payload_size = network_to_host(tmp2);
         }
@@ -734,7 +736,7 @@ private:
             // 64 bit payload size
             uint64_t tmp3;
             WS_TRYV(this->socket_.read_exact(
-                span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
+                std::span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
             ));
             payload_size = network_to_host(tmp3);
         }
@@ -770,8 +772,8 @@ private:
         return frame;
     }
 
-    [[nodiscard]] expected<void, WSError> write_frame(
-        Frame& frame, span<byte> payload, Timeout<>& timeout
+    [[nodiscard]] std::expected<void, WSError> write_frame(
+        Frame& frame, std::span<byte> payload, Timeout<>& timeout
     ) noexcept
     {
 #if WS_CLIENT_LOG_SEND_FRAME > 0
@@ -836,10 +838,10 @@ private:
             offset += frame.payload_size;
         }
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
-    [[nodiscard]] expected<void, WSError> send_close_frame(
+    [[nodiscard]] std::expected<void, WSError> send_close_frame(
         close_code code, Timeout<>& timeout
     ) noexcept
     {
@@ -849,7 +851,7 @@ private:
         frame.set_is_masked(true);
         frame.mask_key = this->mask_key_gen_();
 
-        span<byte> payload;
+        std::span<byte> payload;
 
         if (code != close_code::not_set)
         {
@@ -882,10 +884,10 @@ private:
         logger_->template log<LogLevel::D, LogTopic::SendFrame>("Close frame sent");
 #endif
 
-        return expected<void, WSError>{};
+        return std::expected<void, WSError>{};
     }
 
-    [[nodiscard]] variant<PingFrame, PongFrame, CloseFrame, WSError> handle_control_frame(
+    [[nodiscard]] std::variant<PingFrame, PongFrame, CloseFrame, WSError> handle_control_frame(
         Frame& frame, Timeout<>& timeout
     ) noexcept
     {

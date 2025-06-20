@@ -4,16 +4,14 @@
 
 namespace ws_client
 {
-using std::string;
-
 /**
  * Base64 encodes binary data as string.
  */
-inline string base64_encode(const unsigned char* data, const size_t len)
+inline std::string base64_encode(const unsigned char* data, const size_t len)
 {
     static constexpr char encode_table[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    string encoded;
+    std::string encoded;
     encoded.reserve(((len + 2) / 3) * 4);
 
     for (size_t i = 0; i < len; i += 3)
@@ -44,7 +42,7 @@ inline string base64_encode(const unsigned char* data, const size_t len)
 /**
  * Base64 encodes binary data as string.
  */
-inline string base64_encode(const string& str)
+inline std::string base64_encode(const std::string& str)
 {
     const unsigned char* data = reinterpret_cast<const unsigned char*>(str.data());
     const size_t len = str.size();

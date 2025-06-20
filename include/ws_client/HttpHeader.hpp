@@ -4,16 +4,12 @@
 #include <vector>
 #include <optional>
 #include <ranges>
+#include <utility>
 
 #include "ws_client/utils/string.hpp"
 
 namespace ws_client
 {
-using std::string;
-using std::optional;
-using std::vector;
-using std::pair;
-
 /**
  * HTTP status code, protocol version and optional reason text.
  * Example: "HTTP/1.1 200 OK"
@@ -23,7 +19,7 @@ struct HttpStatusLine
     /**
      * Protocol version, e.g. "HTTP/1.1"
      */
-    string protocol_version;
+    std::string protocol_version;
 
     /**
      * Status code, e.g. 200, 404, 500, etc.
@@ -34,7 +30,7 @@ struct HttpStatusLine
      * Reason text, e.g. "OK", "Not Found", "Internal Server Error", etc.
      * This field is optional and may be empty.
      */
-    string reason;
+    std::string reason;
 };
 
 /**
@@ -46,17 +42,17 @@ struct HttpRequestLine
     /**
      * HTTP method, e.g. "GET", "POST", "PUT", "DELETE", etc.
      */
-    string method;
+    std::string method;
 
     /**
      * Request target, e.g. "/", "/index.html", "/api/v1/resource", etc.
      */
-    string request_target;
+    std::string request_target;
 
     /**
      * Protocol version, e.g. "HTTP/1.1"
      */
-    string http_version;
+    std::string http_version;
 };
 
 struct HttpHeaderFields
@@ -68,10 +64,11 @@ struct HttpHeaderFields
      * for multiple headers with the same key and to preserve insertion order.
      * E.g. "Set-Cookie" or "WWW-Authenticate" etc. may appear multiple times.
      */
-    vector<pair<string, string>> fields;
+    std::vector<std::pair<std::string, std::string>> fields;
 
     HttpHeaderFields() noexcept = default;
-    explicit HttpHeaderFields(vector<pair<string, string>>&& fields) noexcept : fields(std::move(fields))
+    explicit HttpHeaderFields(std::vector<std::pair<std::string, std::string>>&& fields) noexcept
+        : fields(std::move(fields))
     {
     }
 
@@ -81,7 +78,7 @@ struct HttpHeaderFields
      * the new header is simply added as separate entry.
      * Key-comparison is case-insensitive.
      */
-    void add(const string& key, const string& value) noexcept
+    void add(const std::string& key, const std::string& value) noexcept
     {
         fields.emplace_back(key, value);
     }
@@ -90,7 +87,7 @@ struct HttpHeaderFields
      * Adds a key-value header pair to the list of headers
      * if no header with the same key exists, otherwise does nothing.
      */
-    void add_if_missing(const string& key, const string& value) noexcept
+    void add_if_missing(const std::string& key, const std::string& value) noexcept
     {
         if (!this->contains_key(key))
             this->add(key, value);
@@ -101,7 +98,7 @@ struct HttpHeaderFields
      * If a header with the same key already exists, it is replaced.
      * Key-comparison is case-insensitive.
      */
-    void set(const string& key, const string& value) noexcept
+    void set(const std::string& key, const std::string& value) noexcept
     {
         // remove all existing headers with the same key
         fields.erase(
@@ -121,9 +118,9 @@ struct HttpHeaderFields
      * Retrievs all values headers that match the given key.
      * Key-comparison is case-insensitive.
      */
-    vector<string> get(const string& key) const noexcept
+    std::vector<std::string> get(const std::string& key) const noexcept
     {
-        vector<string> result;
+        std::vector<std::string> result;
         for (const auto& header : fields)
         {
             if (equals_ci(header.first, key))
@@ -138,7 +135,7 @@ struct HttpHeaderFields
      * though it is uncommon.
      * Key-comparison is case-insensitive.
      */
-    optional<string> get_first(const string& key) const noexcept
+    std::optional<std::string> get_first(const std::string& key) const noexcept
     {
         auto result = std::ranges::find_if(
             fields,
@@ -157,7 +154,7 @@ struct HttpHeaderFields
      * Removes all headers that match the given key.
      * Key-comparison is case-insensitive.
      */
-    void remove_key(const string& key) noexcept
+    void remove_key(const std::string& key) noexcept
     {
         fields.erase(
             std::remove_if(
@@ -173,7 +170,7 @@ struct HttpHeaderFields
      * Checks if a header with the given key exists.
      * Key-comparison is case-insensitive.
      */
-    bool contains_key(const string& key) const noexcept
+    bool contains_key(const std::string& key) const noexcept
     {
         return std::ranges::any_of(
             fields, [&key](const auto& header) { return equals_ci(header.first, key); }
@@ -184,7 +181,7 @@ struct HttpHeaderFields
      * Counts the number of headers with the given key.
      * Key-comparison is case-insensitive.
      */
-    size_t count_key(const string& key) const noexcept
+    size_t count_key(const std::string& key) const noexcept
     {
         return std::ranges::count_if(
             fields, [&key](const auto& header) { return equals_ci(header.first, key); }
@@ -201,14 +198,17 @@ struct HttpRequestHeader
     HttpHeaderFields fields;
 
     HttpRequestHeader() noexcept = default;
-    explicit HttpRequestHeader(HttpRequestLine request_line) noexcept : request_line(std::move(request_line))
+    explicit HttpRequestHeader(HttpRequestLine request_line) noexcept
+        : request_line(std::move(request_line))
     {
     }
     explicit HttpRequestHeader(HttpRequestLine request_line, HttpHeaderFields fields) noexcept
         : request_line(std::move(request_line)), fields(std::move(fields))
     {
     }
-    explicit HttpRequestHeader(HttpRequestLine request_line, vector<pair<string, string>>&& fields) noexcept
+    explicit HttpRequestHeader(
+        HttpRequestLine request_line, std::vector<std::pair<std::string, std::string>>&& fields
+    ) noexcept
         : request_line(std::move(request_line)), fields(HttpHeaderFields(std::move(fields)))
     {
     }
@@ -246,7 +246,9 @@ struct HttpResponseHeader
         : status_line(std::move(status_line)), fields(std::move(fields))
     {
     }
-    HttpResponseHeader(HttpStatusLine status_line, vector<pair<string, string>>&& fields) noexcept
+    HttpResponseHeader(
+        HttpStatusLine status_line, std::vector<std::pair<std::string, std::string>>&& fields
+    ) noexcept
         : status_line(std::move(status_line)), fields(HttpHeaderFields(std::move(fields)))
     {
     }

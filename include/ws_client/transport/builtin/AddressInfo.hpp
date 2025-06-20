@@ -12,9 +12,6 @@
 
 namespace ws_client
 {
-using std::string;
-using std::vector;
-
 enum class AddrType : uint8_t
 {
     unspecified,
@@ -23,7 +20,7 @@ enum class AddrType : uint8_t
 };
 
 // to_string
-inline constexpr const string_view to_string(AddrType type) noexcept
+inline constexpr const std::string_view to_string(AddrType type) noexcept
 {
     switch (type)
     {
@@ -53,23 +50,23 @@ inline std::ostream& operator<<(std::ostream& os, AddrType type)
 class AddressInfo
 {
 private:
-    string hostname_;
-    string ip_;
+    std::string hostname_;
+    std::string ip_;
     AddrType type_;
     int ai_family_;
     socklen_t ai_addrlen_;
     sockaddr_storage address_;
-    string ai_canonname_;
+    std::string ai_canonname_;
 
 public:
     explicit AddressInfo(
-        string hostname,
+        std::string hostname,
         AddrType type,
-        string ip,
+        std::string ip,
         int ai_family,
         socklen_t addrlen,
         sockaddr* addr,
-        string canonname
+        std::string canonname
     ) noexcept
         : hostname_(std::move(hostname)),
           ip_(std::move(ip)),
@@ -138,7 +135,7 @@ public:
         return ai_family_;
     }
 
-    inline string canonname() const noexcept
+    inline std::string canonname() const noexcept
     {
         return ai_canonname_;
     }
@@ -148,12 +145,12 @@ public:
         return ai_addrlen_;
     }
 
-    inline const string ip() const noexcept
+    inline const std::string ip() const noexcept
     {
         return ip_;
     }
 
-    inline string hostname() const noexcept
+    inline std::string hostname() const noexcept
     {
         return hostname_;
     }

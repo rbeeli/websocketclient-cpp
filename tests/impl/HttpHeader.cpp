@@ -115,11 +115,11 @@ TEST(HttpRequestHeader_ostream_operator, simple_test)
 
     std::ostringstream stream;
     stream << req;
-    string expected = "GET /index.html HTTP/1.1\r\n"
+    std::string expected = "GET /index.html HTTP/1.1\r\n"
                       "Host: example.com\r\n"
                       "User-Agent: Mozilla/5.0\r\n"
                       "Accept: text/html\r\n\r\n";
-    string actual = stream.str();
+    std::string actual = stream.str();
     EXPECT_EQ(actual, expected);
 }
 
@@ -138,12 +138,12 @@ TEST(HttpRequestHeader_ostream_operator, test_multiple_same_key)
 
     std::ostringstream stream;
     stream << req;
-    string expected = "GET /index.html HTTP/1.1\r\n"
+    std::string expected = "GET /index.html HTTP/1.1\r\n"
                       "Host: example.com\r\n"
                       "User-Agent: Mozilla/5.0\r\n"
                       "Accept: text/html\r\n"
                       "Accept: application/json\r\n\r\n";
-    string actual = stream.str();
+    std::string actual = stream.str();
     EXPECT_EQ(actual, expected);
 }
 
@@ -157,8 +157,8 @@ TEST(HttpRequestHeader_ostream_operator, empty_value)
 
     std::ostringstream stream;
     stream << req;
-    string expected = "GET * HTTP/1.1\r\n"
+    std::string expected = "GET * HTTP/1.1\r\n"
                       "User-Agent: \r\n\r\n";
-    string actual = stream.str();
+    std::string actual = stream.str();
     EXPECT_EQ(actual, expected);
 }

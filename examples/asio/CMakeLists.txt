@@ -31,6 +31,23 @@ target_compile_definitions(ex_echo_asio PRIVATE
 )
 
 # --------------------------------------
+add_executable(ex_can_read_asio ex_can_read_asio.cpp)
+target_link_libraries(ex_can_read_asio PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    simdutf::simdutf
+    PkgConfig::ZLIBNG
+    asio::asio
+    websocketclient
+)
+target_compile_definitions(ex_can_read_asio PRIVATE
+    ASIO_STANDALONE=1
+    ASIO_NO_TYPEID=1
+    WS_CLIENT_USE_ZLIB_NG=1 # Use zlib-ng instead of zlib
+    WS_CLIENT_USE_SIMD_UTF8=1 # Use simdutf for utf-8 validation
+)
+
+# --------------------------------------
 add_executable(ex_binance_asio ex_binance_asio.cpp)
 target_link_libraries(ex_binance_asio PRIVATE
     OpenSSL::SSL

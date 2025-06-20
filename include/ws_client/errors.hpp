@@ -11,10 +11,6 @@
 
 namespace ws_client
 {
-using std::expected;
-using std::string;
-using std::string_view;
-
 /**
  * Enum for WebSocket close frame status codes as defined in RFC 6455.
  */
@@ -63,7 +59,7 @@ static bool is_valid_close_code(close_code code) noexcept
            (static_cast<uint16_t>(code) >= 3000 && static_cast<uint16_t>(code) <= 4999);
 }
 
-static constexpr string_view to_string(close_code code) noexcept
+static constexpr std::string_view to_string(close_code code) noexcept
 {
     switch (code)
     {
@@ -109,7 +105,7 @@ enum class WSErrorCode : int16_t
     logic_error = 10,
 };
 
-static constexpr string_view to_string(WSErrorCode error) noexcept
+static constexpr std::string_view to_string(WSErrorCode error) noexcept
 {
     switch (error)
     {
@@ -150,9 +146,9 @@ public:
         return "WSErrorCategory";
     }
 
-    string message(int ev) const override
+    std::string message(int ev) const override
     {
-        return string(to_string(static_cast<WSErrorCode>(ev)));
+        return std::string(to_string(static_cast<WSErrorCode>(ev)));
     }
 };
 
@@ -166,13 +162,13 @@ inline std::error_code make_error_code(WSErrorCode e) noexcept
 struct WSError
 {
     WSErrorCode code;
-    string message;
+    std::string message;
     close_code close_with_code;
     std::source_location location;
 
     WSError(
         WSErrorCode code,
-        string message,
+        std::string message,
         close_code close_with_code = close_code::not_set,
         const std::source_location& loc = std::source_location::current()
     ) noexcept
@@ -185,12 +181,12 @@ struct WSError
         return make_error_code(code);
     }
 
-    inline string error_code_message() const
+    inline std::string error_code_message() const
     {
         return error_category.message(static_cast<int>(code));
     }
 
-    inline string to_string() const
+    inline std::string to_string() const
     {
         return std::format(
             "WSClientError {}: {} (close code {}) at {}:{}:{} in {}",
@@ -261,7 +257,7 @@ struct is_error_code_enum<ws_client::WSErrorCode> : true_type
 // --------------------------------------------------------
 
 #define WS_ERROR(CODE, MESSAGE, CLOSE_CODE)                                                        \
-    std::unexpected(WSError(WSErrorCode::CODE, MESSAGE, CLOSE_CODE))
+    std::unexpected(ws_client::WSError(ws_client::WSErrorCode::CODE, MESSAGE, CLOSE_CODE))
 
 /**
  * Checks if the expression returns an `expected` with an error.

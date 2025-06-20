@@ -127,5 +127,14 @@
   "vcpkg.general.autoUpdateTriplet": false,
   "cmake.configureArgs": [
   ],
-  "vcpkg.target.defaultTriplet": ""
+  "vcpkg.target.defaultTriplet": "",
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
 }

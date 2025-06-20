@@ -39,7 +39,7 @@ async def wss_server(websocket, path):
         raw_socket = transport.get_extra_info("socket")
         # simulate an unclean shutdown by closing the socket directly
         raw_socket.shutdown(socket.SHUT_RDWR)
-        raw_socket.close()
+        # raw_socket.close()
         await asyncio.sleep(2)
     elif close_mode == "server_close":
         await websocket.close()

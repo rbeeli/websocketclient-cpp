@@ -21,7 +21,7 @@
 using namespace ws_client;
 using namespace std::chrono_literals;
 
-asio::awaitable<expected<void, WSError>> run()
+asio::awaitable<std::expected<void, WSError>> run()
 {
     // parse URL
     WS_CO_TRY(url_res, URL::parse("wss://localhost:9443"));
@@ -33,13 +33,20 @@ asio::awaitable<expected<void, WSError>> run()
 
     // auto write_strand = asio::make_strand(executor);
 
-    asio::ssl::context ctx(asio::ssl::context::tlsv12_client);
+    asio::ssl::context ctx(asio::ssl::context::tls);
+
+    // load custom certificate
     ctx.load_verify_file("cert.pem");
+
+    // enable verification of the server certificate
     ctx.set_verify_mode(asio::ssl::verify_peer);
-    ctx.set_verify_callback(asio::ssl::host_name_verification(url.host()));
+
+    // enable host name verification
+    ctx.set_verify_callback(asio::ssl::host_name_verification("localhost"));
 
     std::cout << "Connecting to " << url.host() << "... \n";
     asio::ssl::stream<asio::ip::tcp::socket> socket(executor, ctx);
+
     co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
     std::cout << "Connected\n";
 
@@ -63,7 +70,7 @@ asio::awaitable<expected<void, WSError>> run()
     WS_CO_TRYV(co_await client.handshake(handshake));
 
     // send message
-    string payload = "test";
+    std::string payload = "test";
     Message msg(MessageType::text, payload);
     WS_CO_TRYV(co_await client.send_message(msg));
 
@@ -73,13 +80,13 @@ asio::awaitable<expected<void, WSError>> run()
     for (int i = 0;; i++)
     {
         // read message from server into buffer
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
             co_await client.read_message(*buffer, 60s);
 
         if (std::get_if<Message>(&var))
         {
             // write message back to server
-            string text = "This is the " + std::to_string(i) + "th message";
+            std::string text = "This is the " + std::to_string(i) + "th message";
             Message msg2(MessageType::text, text);
 
             // // wait for server to close connection
@@ -108,7 +115,7 @@ asio::awaitable<expected<void, WSError>> run()
             if (close_frame->has_reason())
             {
                 logger.log<LogLevel::I, LogTopic::User>(
-                    "Close frame received: " + string(close_frame->get_reason())
+                    std::format("Close frame received: {}", close_frame->get_reason())
                 );
             }
             else
@@ -168,7 +175,7 @@ asio::awaitable<expected<void, WSError>> run()
             std::format("Error closing websocket client: {}", res.error())
         );
 
-    co_return expected<void, WSError>{};
+    co_return std::expected<void, WSError>{};
 };
 
 

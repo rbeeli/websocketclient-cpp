@@ -9,8 +9,6 @@
 
 namespace ws_client
 {
-using std::span;
-
 /**
  * Circular buffer data structure for primitive / trivially copyable types.
  * 
@@ -145,7 +143,7 @@ public:
     /**
      * Push items onto buffer.
      */
-    inline void push(span<const T> src) noexcept
+    inline void push(std::span<const T> src) noexcept
     {
         push(src.data(), src.size());
     }
@@ -206,7 +204,7 @@ public:
     /**
      * Pop multiple items from buffer.
      */
-    inline void pop(span<T> dest) noexcept
+    inline void pop(std::span<T> dest) noexcept
     {
         pop(dest.data(), dest.size());
     }
@@ -267,11 +265,11 @@ public:
      * Note that due to the wrap-around, the span might be shorter than
      * the available space in the buffer.
      */
-    [[nodiscard]] inline span<T> available_as_contiguous_span() noexcept
+    [[nodiscard]] inline std::span<T> available_as_contiguous_span() noexcept
     {
         if (head_ >= tail_)
-            return span<T>(buffer_ + head_, capacity_ - head_);
-        return span<T>(buffer_ + head_, tail_ - head_);
+            return std::span<T>(buffer_ + head_, capacity_ - head_);
+        return std::span<T>(buffer_ + head_, tail_ - head_);
     }
 
     /**
@@ -282,11 +280,11 @@ public:
      * Note that due to the wrap-around, the span might be shorter than
      * the used space in the buffer.
     */
-    [[nodiscard]] inline span<T> used_as_contiguous_span() noexcept
+    [[nodiscard]] inline std::span<T> used_as_contiguous_span() noexcept
     {
         if (head_ >= tail_)
-            return span<T>(buffer_ + tail_, head_ - tail_);
-        return span<T>(buffer_ + tail_, capacity_ - tail_);
+            return std::span<T>(buffer_ + tail_, head_ - tail_);
+        return std::span<T>(buffer_ + tail_, capacity_ - tail_);
     }
 
     /**

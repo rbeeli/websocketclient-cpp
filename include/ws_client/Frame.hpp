@@ -39,10 +39,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::string_view;
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 /**
  * Frame opcodes are 4 bits, see RFC 6455, Section "5.2. Base Framing Protocol".
@@ -74,7 +71,7 @@ static bool is_reserved(opcode v) noexcept
            (v >= opcode::control_rsvb && v <= opcode::control_rsvf);
 }
 
-static constexpr string_view to_string(opcode v)
+static constexpr std::string_view to_string(opcode v)
 {
     switch (v)
     {
@@ -274,9 +271,9 @@ struct ControlFrame
     {
     }
 
-    inline span<byte> payload_bytes() noexcept
+    inline std::span<byte> payload_bytes() noexcept
     {
-        return span<byte>(this->payload.data(), this->payload_size);
+        return std::span<byte>(this->payload.data(), this->payload_size);
     }
 };
 
@@ -308,12 +305,12 @@ struct CloseFrame final : public ControlFrame
         return static_cast<close_code>(code);
     }
 
-    inline string_view get_reason() const noexcept
+    inline std::string_view get_reason() const noexcept
     {
         if (!this->has_reason())
             return "";
 
-        return string_view(
+        return std::string_view(
             reinterpret_cast<const char*>(this->payload.data() + 2), this->payload_size - 2
         );
     }

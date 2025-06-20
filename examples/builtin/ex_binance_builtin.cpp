@@ -49,7 +49,7 @@ struct msg_stats
     }
 };
 
-expected<void, WSError> run()
+std::expected<void, WSError> run()
 {
     // websocketclient logger
     ConsoleLogger logger{LogLevel::D};
@@ -121,8 +121,8 @@ expected<void, WSError> run()
     {
         ++stats.counter;
 
-        variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
-            client.read_message(*buffer, 30s);                            // 30 sec timeout
+        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var = //
+            client.read_message(*buffer, 30s);                                 // 30 sec timeout
 
         if (auto msg = std::get_if<Message>(&var))
         {

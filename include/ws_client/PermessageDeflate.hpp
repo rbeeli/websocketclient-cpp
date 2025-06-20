@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+#include <string_view>
 #include <expected>
 #include <iostream>
 #include <memory>
@@ -37,10 +39,7 @@
 
 namespace ws_client
 {
-using std::string;
-using std::byte;
-using std::span;
-using std::map;
+using byte = std::byte;
 
 /**
  * Permessage-deflate extension, as defined in RFC 7692.
@@ -125,7 +124,7 @@ struct PermessageDeflate
      * The server might not respond with the exact configuration requested, so we need to
      * adjust the configuration accordingly.
      */
-    [[nodiscard]] expected<bool, WSError> negotiate(const HttpResponseHeader& response)
+    [[nodiscard]] std::expected<bool, WSError> negotiate(const HttpResponseHeader& response)
     {
 #if WS_CLIENT_LOG_COMPRESSION > 0
         logger->template log<LogLevel::D, LogTopic::Compression>(
@@ -146,7 +145,7 @@ struct PermessageDeflate
             return false;
         }
 
-        map<string, string> extensions = parse_WebSocketExtensions(*h_ext);
+        std::map<std::string, std::string> extensions = parse_WebSocketExtensions(*h_ext);
 
         // verify permessage-deflate exists
         if (extensions.find("permessage-deflate") == extensions.end())
@@ -185,8 +184,8 @@ struct PermessageDeflate
         return true;
     }
 
-    [[nodiscard]] expected<void, WSError> negotiate_server_no_context_takeover(
-        map<string, string>& extensions
+    [[nodiscard]] std::expected<void, WSError> negotiate_server_no_context_takeover(
+        std::map<std::string, std::string>& extensions
     )
     {
         // verify/adjust server_no_context_takeover
@@ -231,8 +230,8 @@ struct PermessageDeflate
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> negotiate_client_no_context_takeover(
-        map<string, string>& extensions
+    [[nodiscard]] std::expected<void, WSError> negotiate_client_no_context_takeover(
+        std::map<std::string, std::string>& extensions
     )
     {
         // verify/adjust client_no_context_takeover
@@ -264,8 +263,8 @@ struct PermessageDeflate
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> negotiate_server_max_window_bits(
-        map<string, string>& extensions
+    [[nodiscard]] std::expected<void, WSError> negotiate_server_max_window_bits(
+        std::map<std::string, std::string>& extensions
     )
     {
         // verify server_max_window_bits
@@ -387,8 +386,8 @@ struct PermessageDeflate
         return {};
     }
 
-    [[nodiscard]] expected<void, WSError> negotiate_client_max_window_bits(
-        map<string, string>& extensions
+    [[nodiscard]] std::expected<void, WSError> negotiate_client_max_window_bits(
+        std::map<std::string, std::string>& extensions
     )
     {
         // verify client_max_window_bits
@@ -466,7 +465,8 @@ struct PermessageDeflate
         }
         else if (extensions.find("client_max_window_bits") != extensions.end())
         {
-            string client_max_window_bits_str = extensions.find("client_max_window_bits")->second;
+            std::string client_max_window_bits_str = extensions.find("client_max_window_bits")
+                                                         ->second;
 
             int client_max_window_bits_parsed;
             auto const res = std::from_chars(
@@ -518,9 +518,9 @@ struct PermessageDeflate
         return {};
     }
 
-    string get_SecWebSocketExtensions_value() const
+    std::string get_SecWebSocketExtensions_value() const
     {
-        string result = "permessage-deflate";
+        std::string result = "permessage-deflate";
 
         if (this->server_max_window_bits > 0)
         {
@@ -544,11 +544,11 @@ struct PermessageDeflate
     }
 
 
-    map<string, string> parse_WebSocketExtensions(const string& header)
+    std::map<std::string, std::string> parse_WebSocketExtensions(const std::string& header)
     {
-        map<string, string> extensions;
+        std::map<std::string, std::string> extensions;
         std::istringstream stream(header);
-        string extension;
+        std::string extension;
 
         while (std::getline(stream, extension, ';'))
         {
@@ -557,7 +557,7 @@ struct PermessageDeflate
             );
 
             std::istringstream extStream(extension);
-            string key, value;
+            std::string key, value;
             if (std::getline(std::getline(extStream, key, '='), value))
             {
                 key.erase(std::remove_if(key.begin(), key.end(), ::isspace), key.end());
@@ -571,7 +571,9 @@ struct PermessageDeflate
         return extensions;
     }
 
-    [[nodiscard]] expected<uint8_t, WSError> parse_window_bits(const string bits_string) const
+    [[nodiscard]] std::expected<uint8_t, WSError> parse_window_bits(
+        const std::string bits_string
+    ) const
     {
         int result;
         auto const res = std::from_chars(
@@ -689,7 +691,7 @@ public:
      * This is called after the WebSocket handshake is completed
      * by the client internally.
      */
-    [[nodiscard]] expected<void, WSError> init() noexcept
+    [[nodiscard]] std::expected<void, WSError> init() noexcept
     {
         // create decompression buffer
         size_t decom_init_size = 1024;
@@ -739,9 +741,9 @@ public:
         return {};
     }
 
-    [[nodiscard]] expected<size_t, WSError> decompress(Buffer& output) noexcept
+    [[nodiscard]] std::expected<size_t, WSError> decompress(Buffer& output) noexcept
     {
-        span<byte> input = decompress_buffer().data();
+        std::span<byte> input = decompress_buffer().data();
 
         // set zlib input buffer to frame payload
         istate_->next_in = reinterpret_cast<Bytef*>(input.data());
@@ -755,7 +757,7 @@ public:
             // assumes average compression ratio of 5:1.
             // if more than 5x the input size is required, the buffer will be extended again.
             WS_TRY(alloc_res, output.append(std::max(64U, istate_->avail_in * 5)));
-            span<byte> avail = *alloc_res;
+            std::span<byte> avail = *alloc_res;
 
             // set zlib output buffer
             istate_->next_out = reinterpret_cast<Bytef*>(avail.data());
@@ -800,7 +802,7 @@ public:
         return size;
     }
 
-    [[nodiscard]] expected<span<byte>, WSError> compress(span<byte> input) noexcept
+    [[nodiscard]] std::expected<std::span<byte>, WSError> compress(std::span<byte> input) noexcept
     {
         auto& output = compress_buffer();
 
@@ -829,7 +831,7 @@ public:
         {
             // extend output buffer if required, usually over-allocates.
             WS_TRY(alloc_res, output.append(std::max(64U, ostate_->avail_in)));
-            span<byte> avail = *alloc_res;
+            std::span<byte> avail = *alloc_res;
 
             // set zlib output buffer
             ostate_->next_out = reinterpret_cast<Bytef*>(avail.data());
@@ -866,7 +868,7 @@ public:
         return output.data().subspan(0, size);
     }
 
-    [[nodiscard]] static auto make_error(string_view desc, const char* msg) noexcept
+    [[nodiscard]] static auto make_error(std::string_view desc, const char* msg) noexcept
     {
         return WS_ERROR(
             compression_error,

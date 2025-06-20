@@ -9,18 +9,17 @@
 
 namespace ws_client
 {
-using std::byte;
-using std::span;
+using byte = std::byte;
 
 /**
  * Concept for buffer-like template type parameters.
  */
 template <typename T>
-concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data, size_t size) {
+concept HasBufferOperations = requires(T t, std::span<byte> buffer, const byte* data, size_t size) {
     /**
      * Returns a span of bytes over the data written to the buffer.
      */
-    { t.data() } -> std::same_as<span<byte>>;
+    { t.data() } -> std::same_as<std::span<byte>>;
 
     /**
      * Get the number of bytes currently stored in the buffer.
@@ -46,14 +45,14 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
      * Reserve space for at least `size` bytes in the buffer.
      * Only performs allocation if the requested size is greater than the current capacity.
      */
-    { t.reserve(size) } -> std::same_as<expected<void, WSError>>;
+    { t.reserve(size) } -> std::same_as<std::expected<void, WSError>>;
 
     /**
      * Resize the buffer to `size` bytes.
      * The buffer data can then be accessed using the `data` method.
      * The allocated space is exactly `size` bytes after this operation.
      */
-    { t.resize(size) } -> std::same_as<expected<void, WSError>>;
+    { t.resize(size) } -> std::same_as<std::expected<void, WSError>>;
 
     /**
      * Get the current number of allocated bytes.
@@ -75,7 +74,7 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    { t.append(data, size) } -> std::same_as<expected<span<byte>, WSError>>;
+    { t.append(data, size) } -> std::same_as<std::expected<std::span<byte>, WSError>>;
 
     /**
      * Append `size` uninitialized bytes to buffer.
@@ -83,6 +82,6 @@ concept HasBufferOperations = requires(T t, span<byte> buffer, const byte* data,
      * Existing data in the buffer is preserved.
      * Returns added data region as a span of bytes.
      */
-    { t.append(size) } -> std::same_as<expected<span<byte>, WSError>>;
+    { t.append(size) } -> std::same_as<std::expected<std::span<byte>, WSError>>;
 };
 } // namespace ws_client
