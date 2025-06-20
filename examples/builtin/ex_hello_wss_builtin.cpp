@@ -46,7 +46,7 @@ std::expected<void, WSError> run()
     WS_TRYV(ctx.init());
     WS_TRYV(ctx.set_default_verify_paths());
     WS_TRYV(ctx.load_verify_file("../cert.pem"));
-    WS_TRYV(ctx.set_session_cache_mode_client());
+    ctx.set_session_cache_mode_client();
     auto ssl = OpenSslSocket(&logger, std::move(tcp), &ctx, url->host(), true);
     WS_TRYV(ssl.init());
     WS_TRYV(ssl.connect(2s)); // 2 sec connect timeout

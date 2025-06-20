@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5] - 2025-06-20
+
+### Changed
+
+- Refactored `OpenSslContext`, changed SSL security defaults
+
 ## [0.4] - 2025-06-20
 
 ### Added

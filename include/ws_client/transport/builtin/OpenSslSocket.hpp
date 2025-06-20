@@ -278,7 +278,7 @@ public:
             return WS_ERROR(logic_error, "OpenSslSocket already initialized", close_code::not_set);
 
         // create SSL structure
-        ssl_ = SSL_new(ctx_->ssl_ctx());
+        ssl_ = SSL_new(ctx_->handle());
         if (!ssl_)
         {
             constexpr int ssl_err = 0; // SSL_get_error not applicable to SSL_new

@@ -12,6 +12,15 @@
 
 namespace ws_client
 {
+struct SslCtxDeleter
+{
+    void operator()(SSL_CTX* p) const noexcept
+    {
+        SSL_CTX_free(p);
+    }
+};
+using SslCtxPtr = std::unique_ptr<SSL_CTX, SslCtxDeleter>;
+
 /* ===================
  * Error handling code
  * =================== */
