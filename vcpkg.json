@@ -1,6 +1,6 @@
 {
     "name": "websocketclient-cpp",
-    "version": "0.3",
+    "version": "0.6",
     "dependencies": [
       "zlib",
       "zlib-ng",

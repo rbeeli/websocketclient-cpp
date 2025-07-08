@@ -19,8 +19,8 @@ namespace ws_client
 {
 using byte = std::byte;
 
-template <typename TSocket, template <typename...> typename TTask>
-    requires HasSocketOperationsAsync<TSocket, TTask>
+template <typename TSocket, template <typename...> typename TTask, CancelSlotLike TCancelSlot>
+    requires HasSocketOperationsAsync<TSocket, TTask, TCancelSlot>
 class BufferedSocketAsync final
 {
     static constexpr int read_buffer_size = 4096;
@@ -66,10 +66,10 @@ public:
      * Returns the number of bytes read.
      */
     [[nodiscard]] inline TTask<std::expected<size_t, WSError>> read_some(
-        std::span<byte> buffer, Timeout<>& timeout
+        std::span<byte> buffer, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
-        co_return co_await socket_.read_some(buffer, timeout);
+        co_return co_await socket_.read_some(buffer, timeout, cancel);
     }
 
     /**
@@ -78,14 +78,14 @@ public:
      * connection closure by peer.
      */
     [[nodiscard]] TTask<std::expected<size_t, WSError>> read_exact(
-        std::span<byte> buffer, Timeout<>& timeout
+        std::span<byte> buffer, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
         size_t total_read = 0;
         size_t remaining = buffer.size();
         while (remaining > 0)
         {
-            WS_CO_TRY(res, co_await this->fill_read_buffer(remaining, timeout));
+            WS_CO_TRY(res, co_await this->fill_read_buffer(remaining, timeout, cancel));
             size_t read_bytes = *res;
 
             // copy from read buffer to destination buffer
@@ -104,14 +104,14 @@ public:
      */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] TTask<std::expected<void, WSError>> read_until(
-        TBuffer& buffer, const std::span<byte> delimiter, Timeout<>& timeout
+        TBuffer& buffer, const std::span<byte> delimiter, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
         size_t search_offset = 0;
         while (true)
         {
             // read some data into circular buffer
-            WS_CO_TRYV(co_await this->fill_read_buffer(read_buffer_.capacity(), timeout));
+            WS_CO_TRYV(co_await this->fill_read_buffer(read_buffer_.capacity(), timeout, cancel));
 
             // append circular buffer data to buffer
             WS_CO_TRY(cb_read_span_res, buffer.append(read_buffer_.size()));
@@ -152,10 +152,10 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] inline TTask<std::expected<size_t, WSError>> write_some(
-        const std::span<const byte> buffer, Timeout<>& timeout
+        const std::span<const byte> buffer, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
-        co_return co_await socket_.write_some(buffer.data(), buffer.size(), timeout);
+        co_return co_await socket_.write_some(buffer.data(), buffer.size(), timeout, cancel);
     }
 
     /**
@@ -163,14 +163,16 @@ public:
      * Does not perform partial writes unless an error occurs.
      */
     [[nodiscard]] inline TTask<std::expected<void, WSError>> write(
-        const std::span<byte> buffer, Timeout<>& timeout
+        const std::span<byte> buffer, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
         size_t size = buffer.size();
         byte* p = buffer.data();
         while (size != 0)
         {
-            WS_CO_TRY(ret_res, co_await socket_.write_some(std::span<byte>(p, size), timeout));
+            WS_CO_TRY(
+                ret_res, co_await socket_.write_some(std::span<byte>(p, size), timeout, cancel)
+            );
             auto ret = *ret_res;
 
             if (ret == 0) [[unlikely]]
@@ -187,7 +189,7 @@ public:
 
 private:
     [[nodiscard]] TTask<std::expected<size_t, WSError>> fill_read_buffer(
-        const size_t desired_bytes, Timeout<>& timeout
+        const size_t desired_bytes, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
         assert(desired_bytes > 0 && "Desired bytes must be greater than 0");
@@ -201,7 +203,7 @@ private:
         // than the available space in the buffer, because it can only return
         // a single continguous span (from head to end of buffer or from start to tail).
         std::span<byte> buf_span = read_buffer_.available_as_contiguous_span();
-        WS_CO_TRY(res, co_await this->read_some(buf_span, timeout));
+        WS_CO_TRY(res, co_await this->read_some(buf_span, timeout, cancel));
 
         // move head by the number of bytes read into buffer
         read_buffer_.move_head(res.value());

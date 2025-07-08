@@ -44,6 +44,9 @@ using namespace std::chrono_literals;
  * errors. The caller MUST close the client upon receiving a close frame
  * or an error, read or write operations afterwards are undefined behaviour.
  * 
+ * @tparam TTask         Task type for coroutine-based asynchronous operations,
+ *                       e.g. `TValueTask` for `coroio`, or `asio::awaitable` for `asio`.
+ * 
  * @tparam TLogger       Logger type for logging messages and errors.
  *
  * @tparam TSocket       Socket implementation type for transportation.
@@ -53,8 +56,7 @@ using namespace std::chrono_literals;
  *                       - `CoroioSocket`, for non-blocking async I/O based on `coroio`
  *                       - `AsioSocket`, for non-blocking async I/O based on `asio`
  * 
- * @tparam TTask         Task type for coroutine-based asynchronous operations,
- *                       e.g. `TValueTask` for `coroio`, or `asio::awaitable` for `asio`.
+ * @tparam TCancelSlot   Cancellation slot/token type, e.g. asio::cancellation_slot for ASIO.
  * 
  * @tparam TMaskKeyGen   Mask key generator type. Must implement contract `HasMaskKeyOperator`.
  * 
@@ -66,13 +68,15 @@ template <
     template <typename...> typename TTask,
     typename TLogger,
     typename TSocket,
+    typename TCancelSlot = typename std::remove_cvref_t<TSocket>::cancellation_slot_type,
     typename TMaskKeyGen = DefaultMaskKeyGen>
-    requires HasSocketOperationsAsync<TSocket, TTask> && HasMaskKeyOperator<TMaskKeyGen>
+    requires HasSocketOperationsAsync<TSocket, TTask, TCancelSlot> &&
+             HasMaskKeyOperator<TMaskKeyGen>
 class WebSocketClientAsync
 {
     bool closed_ = true;
 
-    BufferedSocketAsync<TSocket, TTask> socket_;
+    BufferedSocketAsync<TSocket, TTask, TCancelSlot> socket_;
     TLogger* logger_;
 
     // mask key generator
@@ -104,7 +108,7 @@ public:
     }
 
     explicit WebSocketClientAsync(TLogger* logger, TSocket&& socket) noexcept
-        : socket_(BufferedSocketAsync<TSocket, TTask>(std::move(socket))),
+        : socket_(BufferedSocketAsync<TSocket, TTask, TCancelSlot>(std::move(socket))),
           logger_(logger),
           mask_key_gen_(DefaultMaskKeyGen())
     {
@@ -149,7 +153,7 @@ public:
     /**
      * Returns the underlying socket object.
      */
-    [[nodiscard]] inline BufferedSocketAsync<TSocket, TTask>& underlying() noexcept
+    [[nodiscard]] inline BufferedSocketAsync<TSocket, TTask, TCancelSlot>& underlying() noexcept
     {
         return this->socket_;
     }
@@ -189,7 +193,9 @@ public:
      * User needs to ensure this method is called only once.
      */
     [[nodiscard]] TTask<std::expected<void, WSError>> handshake(
-        Handshake<TLogger>& handshake, std::chrono::milliseconds timeout_ms = 5s
+        Handshake<TLogger>& handshake,
+        std::chrono::milliseconds timeout_ms = 5s,
+        TCancelSlot cancel = {}
     ) noexcept
     {
         if (!this->closed_)
@@ -202,16 +208,16 @@ public:
         std::span<byte> req_data = std::span(
             reinterpret_cast<byte*>(req_str.data()), req_str.size()
         );
-        WS_CO_TRYV(co_await this->socket_.write(req_data, timeout));
+        WS_CO_TRYV(co_await this->socket_.write(req_data, timeout, cancel));
 
         // read HTTP response
         WS_CO_TRY(headers_buffer, Buffer::create(1024, 1024 * 1024)); // 1 KB to 1 MB
         byte delim[4] = {byte{'\r'}, byte{'\n'}, byte{'\r'}, byte{'\n'}};
         std::span<byte> delim_span = std::span(delim);
-        WS_CO_TRYV(co_await this->socket_.read_until(*headers_buffer, delim_span, timeout));
+        WS_CO_TRYV(co_await this->socket_.read_until(*headers_buffer, delim_span, timeout, cancel));
 
         // read and discard header terminator bytes \r\n\r\n
-        WS_CO_TRYV(co_await this->socket_.read_exact(delim_span, timeout));
+        WS_CO_TRYV(co_await this->socket_.read_exact(delim_span, timeout, cancel));
 
         // process HTTP response
         WS_CO_TRYV(handshake.process_response(string_from_bytes(headers_buffer->data())));
@@ -251,7 +257,9 @@ public:
      */
     template <HasBufferOperations TBuffer>
     [[nodiscard]] TTask<std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError>>
-    read_message(TBuffer& buffer, std::chrono::milliseconds timeout_ms) noexcept
+    read_message(
+        TBuffer& buffer, std::chrono::milliseconds timeout_ms, TCancelSlot cancel = {}
+    ) noexcept
     {
         if (this->closed_)
             co_return WSError(WSErrorCode::connection_closed, "Connection in closed state.");
@@ -261,7 +269,7 @@ public:
         while (!timeout.is_expired())
         {
             // read next frame w/o payload
-            WS_CO_TRY_RAW(frame_res, co_await this->read_frame(timeout));
+            WS_CO_TRY_RAW(frame_res, co_await this->read_frame(timeout, cancel));
             Frame& frame = *frame_res;
 
             // check reserved opcodes
@@ -277,7 +285,7 @@ public:
             // handle control frames
             if (frame.header.is_control())
             {
-                auto res = co_await this->handle_control_frame(frame, timeout);
+                auto res = co_await this->handle_control_frame(frame, timeout, cancel);
 
                 // convert to outer variant
                 co_return std::visit(
@@ -389,18 +397,23 @@ public:
                     // read payload directly into decompression buffer
                     WS_CO_TRY_RAW(
                         frame_data_compressed_res,
-                        this->permessage_deflate_ctx_->decompress_buffer().append(frame.payload_size
+                        this->permessage_deflate_ctx_->decompress_buffer().append(
+                            frame.payload_size
                         )
                     );
                     WS_CO_TRYV_RAW(
-                        co_await this->socket_.read_exact(*frame_data_compressed_res, timeout)
+                        co_await this->socket_.read_exact(
+                            *frame_data_compressed_res, timeout, cancel
+                        )
                     );
                 }
                 else
                 {
                     // read payload into message buffer
                     WS_CO_TRY_RAW(frame_data_res, buffer.append(frame.payload_size));
-                    WS_CO_TRYV_RAW(co_await this->socket_.read_exact(*frame_data_res, timeout));
+                    WS_CO_TRYV_RAW(
+                        co_await this->socket_.read_exact(*frame_data_res, timeout, cancel)
+                    );
                 }
             }
 
@@ -410,9 +423,11 @@ public:
 
         // check if timeout occurred
         if (timeout.is_expired())
+        {
             co_return WSError(
                 WSErrorCode::timeout_error, "Timeout while reading WebSocket message."
             );
+        }
 
         std::span<byte> payload_buffer;
 
@@ -523,7 +538,7 @@ public:
      * NOTE: The message is always sent as a single frame, fragmentation is currently not supported.
      */
     [[nodiscard]] TTask<std::expected<void, WSError>> send_message(
-        const Message& msg, SendOptions options = {}
+        const Message& msg, SendOptions options = {}, TCancelSlot cancel = {}
     ) noexcept
     {
         if (this->closed_)
@@ -573,7 +588,7 @@ public:
         frame.set_payload_size(payload.size());
 
         Timeout timeout(options.timeout);
-        WS_CO_TRYV(co_await this->write_frame(frame, payload, timeout));
+        WS_CO_TRYV(co_await this->write_frame(frame, payload, timeout, cancel));
 
         co_return std::expected<void, WSError>{};
     }
@@ -582,7 +597,7 @@ public:
      * Sends a PONG frame to the server in response to a PING frame.
      */
     [[nodiscard]] TTask<std::expected<void, WSError>> send_pong_frame(
-        std::span<byte> payload, std::chrono::milliseconds timeout_ms = 5s
+        std::span<byte> payload, std::chrono::milliseconds timeout_ms = 5s, TCancelSlot cancel = {}
     ) noexcept
     {
         if (this->closed_)
@@ -600,7 +615,7 @@ public:
         frame.mask_key = this->mask_key_gen_();
 
         Timeout timeout(timeout_ms);
-        WS_CO_TRYV(co_await this->write_frame(frame, payload, timeout));
+        WS_CO_TRYV(co_await this->write_frame(frame, payload, timeout, cancel));
 
         co_return std::expected<void, WSError>{};
     }
@@ -632,7 +647,7 @@ public:
      * - https://www.rfc-editor.org/rfc/rfc6455#section-7.1.7
      */
     [[nodiscard]] inline TTask<std::expected<void, WSError>> close(
-        close_code code, std::chrono::milliseconds timeout_ms = 5s
+        close_code code, std::chrono::milliseconds timeout_ms = 5s, TCancelSlot cancel = {}
     ) noexcept
     {
         if (this->closed_)
@@ -658,7 +673,7 @@ public:
             );
 
             // send close frame
-            auto res = co_await this->send_close_frame(code, timeout);
+            auto res = co_await this->send_close_frame(code, timeout, cancel);
             if (!res.has_value())
             {
 #if WS_CLIENT_LOG_SEND_FRAME > 0
@@ -691,11 +706,11 @@ public:
         // This call is required to ensure all ASIO operations are cancelled
         // before closing the socket, even if the server has already closed the connection
         // in the non-graceful case.
-        co_await this->socket_.underlying().shutdown(fail_conn, timeout);
+        co_await this->socket_.underlying().shutdown(fail_conn, timeout); // TODO: Cancel
 
         // close underlying socket connection
         {
-            auto res = co_await this->socket_.underlying().close(fail_conn);
+            auto res = co_await this->socket_.underlying().close(fail_conn); // TODO: Cancel
             if (!res.has_value())
             {
 #if WS_CLIENT_LOG_TCP > 0
@@ -711,13 +726,15 @@ public:
     }
 
 private:
-    [[nodiscard]] TTask<std::expected<Frame, WSError>> read_frame(Timeout<>& timeout)
+    [[nodiscard]] TTask<std::expected<Frame, WSError>> read_frame(
+        Timeout<>& timeout, TCancelSlot& cancel
+    )
     {
         Frame frame;
 
         // read frame header (2 bytes)
         byte tmp1[2];
-        WS_CO_TRYV(co_await this->socket_.read_exact(std::span<byte>(tmp1, 2), timeout));
+        WS_CO_TRYV(co_await this->socket_.read_exact(std::span<byte>(tmp1, 2), timeout, cancel));
 
         frame.header.b0 = tmp1[0];
         frame.header.b1 = tmp1[1];
@@ -741,7 +758,9 @@ private:
             uint16_t tmp2;
             WS_CO_TRYV(
                 co_await this->socket_.read_exact(
-                    std::span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)), timeout
+                    std::span<byte>(reinterpret_cast<byte*>(&tmp2), sizeof(uint16_t)),
+                    timeout,
+                    cancel
                 )
             );
             payload_size = network_to_host(tmp2);
@@ -752,7 +771,9 @@ private:
             uint64_t tmp3;
             WS_CO_TRYV(
                 co_await this->socket_.read_exact(
-                    std::span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)), timeout
+                    std::span<byte>(reinterpret_cast<byte*>(&tmp3), sizeof(uint64_t)),
+                    timeout,
+                    cancel
                 )
             );
             payload_size = network_to_host(tmp3);
@@ -769,9 +790,9 @@ private:
         }
 
 #if WS_CLIENT_LOG_RECV_FRAME > 0
-        if (logger_->template is_enabled<LogLevel::D, LogTopic::SendFrame>()) [[unlikely]]
+        if (logger_->template is_enabled<LogLevel::D, LogTopic::RecvFrame>()) [[unlikely]]
         {
-            logger_->template log<LogLevel::D, LogTopic::SendFrame>(std::format(
+            logger_->template log<LogLevel::D, LogTopic::RecvFrame>(std::format(
                 "Received {} frame rsv={:d} {:d} {:d} control={:d} final={:d} masked={:d} "
                 "payload_size={}",
                 to_string(frame.header.op_code()),
@@ -790,7 +811,7 @@ private:
     }
 
     [[nodiscard]] TTask<std::expected<void, WSError>> write_frame(
-        Frame& frame, std::span<byte> payload, Timeout<>& timeout
+        Frame& frame, std::span<byte> payload, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
 #if WS_CLIENT_LOG_SEND_FRAME > 0
@@ -846,12 +867,12 @@ private:
         frame.mask_key.mask(payload);
 
         // write frame header
-        WS_CO_TRYV(co_await this->socket_.write(write_buffer_.subspan(0, offset), timeout));
+        WS_CO_TRYV(co_await this->socket_.write(write_buffer_.subspan(0, offset), timeout, cancel));
 
         // write frame payload
         if (frame.payload_size > 0)
         {
-            WS_CO_TRYV(co_await this->socket_.write(payload, timeout));
+            WS_CO_TRYV(co_await this->socket_.write(payload, timeout, cancel));
             offset += frame.payload_size;
         }
 
@@ -859,7 +880,7 @@ private:
     }
 
     [[nodiscard]] TTask<std::expected<void, WSError>> send_close_frame(
-        close_code code, Timeout<>& timeout
+        close_code code, Timeout<>& timeout, TCancelSlot& cancel
     ) noexcept
     {
         Frame frame;
@@ -895,7 +916,7 @@ private:
 
         frame.set_payload_size(payload.size());
 
-        WS_CO_TRY(ret, co_await this->write_frame(frame, payload, timeout));
+        WS_CO_TRY(ret, co_await this->write_frame(frame, payload, timeout, cancel));
 
 #if WS_CLIENT_LOG_SEND_FRAME > 0
         logger_->template log<LogLevel::D, LogTopic::SendFrame>("Close frame sent");
@@ -905,7 +926,7 @@ private:
     }
 
     [[nodiscard]] TTask<std::variant<PingFrame, PongFrame, CloseFrame, WSError>>
-    handle_control_frame(Frame& frame, Timeout<>& timeout) noexcept
+    handle_control_frame(Frame& frame, Timeout<>& timeout, TCancelSlot& cancel) noexcept
     {
         if (!frame.header.is_final())
         {
@@ -965,7 +986,9 @@ private:
                     }
 
                     WS_CO_TRYV_RAW(
-                        co_await this->socket_.read_exact(close_frame.payload_bytes(), timeout)
+                        co_await this->socket_.read_exact(
+                            close_frame.payload_bytes(), timeout, cancel
+                        )
                     );
 
                     // check close code if provided
@@ -1006,7 +1029,9 @@ private:
                 if (frame.payload_size > 0)
                 {
                     WS_CO_TRYV_RAW(
-                        co_await this->socket_.read_exact(ping_frame.payload_bytes(), timeout)
+                        co_await this->socket_.read_exact(
+                            ping_frame.payload_bytes(), timeout, cancel
+                        )
                     );
                 }
 
@@ -1021,7 +1046,9 @@ private:
                 if (frame.payload_size > 0)
                 {
                     WS_CO_TRYV_RAW(
-                        co_await this->socket_.read_exact(pong_frame.payload_bytes(), timeout)
+                        co_await this->socket_.read_exact(
+                            pong_frame.payload_bytes(), timeout, cancel
+                        )
                     );
                 }
 
@@ -1042,4 +1069,5 @@ private:
         }
     }
 };
+
 } // namespace ws_client

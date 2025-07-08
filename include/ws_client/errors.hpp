@@ -103,6 +103,7 @@ enum class WSErrorCode : int16_t
     compression_error = 8,
     timeout_error = 9,
     logic_error = 10,
+    operation_cancelled = 11
 };
 
 static constexpr std::string_view to_string(WSErrorCode error) noexcept
@@ -129,6 +130,8 @@ static constexpr std::string_view to_string(WSErrorCode error) noexcept
             return "timeout_error";
         case WSErrorCode::logic_error:
             return "logic_error";
+        case WSErrorCode::operation_cancelled:
+            return "operation_cancelled";
         default:
             return "unknown";
     }

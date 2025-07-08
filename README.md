@@ -17,6 +17,7 @@ A transport-agnostic, high-performance, header-only C++23 WebSocket client libra
   - No hidden synchronization needed
 - Pre-allocate message payload buffer once and reuse it for all messages
 - Timeout parameter for all network operations
+- Async implementation supports cancellation (e.g. `asio::cancellation_slot`)
 - Few dependencies (STL, [OpenSSL](https://github.com/openssl/openssl), [zlib](https://github.com/madler/zlib) or [zlib-ng](https://github.com/zlib-ng/zlib-ng), [simdutf](https://github.com/simdutf/simdutf))
 - Pluggable transport layers
   - Blocking I/O support (built-in based on POSIX)

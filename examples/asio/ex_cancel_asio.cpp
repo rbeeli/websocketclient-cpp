@@ -101,9 +101,32 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     while (client.is_open())
     {
+        asio::cancellation_signal cancel;
+
+        // this is not super safe (detached), but good enough for demonstration here
+        asio::co_spawn(
+            executor,
+            ([](asio::any_io_executor io, asio::cancellation_signal& cancel) -> asio::awaitable<void>
+            {
+                // wait 3 seconds
+                asio::steady_timer t(io);
+                t.expires_after(3s);
+                co_await t.async_wait(asio::use_awaitable);
+
+                // fire cancel signal
+                std::cout << "Cancelling operation..." << std::endl;
+                cancel.emit(asio::cancellation_type::all);
+
+                co_return;
+            })(executor, cancel),
+            asio::detached
+        );
+
         // read message from server into buffer
         std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(*buffer, 5s); // 5 sec timeout
+            co_await client.read_message(
+                *buffer, 9999s, cancel.slot() // don't run into timeout, cancel will trigger
+            );
 
         if (auto msg = std::get_if<Message>(&var))
         {

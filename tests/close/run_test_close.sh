@@ -36,8 +36,8 @@ for close_mode in "${close_modes[@]}"; do
     PYTHON_PID=$!
 
     pushd ../../build/gcc_debug_tests/tests/close > /dev/null
-    # valgrind --num-callers=4 ./test_close_server_asio
-    valgrind --num-callers=4 ./test_close_server_builtin_ssl
+    valgrind --num-callers=4 ./test_close_server_asio
+    # valgrind --num-callers=4 ./test_close_server_builtin_ssl
     popd > /dev/null
 
     echo "--------------------------------------------------------"

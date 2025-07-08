@@ -119,7 +119,8 @@
     "forward_list": "cpp",
     "print": "cpp",
     "format": "cpp",
-    "text_encoding": "cpp"
+    "text_encoding": "cpp",
+    "scope": "cpp"
   },
   "editor.defaultFormatter": "xaver.clang-format",
   "[cmake]": {

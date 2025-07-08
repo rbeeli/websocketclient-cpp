@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6] - 2025-07-07
+
+### Added
+
+- Made async read/write operations cancellable by introducting a "cancellation slot" parameter
+- Cancellation support implemented in `WebSocketClientAsync`, `BufferedSocketAsync`, `ISocketAsync`, `HasSocketOperationsAsync`, `AsioSocket`
+- New error code `WSErrorCode::operation_cancelled = 11`
+- ASIO cancellation example in [examples/asio/ex_cancel_asio.cpp](./examples/asio/ex_cancel_asio.cpp)
+
 ## [0.5] - 2025-06-20
 
 ### Changed

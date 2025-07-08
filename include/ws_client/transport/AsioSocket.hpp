@@ -9,8 +9,9 @@
 #include <asio/read_until.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
-#include <asio/experimental/awaitable_operators.hpp>
 #include <asio/ssl.hpp>
+#include <asio/experimental/awaitable_operators.hpp>
+#include <asio/experimental/parallel_group.hpp>
 
 #include "ws_client/errors_async.hpp"
 #include "ws_client/log.hpp"
@@ -24,7 +25,7 @@ using byte = std::byte;
 using namespace asio::experimental::awaitable_operators;
 
 template <typename TLogger, typename SocketType>
-class AsioSocket final : public ISocketAsync<asio::awaitable>
+class AsioSocket final : public ISocketAsync<asio::awaitable, asio::cancellation_slot>
 {
 private:
     TLogger* logger_;
@@ -33,8 +34,12 @@ private:
     asio::steady_timer write_timer_;
 
 public:
+    // template <class T = void, class Exec = asio::any_io_executor>
+    // using awaitable_type = asio::awaitable<T, Exec>;
+    using cancellation_slot_type = asio::cancellation_slot;
+
     explicit AsioSocket(TLogger* logger, SocketType&& socket) noexcept
-        : ISocketAsync<asio::awaitable>(),
+        : ISocketAsync<asio::awaitable, asio::cancellation_slot>(),
           logger_(logger),
           socket_(std::move(socket)),
           read_timer_(socket_.get_executor()),
@@ -141,37 +146,55 @@ public:
      * @return The number of bytes read, or an error.
      */
     [[nodiscard]] inline asio::awaitable<std::expected<size_t, WSError>> read_some(
-        std::span<byte> buffer, Timeout<>& timeout
+        std::span<byte> buffer, Timeout<>& timeout, asio::cancellation_slot& cancel
     ) noexcept
     {
+        using namespace asio::experimental;
+        using asio::error::operation_aborted;
+
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
         // set a timeout for the read operation
         read_timer_.expires_after(timeout.remaining());
 
+        // build the two async ops
         // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
-        asio::error_code ec1;
-        asio::error_code ec2;
-        auto result = co_await (
-            socket_.async_read_some(buf, asio::redirect_error(asio::use_awaitable, ec1)) ||
-            read_timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
-        );
+        asio::error_code ec_read, ec_timer;
+        auto read_op = socket_.async_read_some(buf, asio::redirect_error(asio::deferred, ec_read));
+        auto time_op = read_timer_.async_wait(asio::redirect_error(asio::deferred, ec_timer));
 
-        // check if timed out
-        if (result.index() == 1)
-        {
-            // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout_error, "Read timed out", close_code::not_set);
-        }
+        // run them in parallel; whichever finishes first cancels the other.
+        // cancel token is bound only once on group, not individual ops!
+        auto [_ /*order*/, n_bytes] =
+            co_await make_parallel_group(std::move(read_op), std::move(time_op))
+                .async_wait(
+                    wait_for_one(), asio::bind_cancellation_slot(cancel, asio::use_awaitable)
+                );
 
-        // cancel timer
         read_timer_.cancel();
 
-        if (ec1)
-            co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
+        if (!ec_read)
+        {
+            // read succeeded
+            co_return n_bytes; // bytes transferred
+        }
 
-        // return the number of bytes read
-        co_return std::get<0>(result);
+        if (ec_read == operation_aborted)
+        {
+            socket_.lowest_layer().cancel(); // abort pending socket operations
+
+            if (!ec_timer)
+            {
+                // timer completed -> timeout
+                co_return WS_ERROR(timeout_error, "Read timed out", close_code::not_set);
+            }
+
+            // timer didn't complete -> external cancellation
+            co_return WS_ERROR(operation_cancelled, "Read cancelled", close_code::not_set);
+        }
+
+        // other unexpected read error
+        co_return WS_ERROR(transport_error, ec_read.message(), close_code::not_set);
     }
 
     /**
@@ -183,37 +206,57 @@ public:
      * @return The number of bytes written, or an error.
      */
     [[nodiscard]] inline asio::awaitable<std::expected<size_t, WSError>> write_some(
-        const std::span<const byte> buffer, Timeout<>& timeout
+        const std::span<const byte> buffer, Timeout<>& timeout, asio::cancellation_slot& cancel
     ) noexcept
     {
+        using namespace asio::experimental;
+        using asio::error::operation_aborted;
+
         auto buf = asio::buffer(buffer.data(), buffer.size());
 
         // set a timeout for the write operation
         write_timer_.expires_after(timeout.remaining());
 
+        // build the two async ops.
         // both operations must use redirect_error, otherwise bus error on ARM64 (not x86 though)!
-        asio::error_code ec1;
-        asio::error_code ec2;
-        auto result = co_await (
-            asio::async_write(socket_, buf, asio::redirect_error(asio::use_awaitable, ec1)) ||
-            write_timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec2))
+        asio::error_code ec_write, ec_timer;
+        auto write_op = asio::async_write(
+            socket_, buf, asio::redirect_error(asio::deferred, ec_write)
         );
+        auto time_op = write_timer_.async_wait(asio::redirect_error(asio::deferred, ec_timer));
 
-        // check if timed out
-        if (result.index() == 1)
-        {
-            // timer completed, indicating a timeout
-            co_return WS_ERROR(timeout_error, "Write timed out", close_code::not_set);
-        }
+        // run them in parallel; whichever finishes first cancels the other.
+        // cancel token is bound only once on group, not individual ops!
+        auto [_ /*order*/, n_bytes] =
+            co_await make_parallel_group(std::move(write_op), std::move(time_op))
+                .async_wait(
+                    wait_for_one(), asio::bind_cancellation_slot(cancel, asio::use_awaitable)
+                );
 
-        // cancel timer
         write_timer_.cancel();
 
-        if (ec1)
-            co_return WS_ERROR(transport_error, ec1.message(), close_code::not_set);
+        if (!ec_write)
+        {
+            // write succeeded
+            co_return n_bytes; // bytes transferred
+        }
 
-        // return the number of bytes written
-        co_return std::get<0>(result);
+        if (ec_write == operation_aborted)
+        {
+            socket_.lowest_layer().cancel(); // abort pending socket operations
+
+            if (!ec_timer)
+            {
+                // timer completed -> timeout
+                co_return WS_ERROR(timeout_error, "Write timed out", close_code::not_set);
+            }
+
+            // timer didn't complete -> external cancellation
+            co_return WS_ERROR(operation_cancelled, "Write cancelled", close_code::not_set);
+        }
+
+        // other unexpected write error
+        co_return WS_ERROR(transport_error, ec_write.message(), close_code::not_set);
     }
 
     /**
@@ -266,7 +309,8 @@ public:
                 if (res.index() == 1)
                 {
 #if WS_CLIENT_LOG_SSL > 0
-                    logger_->template log<LogLevel::W, LogTopic::SSL>("SSL async_shutdown timed out"
+                    logger_->template log<LogLevel::W, LogTopic::SSL>(
+                        "SSL async_shutdown timed out"
                     );
 
 #endif
