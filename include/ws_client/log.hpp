@@ -128,7 +128,7 @@ inline constexpr const char* extract_log_file_name(const char* path) noexcept
 class ConsoleLogger
 {
 private:
-    std::mutex clog_mutex;
+    inline static std::mutex clog_mutex;
     std::array<std::atomic<LogLevel>, WS_LOG_TOPICS_COUNT> topic_levels;
 
     template <LogLevel level>
@@ -151,7 +151,7 @@ public:
     {
     }
 
-    ConsoleLogger(LogLevel min_level) noexcept
+    explicit ConsoleLogger(LogLevel min_level) noexcept
     {
         // Configure defaults for log topics.
         // Defaults can be overridden using compile-time defines.
@@ -174,10 +174,7 @@ public:
     ConsoleLogger(const ConsoleLogger&) = delete;
     ConsoleLogger& operator=(const ConsoleLogger&) = delete;
 
-    // // enable move
-    // ConsoleLogger(ConsoleLogger&&) noexcept = default;
-    // ConsoleLogger& operator=(ConsoleLogger&&) noexcept = default;
-    // TODO move
+    // disable move
     ConsoleLogger(ConsoleLogger&&) = delete;
     ConsoleLogger& operator=(ConsoleLogger&&) = delete;
 
@@ -186,7 +183,7 @@ public:
      * This function is thread-safe.
      */
     template <LogLevel level, LogTopic topic>
-    bool is_enabled() const noexcept
+    [[nodiscard]] bool is_enabled() const noexcept
     {
         size_t topic_ix = static_cast<size_t>(topic);
         LogLevel topic_level = topic_levels[topic_ix].load(std::memory_order::relaxed);
