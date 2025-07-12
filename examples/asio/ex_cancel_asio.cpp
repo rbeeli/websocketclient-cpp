@@ -37,7 +37,7 @@ asio::awaitable<std::expected<void, WSError>> run()
     asio::ip::tcp::resolver resolver(executor);
     auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
 
-    std::cout << "Connecting to " << url->host() << "... \n";
+    logger.log<LogLevel::I, LogTopic::User>(std::format("Connecting to {}...", url->host()));
 
     asio::ssl::context ctx(asio::ssl::context::tls);
     ctx.set_default_verify_paths();
@@ -45,7 +45,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
 
-    std::cout << "Connected\n";
+    logger.log<LogLevel::I, LogTopic::User>("Connected");
 
     // disable Nagle's algorithm
     socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
@@ -61,7 +61,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
-    std::cout << "Handshake ok\n";
+    logger.log<LogLevel::I, LogTopic::User>("Handshake ok");
 
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 
@@ -99,79 +99,102 @@ asio::awaitable<std::expected<void, WSError>> run()
     // allocate message buffer with 4 KiB initial size and 1 MiB max size
     WS_CO_TRY(buffer, Buffer::create(4096, 1 * 1024 * 1024));
 
-    while (client.is_open())
+    asio::cancellation_signal cancel;
+
+    // this is not super safe (detached), but good enough for demonstration here
+    asio::co_spawn(
+        executor,
+        [&]() -> asio::awaitable<void>
+        {
+            auto ex = co_await asio::this_coro::executor;
+            
+            // wait 3 seconds
+            asio::steady_timer t(ex);
+            t.expires_after(3s);
+            co_await t.async_wait(asio::use_awaitable);
+
+            // fire cancel signal
+            logger.log<LogLevel::W, LogTopic::User>("Cancelling operation...");
+            cancel.emit(asio::cancellation_type::all);
+
+            co_return;
+        },
+        asio::detached
+    );
+
+    // run worker coroutine that gets cancelled
+    auto worker = [&]() -> asio::awaitable<std::expected<void, WSError>>
     {
-        asio::cancellation_signal cancel;
+        // important to not throw on cancellation!
+        co_await asio::this_coro::throw_if_cancelled(false);
 
-        // this is not super safe (detached), but good enough for demonstration here
-        asio::co_spawn(
-            executor,
-            ([](asio::any_io_executor io, asio::cancellation_signal& cancel) -> asio::awaitable<void>
-            {
-                // wait 3 seconds
-                asio::steady_timer t(io);
-                t.expires_after(3s);
-                co_await t.async_wait(asio::use_awaitable);
-
-                // fire cancel signal
-                std::cout << "Cancelling operation..." << std::endl;
-                cancel.emit(asio::cancellation_type::all);
-
-                co_return;
-            })(executor, cancel),
-            asio::detached
-        );
-
-        // read message from server into buffer
-        std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
-            co_await client.read_message(
-                *buffer, 9999s, cancel.slot() // don't run into timeout, cancel will trigger
-            );
-
-        if (auto msg = std::get_if<Message>(&var))
+        while (client.is_open())
         {
-            std::cout << msg->to_string() << std::endl;
-        }
-        else if (auto ping_frame = std::get_if<PingFrame>(&var))
-        {
-            logger.log<LogLevel::D, LogTopic::User>("Ping frame received");
-            WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
-        }
-        else if (std::get_if<PongFrame>(&var))
-        {
-            logger.log<LogLevel::D, LogTopic::User>("Pong frame received");
-        }
-        else if (auto close_frame = std::get_if<CloseFrame>(&var))
-        {
-            // server initiated close
-            if (close_frame->has_reason())
-            {
-                logger.log<LogLevel::I, LogTopic::User>(
-                    std::format("Close frame received: {}", close_frame->get_reason())
+            // read message from server into buffer
+            std::variant<Message, PingFrame, PongFrame, CloseFrame, WSError> var =
+                co_await client.read_message(
+                    *buffer, 9999s // don't run into timeout, cancel will trigger
                 );
-            }
-            else
-                logger.log<LogLevel::I, LogTopic::User>("Close frame received");
-            break;
-        }
-        else if (auto err = std::get_if<WSError>(&var))
-        {
-            if (err->code == WSErrorCode::timeout_error)
+
+            if (auto msg = std::get_if<Message>(&var))
             {
-                std::cout << "read_message timed out\n";
+                logger.log<LogLevel::I, LogTopic::User>(msg->to_string());
+            }
+            else if (auto ping_frame = std::get_if<PingFrame>(&var))
+            {
+                logger.log<LogLevel::D, LogTopic::User>("Ping frame received");
+                WS_CO_TRYV(co_await client.send_pong_frame(ping_frame->payload_bytes()));
+            }
+            else if (std::get_if<PongFrame>(&var))
+            {
+                logger.log<LogLevel::D, LogTopic::User>("Pong frame received");
+            }
+            else if (auto close_frame = std::get_if<CloseFrame>(&var))
+            {
+                // server initiated close
+                if (close_frame->has_reason())
+                {
+                    logger.log<LogLevel::I, LogTopic::User>(
+                        std::format("Close frame received: {}", close_frame->get_reason())
+                    );
+                }
+                else
+                    logger.log<LogLevel::I, LogTopic::User>("Close frame received");
                 break;
             }
+            else if (auto err = std::get_if<WSError>(&var))
+            {
+                if (err->code == WSErrorCode::timeout_error)
+                {
+                    logger.log<LogLevel::W, LogTopic::User>("read_message timed out");
+                    break;
+                }
 
-            // error occurred - must close connection
-            logger.log<LogLevel::E, LogTopic::User>(err->to_string());
-            WS_CO_TRYV(co_await client.close(err->close_with_code));
-            co_return std::expected<void, WSError>{};
+                // error occurred - must close connection
+                logger.log<LogLevel::E, LogTopic::User>(err->to_string());
+                WS_CO_TRYV(co_await client.close(err->close_with_code));
+                co_return std::unexpected{*err};
+            }
         }
-    }
 
+        co_return std::expected<void, WSError>{};
+    };
+
+    // spawn worker coroutine with cancellation signal attached
+    asio::error_code ec;
+    auto result = co_await asio::co_spawn(
+        executor,
+        worker,
+        asio::bind_cancellation_slot(cancel.slot(), asio::redirect_error(asio::use_awaitable, ec))
+    );
+
+    if (ec)
+        std::cout << "!!!!! co_spawn error" << ec << std::endl;
+
+    // no-op if cancelled before
     co_await client.close(close_code::normal_closure);
 
-    co_return std::expected<void, WSError>{};
+    co_return result;
 };
 
 

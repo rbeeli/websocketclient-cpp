@@ -40,7 +40,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
 
-    std::cout << "Connected\n";
+    logger.log<LogLevel::I, LogTopic::User>("Connected");
 
     // disable Nagle's algorithm
     socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
@@ -56,7 +56,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
-    std::cout << "Handshake ok\n";
+    logger.log<LogLevel::I, LogTopic::User>("Handshake ok");
 
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 

@@ -15,26 +15,18 @@ namespace ws_client
 {
 using byte = std::byte;
 
-template <typename S>
-concept CancelSlotLike = std::copy_constructible<S> && std::move_constructible<S>;
-
 /**
  * Concept for asynchronous socket template type parameters based on coroutines.
  * Requires the socket to support reading and writing bytes to the underlying socket, and closing the socket.
  * The functions MUST NOT throw exceptions, and instead return WSError object.
  */
 template <
-    typename T,                            // the socket type
-    template <typename...> typename TTask, // coroutine wrapper
-    typename TCancelSlot                   // cancellation type
+    typename T,                           // the socket type
+    template <typename...> typename TTask // coroutine wrapper
     >
-concept HasSocketOperationsAsync = CancelSlotLike<TCancelSlot> && requires(
-                                                                      T t,
-                                                                      std::span<byte> buffer,
-                                                                      Timeout<>& timeout,
-                                                                      bool fail_connection,
-                                                                      TCancelSlot& cancel
-                                                                  ) {
+concept HasSocketOperationsAsync = requires(
+    T t, std::span<byte> buffer, Timeout<>& timeout, bool fail_connection
+) {
     /**
      * Checks if there is data available to be read from the socket without consuming it.
      * For SSL sockets, this checks for actual application data, not just SSL protocol bytes.
@@ -50,7 +42,7 @@ concept HasSocketOperationsAsync = CancelSlotLike<TCancelSlot> && requires(
      * 
      * @return The number of bytes read, or an error.
      */
-    { t.read_some(buffer, timeout, cancel) } -> std::same_as<TTask<std::expected<size_t, WSError>>>;
+    { t.read_some(buffer, timeout) } -> std::same_as<TTask<std::expected<size_t, WSError>>>;
 
     /**
      * Writes `buffer` to underlying socket.
@@ -58,7 +50,7 @@ concept HasSocketOperationsAsync = CancelSlotLike<TCancelSlot> && requires(
      * 
      * @return The number of bytes written, or an error.
      */
-    { t.write_some(buffer, timeout, cancel) } -> std::same_as<TTask<std::expected<size_t, WSError>>>;
+    { t.write_some(buffer, timeout) } -> std::same_as<TTask<std::expected<size_t, WSError>>>;
 
     /**
      * Shuts down socket communication.

@@ -15,7 +15,7 @@ using byte = std::byte;
 /**
  * Base class for non-blocking asynchronous socket implementations (raw TCP, SSL, etc.).
  */
-template <template <typename...> typename TTask, typename TCancelSlot>
+template <template <typename...> typename TTask>
 class ISocketAsync
 {
 public:
@@ -46,7 +46,7 @@ public:
      * Returns the number of bytes read.
      */
     [[nodiscard]] virtual TTask<std::expected<size_t, WSError>> read_some(
-        std::span<byte> buffer, Timeout<>& timeout, TCancelSlot& cancel
+        std::span<byte> buffer, Timeout<>& timeout
     ) noexcept = 0;
 
     /**
@@ -55,7 +55,7 @@ public:
      * Returns the number of bytes written.
      */
     [[nodiscard]] virtual TTask<std::expected<size_t, WSError>> write_some(
-        const std::span<const byte> data, Timeout<>& timeout, TCancelSlot& cancel
+        const std::span<const byte> data, Timeout<>& timeout
     ) noexcept = 0;
 
     /**

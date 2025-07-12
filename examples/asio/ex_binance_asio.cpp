@@ -66,7 +66,7 @@ asio::awaitable<std::expected<void, WSError>> run()
     asio::ip::tcp::resolver resolver(executor);
     auto endpoints = co_await resolver.async_resolve(url->host(), "https", asio::use_awaitable);
 
-    std::cout << "Connecting to " << url->host() << "... \n";
+    logger.log<LogLevel::I, LogTopic::User>(std::format("Connecting to {}...", url->host()));
 
     asio::ssl::context ctx(asio::ssl::context::tls);
     ctx.set_default_verify_paths();
@@ -74,7 +74,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await asio::async_connect(socket.lowest_layer(), endpoints, asio::use_awaitable);
 
-    std::cout << "Connected\n";
+    logger.log<LogLevel::I, LogTopic::User>("Connected");
 
     // disable Nagle's algorithm
     socket.lowest_layer().set_option(asio::ip::tcp::no_delay(true));
@@ -90,7 +90,7 @@ asio::awaitable<std::expected<void, WSError>> run()
 
     co_await socket.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
 
-    std::cout << "Handshake ok\n";
+    logger.log<LogLevel::I, LogTopic::User>("Handshake ok");
 
     auto asio_socket = AsioSocket(&logger, std::move(socket));
 

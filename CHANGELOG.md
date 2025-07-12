@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7] - 2025-07-12
+
+### Removed
+
+- Full circle: Remove explicit cancellation token parameters introduced in 0.6
+  - Parameter removed from `WebSocketClientAsync`, `BufferedSocketAsync`, `ISocketAsync`, `HasSocketOperationsAsync`, `AsioSocket`
+  - Built-in default cancellation of couroutines sufficient, see updated example in [examples/asio/ex_cancel_asio.cpp](./examples/asio/ex_cancel_asio.cpp)
+
 ## [0.6] - 2025-07-07
 
 ### Added
