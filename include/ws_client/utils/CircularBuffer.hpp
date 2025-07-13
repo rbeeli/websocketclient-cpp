@@ -2,10 +2,12 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
+#include <memory>
 #include <span>
 #include <algorithm>
-#include <cstdlib>
 #include <type_traits>
+#include <new>
 
 namespace ws_client
 {
@@ -17,78 +19,39 @@ namespace ws_client
  * The buffer is not thread-safe and should be used in a single-threaded context only.
  * It is not allowed to push more items than the buffer can store,
  * the user MUST check the available space before pushing.
- * Memory is allocated using `std::malloc`.
+ * Memory is allocated using aligned alloc.
  */
 template <typename T>
     requires std::is_trivially_copyable_v<T>
 class CircularBuffer
 {
 private:
-    T* buffer_;
-    size_t head_;
-    size_t tail_;
-    bool full_;
-    size_t capacity_;
+    struct AlignedDelete
+    {
+        void operator()(void* p) const noexcept
+        {
+            ::operator delete[](p, std::align_val_t{alignof(T)});
+        }
+    };
+    std::unique_ptr<T[], AlignedDelete> buffer_{nullptr};
+
+    size_t head_{0};
+    size_t tail_{0};
+    bool full_{false};
+    size_t capacity_{0};
 
 public:
     explicit CircularBuffer(const size_t capacity) noexcept
-        : head_(0), tail_(0), full_(false), capacity_(capacity)
+        : buffer_(
+              static_cast<T*>(::operator new[](capacity * sizeof(T), std::align_val_t{alignof(T)}))
+          ),
+          capacity_(capacity)
     {
-        // ensure power-of-two capacity
-        assert((capacity & (capacity - 1)) == 0 && "Capacity must be a power of two");
-
-        // allocate buffer
-        buffer_ = reinterpret_cast<T*>(std::malloc(capacity * sizeof(T)));
-        assert(buffer_ != nullptr && "Failed to allocate CircularBuffer buffer");
-    }
-
-    ~CircularBuffer() noexcept
-    {
-        if (buffer_ != nullptr)
-        {
-            std::free(buffer_);
-            buffer_ = nullptr;
-        }
-    }
-
-    // disable copy
-    CircularBuffer(const CircularBuffer&) = delete;
-    CircularBuffer& operator=(const CircularBuffer&) = delete;
-
-    // enable move
-    CircularBuffer(CircularBuffer&& other) noexcept
-        : buffer_(other.buffer_),
-          head_(other.head_),
-          tail_(other.tail_),
-          full_(other.full_),
-          capacity_(other.capacity_)
-    {
-        other.buffer_ = nullptr;
-        other.capacity_ = 0;
-        other.head_ = 0;
-        other.tail_ = 0;
-        other.full_ = false;
-    }
-    CircularBuffer& operator=(CircularBuffer&& other) noexcept
-    {
-        if (this != &other)
-        {
-            if (buffer_ != nullptr)
-                std::free(buffer_);
-
-            buffer_ = other.buffer_;
-            capacity_ = other.capacity_;
-            head_ = other.head_;
-            tail_ = other.tail_;
-            full_ = other.full_;
-
-            other.buffer_ = nullptr;
-            other.capacity_ = 0;
-            other.head_ = 0;
-            other.tail_ = 0;
-            other.full_ = false;
-        }
-        return *this;
+        assert(
+            capacity != 0 && (capacity & (capacity - 1)) == 0 &&
+            "CircularBuffer capacity must be a power of two and non-zero"
+        );
+        assert(buffer_ && "CircularBuffer aligned allocation failed");
     }
 
     /**
@@ -96,8 +59,7 @@ public:
      */
     void push(const T& data) noexcept
     {
-        // check space left in buffer
-        assert(!full() && "Buffer is full");
+        assert(!full() && "CircularBuffer is full");
 
         buffer_[head_] = data;
         ++head_;
@@ -115,19 +77,20 @@ public:
      */
     void push(const T* src, size_t len) noexcept
     {
-        // check space left in buffer
-        assert(len <= available() && "Buffer is full");
+        assert(len <= available() && "CircularBuffer is full");
+
+        T* buf = buffer_.get();
 
         // perform the copy in two steps if necessary due to wrap-around
         size_t first_copy_n = std::min(len, capacity_ - head_);
-        std::copy(src, src + first_copy_n, buffer_ + head_);
+        std::copy(src, src + first_copy_n, buf + head_);
         len -= first_copy_n;
         head_ += first_copy_n;
 
         if (len > 0)
         {
             // wrap around and copy rest
-            std::copy(src + first_copy_n, src + first_copy_n + len, buffer_);
+            std::copy(src + first_copy_n, src + first_copy_n + len, buf);
             head_ = len;
         }
         else
@@ -152,12 +115,14 @@ public:
      * Pop single item from buffer.
      * Returns false if buffer is empty, otherwise true.
      */
-    bool pop(T& data) noexcept
+    [[nodiscard]] bool pop(T& data) noexcept
     {
         if (empty())
             return false;
 
-        data = buffer_[tail_];
+        T* buf = buffer_.get();
+
+        data = buf[tail_];
         tail_++;
 
         // wrap around if we reached the end of the buffer
@@ -178,13 +143,14 @@ public:
         if (len == 0 || empty())
             return;
 
-        // check not reading more than available
-        assert(len <= size() && "Buffer does not contain enough data");
+        assert(len <= size() && "CircularBuffer does not contain enough data");
 
         // copy the first part
         size_t first_copy_n = std::min(len, capacity_ - tail_);
 
-        std::copy(buffer_ + tail_, buffer_ + tail_ + first_copy_n, dest);
+        T* buf = buffer_.get();
+
+        std::copy(buf + tail_, buf + tail_ + first_copy_n, dest);
         tail_ += first_copy_n;
         len -= first_copy_n;
 
@@ -194,7 +160,7 @@ public:
         // check if there's more to copy due to wrap-around
         if (len > 0)
         {
-            std::copy(buffer_, buffer_ + len, dest + first_copy_n);
+            std::copy(buf, buf + len, dest + first_copy_n);
             tail_ = len;
         }
 
@@ -267,9 +233,15 @@ public:
      */
     [[nodiscard]] inline std::span<T> available_as_contiguous_span() noexcept
     {
+        T* buf = buffer_.get();
+
+        if (full_)
+            return {buf + head_, static_cast<size_t>(0)};
+
         if (head_ >= tail_)
-            return std::span<T>(buffer_ + head_, capacity_ - head_);
-        return std::span<T>(buffer_ + head_, tail_ - head_);
+            return {buf + head_, capacity_ - head_}; // normal case
+
+        return {buf + head_, tail_ - head_}; // wrapped case
     }
 
     /**
@@ -282,9 +254,18 @@ public:
     */
     [[nodiscard]] inline std::span<T> used_as_contiguous_span() noexcept
     {
+        T* buf = buffer_.get();
+
+        if (empty())
+            return {buf, static_cast<size_t>(0)};
+
+        if (full_)
+            return {buf + tail_, capacity_ - tail_};
+
         if (head_ >= tail_)
-            return std::span<T>(buffer_ + tail_, head_ - tail_);
-        return std::span<T>(buffer_ + tail_, capacity_ - tail_);
+            return {buf + tail_, head_ - tail_}; // normal case
+
+        return {buf + tail_, capacity_ - tail_}; // wrapped
     }
 
     /**
@@ -294,8 +275,7 @@ public:
      */
     inline void move_head(size_t len) noexcept
     {
-        // check space left in buffer
-        assert(len <= available() && "Cannot move head, buffer (almost) full");
+        assert(len <= available() && "Cannot move head, CircularBuffer (almost) full");
         head_ += len;
         head_ &= capacity_ - 1;
         full_ = head_ == tail_;
@@ -308,28 +288,25 @@ public:
      */
     inline void move_tail(size_t len) noexcept
     {
-        // check not reading more than available
-        assert(len <= size() && "Buffer does not contain enough data to move tail");
+        assert(len <= size() && "CircularBuffer does not contain enough data to move tail");
         tail_ += len;
         tail_ &= capacity_ - 1;
         full_ = false;
     }
 
     /**
-     * Get single item from buffer without removing it from it.
+     * Get single item from buffer without removing it.
      * This operation does not change the state of the buffer.
+     * 
      *
-     * @return True if buffer is not empty and item was copied to data.
+     * @return Returns nullptr if buffer is empty, or pointer to element of type `T`.
      */
-    inline bool peek(T& data) const noexcept
+    [[nodiscard]] inline const T* peek() const noexcept
     {
-        bool data_updated = false;
-        if (!empty())
-        {
-            data = buffer_[tail_];
-            data_updated = true;
-        }
-        return data_updated;
+        if (empty())
+            return nullptr;
+        T* buf = buffer_.get();
+        return buf + tail_;
     }
 
     /**
@@ -340,10 +317,11 @@ public:
      */
     [[nodiscard]] inline T& operator[](size_t index)
     {
-        assert(index < size() && "Index out of bounds");
+        assert(index < size() && "CircularBuffer index out of bounds");
+        T* buf = buffer_.get();
         size_t ix = tail_ + index;
         ix &= capacity_ - 1;
-        return buffer_[ix];
+        return buf[ix];
     }
 
     /**
@@ -354,10 +332,11 @@ public:
      */
     [[nodiscard]] inline const T& operator[](size_t index) const
     {
-        assert(index < size() && "Index out of bounds");
+        assert(index < size() && "CircularBuffer index out of bounds");
+        T* buf = buffer_.get();
         size_t ix = tail_ + index;
         ix &= capacity_ - 1;
-        return buffer_[ix];
+        return buf[ix];
     }
 
     /**

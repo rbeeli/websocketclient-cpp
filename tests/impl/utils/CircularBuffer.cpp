@@ -160,7 +160,7 @@ TEST(CircularBuffer, available_as_contiguous_span_with_wrap_around)
     buffer.push(1);
     buffer.move_tail(1);
     buffer.push(2);
-    buffer.push(3);     // This will cause wrap-around
+    buffer.push(3); // This will cause wrap-around
     buffer.move_tail(1);
 
     auto span = buffer.available_as_contiguous_span();
@@ -173,7 +173,54 @@ TEST(CircularBuffer, move_head_updates_head_correctly)
     buffer.push(1);
     buffer.push(2);
 
-    buffer.move_head(2);         // Simulate having written 2 more items directly
+    buffer.move_head(2);             // Simulate having written 2 more items directly
     EXPECT_TRUE(buffer.size() == 4); // Buffer size should reflect the moved head
     EXPECT_TRUE(!buffer.full());
+}
+
+// ---------------------------------------------------------------------------
+//  Additional tests for span helpers when the buffer is full
+// ---------------------------------------------------------------------------
+
+TEST(CircularBuffer, AvailableSpanIsZeroWhenFull)
+{
+    CircularBuffer<int> buffer(4);
+
+    int src[] = {1, 2, 3, 4};
+    buffer.push(src, 4); // fill → full
+
+    ASSERT_TRUE(buffer.full());
+    auto avail = buffer.available_as_contiguous_span();
+    EXPECT_EQ(avail.size(), 0u); // nothing writable
+}
+
+TEST(CircularBuffer, UsedSpanWhenFull_NoWrap)
+{
+    CircularBuffer<int> buffer(4);
+
+    int src[] = {1, 2, 3, 4};
+    buffer.push(src, 4); // head_ == tail_ == 0, full
+
+    auto used = buffer.used_as_contiguous_span();
+    ASSERT_EQ(used.size(), 4u); // whole array is readable
+    for (int i = 0; i < 4; ++i)
+        EXPECT_EQ(used[i], src[i]);
+}
+
+TEST(CircularBuffer, UsedSpanWhenFull_WrapAround)
+{
+    CircularBuffer<int> buffer(4);
+
+    int first[] = {1, 2, 3, 4};
+    buffer.push(first, 4); // full, head_ == 0
+    buffer.move_tail(2);   // tail_  = 2, size = 2
+
+    int second[] = {5, 6};
+    buffer.push(second, 2); // wraps, full again (head_ == tail_ == 2)
+
+    ASSERT_TRUE(buffer.full());
+    auto used = buffer.used_as_contiguous_span();
+    EXPECT_EQ(used.size(), 2u); // capacity - tail_  (4-2)
+    EXPECT_EQ(used[0], 3);
+    EXPECT_EQ(used[1], 4);
 }
