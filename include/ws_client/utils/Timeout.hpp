@@ -29,7 +29,7 @@ public:
      * Default constructor.
      * Initializes the start time to the current time.
      */
-    Timeout(const DT timeout) noexcept //
+    explicit Timeout(const DT timeout) noexcept //
         : start_(ClockT::now()), timeout_(timeout)
     {
         assert(timeout_ > DT::zero() && "timeout must be positive and non-zero");
@@ -38,7 +38,7 @@ public:
     /**
      * Constructor with a custom start time.
      */
-    Timeout(const DT timeout, const ClockT::time_point start) noexcept //
+    explicit Timeout(const DT timeout, const ClockT::time_point start) noexcept //
         : start_(start), timeout_(timeout)
     {
         assert(timeout_ > DT::zero() && "timeout must be positive and non-zero");
@@ -89,8 +89,7 @@ public:
         auto rem = remaining();
         struct timeval tv;
         tv.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(rem).count();
-        tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(rem % 1s)
-                         .count();
+        tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(rem % 1s).count();
         return tv;
     }
 
