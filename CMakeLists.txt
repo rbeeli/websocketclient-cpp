@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(websocketclient
-    VERSION 0.7
+    VERSION 0.7.1
     LANGUAGES CXX)
 
 include(GNUInstallDirs)
