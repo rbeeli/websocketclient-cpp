@@ -8,7 +8,7 @@ namespace ws_client
 /**
  * Converts 32 bit value from network byte order to host byte order.
  */
-inline uint32_t network_to_host(uint32_t value) noexcept
+[[nodiscard]] inline uint32_t network_to_host(uint32_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap32
@@ -27,7 +27,7 @@ inline uint32_t network_to_host(uint32_t value) noexcept
 /**
  * Converts 16 bit value from network byte order to host byte order.
  */
-inline uint16_t network_to_host(uint16_t value) noexcept
+[[nodiscard]] inline uint16_t network_to_host(uint16_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap16
@@ -45,7 +45,7 @@ inline uint16_t network_to_host(uint16_t value) noexcept
 /**
  * Converts 32 bit value from host byte order to network byte order.
  */
-inline uint32_t host_to_network(uint32_t value) noexcept
+[[nodiscard]] inline uint32_t host_to_network(uint32_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap32
@@ -64,7 +64,7 @@ inline uint32_t host_to_network(uint32_t value) noexcept
 /**
  * Converts 16 bit value from host byte order to network byte order.
  */
-inline uint16_t host_to_network(uint16_t value) noexcept
+[[nodiscard]] inline uint16_t host_to_network(uint16_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap16
@@ -82,7 +82,7 @@ inline uint16_t host_to_network(uint16_t value) noexcept
 /**
  * Converts 64 bit value from host byte order to network byte order.
  */
-inline uint64_t host_to_network(uint64_t value) noexcept
+[[nodiscard]] inline uint64_t host_to_network(uint64_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap64
@@ -103,7 +103,7 @@ inline uint64_t host_to_network(uint64_t value) noexcept
 /**
  * Converts 64 bit value from network byte order to host byte order.
  */
-constexpr uint64_t network_to_host(uint64_t value) noexcept
+[[nodiscard]] constexpr uint64_t network_to_host(uint64_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::little)
 #ifdef __builtin_bswap64

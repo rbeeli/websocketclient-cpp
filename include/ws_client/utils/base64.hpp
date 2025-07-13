@@ -7,7 +7,7 @@ namespace ws_client
 /**
  * Base64 encodes binary data as string.
  */
-inline std::string base64_encode(const unsigned char* data, const size_t len)
+[[nodiscard]] inline std::string base64_encode(const unsigned char* data, const size_t len)
 {
     static constexpr char encode_table[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -42,7 +42,7 @@ inline std::string base64_encode(const unsigned char* data, const size_t len)
 /**
  * Base64 encodes binary data as string.
  */
-inline std::string base64_encode(const std::string& str)
+[[nodiscard]] inline std::string base64_encode(const std::string& str)
 {
     const unsigned char* data = reinterpret_cast<const unsigned char*>(str.data());
     const size_t len = str.size();

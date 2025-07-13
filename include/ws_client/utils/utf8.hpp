@@ -14,7 +14,7 @@ namespace ws_client
  * This function is highly optimized due to the u se
  * of the `simdutf` library.
  */
-inline bool is_valid_utf8(const char* str, int len) noexcept
+[[nodiscard]] [[nodiscard]] inline bool is_valid_utf8(const char* str, int len) noexcept
 {
     return simdutf::validate_utf8(str, len);
 }
@@ -26,7 +26,7 @@ inline bool is_valid_utf8(const char* str, int len) noexcept
  * This function is not optimized, therefore slow, and should be used only
  * if SIMDUTF is not available.
  */
-inline bool is_valid_utf8(const char* str, int len)
+[[nodiscard]] inline bool is_valid_utf8(const char* str, int len)
 {
     const unsigned char* s = reinterpret_cast<const unsigned char*>(str);
     for (int i = 0; i < len;)

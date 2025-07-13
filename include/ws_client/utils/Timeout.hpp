@@ -47,7 +47,7 @@ public:
     /**
      * Returns the start time.
      */
-    inline ClockT::time_point start() const noexcept
+    [[nodiscard]] inline ClockT::time_point start() const noexcept
     {
         return start_;
     }
@@ -55,7 +55,7 @@ public:
     /**
      * Returns the total timeout duration.
      */
-    inline DT timeout() const noexcept
+    [[nodiscard]] inline DT timeout() const noexcept
     {
         return timeout_;
     }
@@ -64,7 +64,7 @@ public:
      * Returns the elapsed time since the start time.
      */
     template <class T = DT>
-    inline auto elapsed() const noexcept
+    [[nodiscard]] inline auto elapsed() const noexcept
     {
         return duration_cast<T>(ClockT::now() - start_);
     }
@@ -73,7 +73,7 @@ public:
      * Returns the remaining time until the timeout is reached.
      */
     template <class T = DT>
-    inline auto remaining() const noexcept
+    [[nodiscard]] inline auto remaining() const noexcept
     {
         auto elap = elapsed<T>();
         if (elap >= timeout_)
@@ -84,7 +84,7 @@ public:
     /**
      * Returns the remaining time as a `timeval` struct (see <sys/time.h>).
      */
-    inline timeval remaining_timeval() const noexcept
+    [[nodiscard]] inline timeval remaining_timeval() const noexcept
     {
         auto rem = remaining();
         struct timeval tv;
@@ -97,7 +97,7 @@ public:
     /**
      * Returns true if the timeout has been reached.
      */
-    inline bool is_expired() const noexcept
+    [[nodiscard]] inline bool is_expired() const noexcept
     {
         return elapsed() >= timeout_;
     }

@@ -15,7 +15,7 @@ using byte = std::byte;
 /**
  * Case-insensitive single ASCII character comparison (less than).
  */
-inline bool less_ci_char(const char a, const char b) noexcept
+[[nodiscard]] inline bool less_ci_char(const char a, const char b) noexcept
 {
     return std::tolower(static_cast<unsigned char>(a)) <
            std::tolower(static_cast<unsigned char>(b));
@@ -24,7 +24,7 @@ inline bool less_ci_char(const char a, const char b) noexcept
 /**
  * Case-insensitive single ASCII character equality comparison.
  */
-inline bool equals_ci_char(const char a, const char b) noexcept
+[[nodiscard]] inline bool equals_ci_char(const char a, const char b) noexcept
 {
     return std::tolower(static_cast<unsigned char>(a)) ==
            std::tolower(static_cast<unsigned char>(b));
@@ -33,7 +33,7 @@ inline bool equals_ci_char(const char a, const char b) noexcept
 /**
  * Case-insensitive string equality comparison.
  */
-inline bool equals_ci(const std::string& a, const std::string& b) noexcept
+[[nodiscard]] inline bool equals_ci(const std::string& a, const std::string& b) noexcept
 {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), equals_ci_char);
 }
@@ -41,7 +41,7 @@ inline bool equals_ci(const std::string& a, const std::string& b) noexcept
 /**
  * Case-insensitive string equality comparison.
  */
-inline bool equals_ci(const std::string_view lhs, const std::string_view rhs) noexcept
+[[nodiscard]] inline bool equals_ci(const std::string_view lhs, const std::string_view rhs) noexcept
 {
     return lhs.size() == rhs.size() &&
            std::equal(lhs.begin(), lhs.end(), rhs.begin(), equals_ci_char);
@@ -104,7 +104,7 @@ inline void trim(std::string& s) noexcept
 /**
  * Creates a string from a span of bytes.
  */
-inline std::string string_from_bytes(std::span<byte> data) noexcept
+[[nodiscard]] inline std::string string_from_bytes(std::span<byte> data) noexcept
 {
     return std::string(reinterpret_cast<const char*>(data.data()), data.size());
 }
