@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <cstddef>
 #include <span>
@@ -60,17 +61,37 @@ struct MaskKey
      * which is called on each aligned chunk (of size `align`) with a pointer to the chunk.
      * Unaligned leading and trailing bytes are processed naively byte by byte.
      */
+    template <size_t align>
+    static size_t leading_bytes(const byte* data, size_t len) noexcept
+    {
+        auto ptr = reinterpret_cast<uintptr_t>(data);
+        size_t unaligned = (ptr & (align - 1));
+        if (unaligned)
+            unaligned = align - unaligned;
+        return unaligned > len ? len : unaligned;
+    }
+
+    /**
+     * Key for the aligned chunks: the chunks start at offset `leading_bytes`,
+     * so the key bytes must be rotated by that offset modulo 4.
+     */
+    template <size_t align>
+    static uint32_t chunk_key(const byte* data, size_t len, uint32_t key) noexcept
+    {
+        const int shift = static_cast<int>(8 * (leading_bytes<align>(data, len) & (sizeof(uint32_t) - 1)));
+        if constexpr (std::endian::native == std::endian::little)
+            return std::rotr(key, shift);
+        else
+            return std::rotl(key, shift);
+    }
+
     template <size_t align, typename MaskFunc>
     static void mask_aligned(byte* data, size_t len, uint32_t key, const MaskFunc mask_func)
     {
         byte* key_bytes = reinterpret_cast<byte*>(&key);
 
         // align data pointer to boundary
-        auto ptr = reinterpret_cast<uintptr_t>(data);
-        size_t unaligned = (ptr & (align - 1));
-        if (unaligned)
-            unaligned = align - unaligned;
-        unaligned = unaligned > len ? len : unaligned;
+        const size_t unaligned = leading_bytes<align>(data, len);
 
         // processing leading bytes naively
         size_t i = 0;
@@ -92,7 +113,7 @@ struct MaskKey
 
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
-        const __m128i key_128 = _mm_set1_epi32(key); // 128-bit vector with key repeated
+        const __m128i key_128 = _mm_set1_epi32(static_cast<int>(chunk_key<16>(data, len, key))); // 128-bit vector with key repeated
         auto mask_func = [&key_128](byte* data)
         {
             auto ptr = reinterpret_cast<__m128i*>(data);
@@ -110,7 +131,7 @@ struct MaskKey
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
         // Duplicate the 32-bit key to all four parts of a 128-bit vector
-        const uint32x4_t key_128 = ::vdupq_n_u32(key);
+        const uint32x4_t key_128 = ::vdupq_n_u32(chunk_key<16>(data, len, key));
 
         auto mask_func = [&key_128](byte* data)
         {
@@ -132,7 +153,8 @@ struct MaskKey
 
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
-        uint64_t key_64 = (static_cast<uint64_t>(key) << 32) | key;
+        const uint32_t chunk = chunk_key<8>(data, len, key);
+        uint64_t key_64 = (static_cast<uint64_t>(chunk) << 32) | chunk;
         auto mask_func = [&key_64](byte* data)
         {
             *reinterpret_cast<uint64_t*>(data) ^= key_64; //

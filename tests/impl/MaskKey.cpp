@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <string>
 #include <iostream>
 
@@ -70,4 +71,32 @@ TEST(MaskKey, mask_key_unaligned)
     key.mask(payload);
     key.mask(payload);
     EXPECT_TRUE(string((char*)payload.data(), payload.size()) == R"({"method":"subscribe","subscription":{"type":"user"})");
+}
+
+TEST(MaskKey, matches_reference_for_all_offsets)
+{
+    alignas(64) byte data[256];
+    alignas(64) byte expected[256];
+
+    const uint32_t key = 0xa5c3f00f;
+    byte key_bytes[4];
+    std::memcpy(key_bytes, &key, sizeof(key));
+
+    for (size_t offset = 0; offset < 32; ++offset)
+    {
+        for (size_t size = 0; size <= 200; ++size)
+        {
+            for (size_t i = 0; i < size; ++i)
+            {
+                const byte value = static_cast<byte>((i * 31 + offset) & 0xff);
+                data[offset + i] = value;
+                expected[offset + i] = value ^ key_bytes[i & 3];
+            }
+
+            MaskKey(key).mask(span(data + offset, size));
+
+            ASSERT_EQ(std::memcmp(data + offset, expected + offset, size), 0)
+                << "offset = " << offset << ", size = " << size;
+        }
+    }
 }
