@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-11-19
+
+### Fixed
+
+- Payload masking of buffers not aligned to 4 bytes: the SSE2, NEON and 64-bit chunk paths used the unrotated masking key, corrupting sent frames ([#14](https://github.com/rbeeli/websocketclient-cpp/pull/14))
+
 ## [0.7.3] - 2026-08-15
 
 ### Added

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <cstddef>
 #include <span>
@@ -56,12 +57,15 @@ struct MaskKey
 
     /**
      * Mask data aligned to an arbitrary bytes boundary (template parameter `align`).
-     * The mask function is passed as a parameter (template parameter `MaskFunc`),
-     * which is called on each aligned chunk (of size `align`) with a pointer to the chunk.
+     * `make_mask_func` is called once with the masking key rotated to the key phase
+     * of the first aligned chunk, and returns the function which is called on each
+     * aligned chunk (of size `align`) with a pointer to the chunk.
      * Unaligned leading and trailing bytes are processed naively byte by byte.
      */
-    template <size_t align, typename MaskFunc>
-    static void mask_aligned(byte* data, size_t len, uint32_t key, const MaskFunc mask_func)
+    template <size_t align, typename MakeMaskFunc>
+    static void mask_aligned(
+        byte* data, size_t len, uint32_t key, const MakeMaskFunc make_mask_func
+    )
     {
         byte* key_bytes = reinterpret_cast<byte*>(&key);
 
@@ -77,7 +81,14 @@ struct MaskKey
         for (; i < unaligned; i++)
             data[i] ^= key_bytes[i & (sizeof(uint32_t) - 1)];
 
-        // processing aligned chunks
+        // processing aligned chunks, which start at key byte `unaligned % 4`
+        const int shift = static_cast<int>(8 * (unaligned & (sizeof(uint32_t) - 1)));
+        uint32_t chunk_key;
+        if constexpr (std::endian::native == std::endian::little)
+            chunk_key = std::rotr(key, shift);
+        else
+            chunk_key = std::rotl(key, shift);
+        const auto mask_func = make_mask_func(chunk_key);
         for (; i + align <= len; i += align)
             mask_func(data + i);
 
@@ -92,15 +103,19 @@ struct MaskKey
 
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
-        const __m128i key_128 = _mm_set1_epi32(key); // 128-bit vector with key repeated
-        auto mask_func = [&key_128](byte* data)
+        auto make_mask_func = [](uint32_t chunk_key)
         {
-            auto ptr = reinterpret_cast<__m128i*>(data);
-            __m128i chunk = _mm_load_si128(ptr);
-            chunk = _mm_xor_si128(chunk, key_128);
-            _mm_store_si128(ptr, chunk);
+            // 128-bit vector with key repeated
+            const __m128i key_128 = _mm_set1_epi32(static_cast<int>(chunk_key));
+            return [key_128](byte* data)
+            {
+                auto ptr = reinterpret_cast<__m128i*>(data);
+                __m128i chunk = _mm_load_si128(ptr);
+                chunk = _mm_xor_si128(chunk, key_128);
+                _mm_store_si128(ptr, chunk);
+            };
         };
-        mask_aligned<16>(data, len, key, mask_func);
+        mask_aligned<16>(data, len, key, make_mask_func);
     }
 
 #elif defined(__aarch64__)
@@ -109,21 +124,24 @@ struct MaskKey
 
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
-        // Duplicate the 32-bit key to all four parts of a 128-bit vector
-        const uint32x4_t key_128 = ::vdupq_n_u32(key);
-
-        auto mask_func = [&key_128](byte* data)
+        auto make_mask_func = [](uint32_t chunk_key)
         {
-            // Load data into two 64-bit chunks (128 bits total)
-            uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t*>(data));
+            // Duplicate the 32-bit key to all four parts of a 128-bit vector
+            const uint32x4_t key_128 = ::vdupq_n_u32(chunk_key);
 
-            // XOR the loaded data with the key vector
-            chunk = ::veorq_u32(chunk, key_128);
+            return [key_128](byte* data)
+            {
+                // Load data into two 64-bit chunks (128 bits total)
+                uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t*>(data));
 
-            // Store the result back into memory
-            vst1q_u32(reinterpret_cast<uint32_t*>(data), chunk);
+                // XOR the loaded data with the key vector
+                chunk = ::veorq_u32(chunk, key_128);
+
+                // Store the result back into memory
+                vst1q_u32(reinterpret_cast<uint32_t*>(data), chunk);
+            };
         };
-        mask_aligned<16>(data, len, key, mask_func);
+        mask_aligned<16>(data, len, key, make_mask_func);
     }
 
 #else
@@ -132,12 +150,15 @@ struct MaskKey
 
     static void mask_fn(byte* data, size_t len, uint32_t key)
     {
-        uint64_t key_64 = (static_cast<uint64_t>(key) << 32) | key;
-        auto mask_func = [&key_64](byte* data)
+        auto make_mask_func = [](uint32_t chunk_key)
         {
-            *reinterpret_cast<uint64_t*>(data) ^= key_64; //
+            const uint64_t key_64 = (static_cast<uint64_t>(chunk_key) << 32) | chunk_key;
+            return [key_64](byte* data)
+            {
+                *reinterpret_cast<uint64_t*>(data) ^= key_64; //
+            };
         };
-        mask_aligned<8>(data, len, key, mask_func);
+        mask_aligned<8>(data, len, key, make_mask_func);
     }
 
 #endif
