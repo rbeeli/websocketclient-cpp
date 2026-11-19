@@ -7,6 +7,7 @@
 #include <mutex>
 #include <chrono>
 
+#include <poll.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
@@ -358,7 +359,7 @@ public:
             int ssl_err = SSL_get_error(ssl_, ret);
             if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
             {
-                // use select() to wait for the socket to get ready
+                // use poll() to wait for the socket to get ready
                 WS_TRY(ready, ssl_select(timeout, ssl_err));
                 if (!ready.value())
                     return WS_ERROR(timeout_error, "SSL handshake timed out", close_code::not_set);
@@ -451,7 +452,7 @@ public:
             }
             else if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
             {
-                // use select() to wait for the socket to get ready
+                // use poll() to wait for the socket to get ready
                 WS_TRY(ready, ssl_select(timeout, ssl_err));
                 if (!ready.value())
                     return false;
@@ -518,7 +519,7 @@ public:
                 int ssl_err = SSL_get_error(ssl_, ret);
                 if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
-                    // use select() to wait for the socket to get ready
+                    // use poll() to wait for the socket to get ready
                     WS_TRY(ready, ssl_select(timeout, ssl_err));
                     if (!ready.value())
                         return WS_ERROR(timeout_error, "SSL read timed out", close_code::not_set);
@@ -577,7 +578,7 @@ public:
                 int ssl_err = SSL_get_error(ssl_, ret);
                 if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                 {
-                    // use select() to wait for the socket to get ready
+                    // use poll() to wait for the socket to get ready
                     WS_TRY(ready, ssl_select(timeout, ssl_err));
                     if (!ready.value())
                         return WS_ERROR(timeout_error, "SSL write timed out", close_code::not_set);
@@ -641,7 +642,7 @@ public:
                         int ssl_err = SSL_get_error(ssl_, ret);
                         if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE)
                         {
-                            // use select() to wait for the socket to get ready
+                            // use poll() to wait for the socket to get ready
                             WS_TRY(ready, ssl_select(timeout, ssl_err));
                             if (!ready.value())
                             {
@@ -971,25 +972,28 @@ private:
     {
         for (;;)
         {
-            // 1. Build the fd sets on each iteration – FD_* macros do not guarantee
-            //    that a set can be reused after select() returns.
-            // use select() to wait for socket to become ready for the SSL operation
-            fd_set fds;
-            FD_ZERO(&fds);
-            FD_SET(socket_.fd(), &fds);
-
-            // set the timeout for select
-            auto remaining = timeout.remaining_timeval();
-            int ret = ::select(
-                socket_.fd() + 1,
-                ssl_err_read_write == SSL_ERROR_WANT_READ ? &fds : nullptr,
-                ssl_err_read_write == SSL_ERROR_WANT_WRITE ? &fds : nullptr,
-                nullptr,
-                &remaining
+            // use poll() to wait for socket to become ready for the SSL operation
+            pollfd pfd{
+                .fd = socket_.fd(),
+                .events = static_cast<short>(
+                    (ssl_err_read_write == SSL_ERROR_WANT_READ ? POLLIN : 0) |
+                    (ssl_err_read_write == SSL_ERROR_WANT_WRITE ? POLLOUT : 0)
+                ),
+                .revents = 0
+            };
+            const int timeout_ms = static_cast<int>(
+                std::min<int64_t>(timeout.remaining().count(), std::numeric_limits<int>::max())
             );
+            int ret = ::poll(&pfd, 1, timeout_ms);
 
             if (ret > 0) [[likely]]
-                return true; // select() indicates readiness
+            {
+                if (pfd.revents & POLLNVAL) [[unlikely]]
+                    return syscall_error(-1, EBADF, "SSL socket operation failed, invalid socket");
+
+                // ready (or error / hangup, reported by the next SSL operation)
+                return true;
+            }
 
             if (ret == 0)
                 return false; // timeout
@@ -1005,7 +1009,7 @@ private:
             }
 
             return syscall_error(
-                ret, errno_, "SSL socket operation failed due to system error in select()"
+                ret, errno_, "SSL socket operation failed due to system error in poll()"
             );
         }
     }

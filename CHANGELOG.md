@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.6] - 2026-11-19
+
+### Fixed
+
+- Size overflow in `Buffer::append`, allowing a heap overflow from huge frame payload lengths when the message buffer has no size limit
+- Stack overflow in the built-in TCP/TLS sockets for socket fd numbers >= `FD_SETSIZE` (1024), by using `poll` instead of `select`
+
 ## [0.7.5] - 2026-11-19
 
 ### Fixed

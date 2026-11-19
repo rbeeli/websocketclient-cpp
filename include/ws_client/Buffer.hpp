@@ -179,7 +179,7 @@ public:
     [[nodiscard]] inline std::expected<void, WSError> reserve(size_t size) noexcept
     {
         if (size > capacity_)
-            WS_TRYV(internal_reserve(size));
+            WS_TRYV(internal_reserve(0, size));
         return {};
     }
 
@@ -191,7 +191,7 @@ public:
     [[nodiscard]] inline std::expected<void, WSError> resize(size_t size) noexcept
     {
         if (size != capacity_)
-            WS_TRYV(internal_reserve(size));
+            WS_TRYV(internal_reserve(0, size));
         used_ = size;
         return {};
     }
@@ -216,9 +216,9 @@ public:
     inline std::expected<std::span<byte>, WSError> append(const byte* data, size_t size) noexcept
     {
         auto pos = this->size();
+        if (size > capacity_ - pos) [[unlikely]] // overflow-safe, `used_ <= capacity_` always holds
+            WS_TRYV(internal_reserve(pos, size));
         auto new_pos = pos + size;
-        if (new_pos > capacity_)
-            WS_TRYV(internal_reserve(new_pos));
         std::memcpy(buffer_ + pos, data, size);
         used_ = new_pos;
         return std::span<byte>(buffer_ + pos, size);
@@ -233,9 +233,9 @@ public:
     inline std::expected<std::span<byte>, WSError> append(size_t size) noexcept
     {
         auto pos = this->size();
+        if (size > capacity_ - pos) [[unlikely]] // overflow-safe, `used_ <= capacity_` always holds
+            WS_TRYV(internal_reserve(pos, size));
         auto new_pos = pos + size;
-        if (new_pos > capacity_)
-            WS_TRYV(internal_reserve(new_pos));
         used_ = new_pos;
         return std::span<byte>(buffer_ + pos, size);
     }
@@ -251,20 +251,34 @@ public:
     }
 
 private:
-    [[nodiscard]] std::expected<void, WSError> internal_reserve(size_t size) noexcept
+    /**
+     * Reallocates the buffer to exactly `used + extra` bytes.
+     * The size is checked against `max_size_` without computing `used + extra` first,
+     * which could wrap around for huge `extra` values (e.g. untrusted frame payload lengths).
+     */
+    [[nodiscard]] std::expected<void, WSError> internal_reserve(size_t used, size_t extra) noexcept
     {
-        if (size > max_size_)
+        if (extra > max_size_ - std::min(used, max_size_))
         {
             return WS_ERROR(
                 buffer_error,
-                std::format(
-                    "Requested buffer size {} exceeds maximum allowed size of {} bytes",
-                    size,
-                    max_size_
-                ),
+                used == 0 ? std::format(
+                                "Requested buffer size {} exceeds maximum allowed size of {} bytes",
+                                extra,
+                                max_size_
+                            )
+                          : std::format(
+                                "Requested buffer size {} + {} exceeds maximum allowed size of {} "
+                                "bytes",
+                                used,
+                                extra,
+                                max_size_
+                            ),
                 close_code::not_set
             );
         }
+
+        const size_t size = used + extra;
 
         // allocate new buffer, or resize existing one
         byte* newbuf = static_cast<byte*>(

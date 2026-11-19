@@ -3,6 +3,7 @@
 #include <string>
 #include <span>
 #include <iostream>
+#include <limits>
 
 #include "ws_client/errors.hpp"
 #include "ws_client/Buffer.hpp"
@@ -203,4 +204,17 @@ TEST(Buffer, ClearGuard)
         ASSERT_TRUE(res.has_value());
     }
     ASSERT_TRUE(buf.empty());
+}
+TEST(Buffer, AppendSizeOverflow)
+{
+    auto buf_res = Buffer::create(16, std::numeric_limits<size_t>::max());
+    ASSERT_TRUE(buf_res.has_value());
+    auto& buf = buf_res.value();
+    ASSERT_TRUE(buf.append(10).has_value());
+
+    // pos + size wraps around to 4, which is within the allocated capacity
+    const size_t size = std::numeric_limits<size_t>::max() - 5;
+    EXPECT_FALSE(buf.append(size).has_value());
+    EXPECT_FALSE(buf.append(buf.data().data(), size).has_value());
+    EXPECT_EQ(buf.size(), 10);
 }

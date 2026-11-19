@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <expected>
+#include <limits>
 #include <span>
 #include <chrono>
 #include <unistd.h>
@@ -9,7 +11,7 @@
 #include <format>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <sys/select.h>
+#include <poll.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <fcntl.h>
@@ -171,7 +173,7 @@ public:
         if (errno_ != EINPROGRESS)
             return std::unexpected(make_error(errno_, "connecting to the server"));
 
-        // use select to wait for the connection or timeout
+        // use poll to wait for the connection or timeout
         WS_TRY(connected, this->wait_writeable(timeout));
         if (!connected.value())
             return WS_ERROR(timeout_error, "Connect timeout", close_code::not_set);
@@ -317,16 +319,18 @@ public:
     {
         while (true)
         {
-            fd_set read_fds;
-            FD_ZERO(&read_fds);
-            FD_SET(fd_, &read_fds);
-
-            auto remaining = timeout.remaining_timeval();
-            int ret = ::select(fd_ + 1, &read_fds, nullptr, nullptr, &remaining);
+            pollfd pfd{.fd = fd_, .events = POLLIN, .revents = 0};
+            const int timeout_ms = static_cast<int>(
+                std::min<int64_t>(timeout.remaining().count(), std::numeric_limits<int>::max())
+            );
+            int ret = ::poll(&pfd, 1, timeout_ms);
 
             if (ret > 0) [[likely]]
             {
-                // socket is readable
+                if (pfd.revents & POLLNVAL) [[unlikely]]
+                    return make_error(EBADF, "Invalid socket in wait_readable");
+
+                // socket is readable (or has an error / hangup, reported by the next read)
                 return true;
             }
             else if (ret == 0)
@@ -352,16 +356,18 @@ public:
     {
         while (true)
         {
-            fd_set write_fds;
-            FD_ZERO(&write_fds);
-            FD_SET(fd_, &write_fds);
-
-            auto remaining = timeout.remaining_timeval();
-            int ret = ::select(fd_ + 1, nullptr, &write_fds, nullptr, &remaining);
+            pollfd pfd{.fd = fd_, .events = POLLOUT, .revents = 0};
+            const int timeout_ms = static_cast<int>(
+                std::min<int64_t>(timeout.remaining().count(), std::numeric_limits<int>::max())
+            );
+            int ret = ::poll(&pfd, 1, timeout_ms);
 
             if (ret > 0) [[likely]]
             {
-                // socket is writable
+                if (pfd.revents & POLLNVAL) [[unlikely]]
+                    return make_error(EBADF, "Invalid socket in wait_writeable");
+
+                // socket is writable (or has an error / hangup, reported by the next write)
                 return true;
             }
             else if (ret == 0)
