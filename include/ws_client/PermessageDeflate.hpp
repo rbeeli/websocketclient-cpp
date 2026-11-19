@@ -726,9 +726,26 @@ public:
             while (true)
             {
                 // extend output buffer if required.
-                // assumes average compression ratio of 5:1.
+                // assumes average compression ratio of 5:1, bounded by the remaining buffer room.
                 // if more than 5x the input size is required, the buffer will be extended again.
-                WS_TRY(alloc_res, output.append(std::max(min_output_size, istate_->avail_in * 5)));
+                const size_t room = output.max_size() - std::min(output.size(), output.max_size());
+                if (room == 0) [[unlikely]]
+                {
+                    return WS_ERROR(
+                        buffer_error,
+                        std::format(
+                            "Decompressed message exceeds maximum buffer size of {} bytes",
+                            output.max_size()
+                        ),
+                        close_code::message_too_big
+                    );
+                }
+                WS_TRY(
+                    alloc_res,
+                    output.append(
+                        std::min<size_t>(std::max(min_output_size, istate_->avail_in * 5), room)
+                    )
+                );
                 std::span<byte> avail = *alloc_res;
 
                 // set zlib output buffer
@@ -822,8 +839,23 @@ public:
         size_t size = 0;
         do
         {
-            // extend output buffer if required, usually over-allocates.
-            WS_TRY(alloc_res, output.append(std::max(64U, ostate_->avail_in)));
+            // extend output buffer if required, usually over-allocates,
+            // bounded by the remaining buffer room.
+            const size_t room = output.max_size() - std::min(output.size(), output.max_size());
+            if (room == 0) [[unlikely]]
+            {
+                return WS_ERROR(
+                    buffer_error,
+                    std::format(
+                        "Compressed message exceeds compress_buffer_size of {} bytes",
+                        output.max_size()
+                    ),
+                    close_code::not_set
+                );
+            }
+            WS_TRY(
+                alloc_res, output.append(std::min<size_t>(std::max(64U, ostate_->avail_in), room))
+            );
             std::span<byte> avail = *alloc_res;
 
             // set zlib output buffer

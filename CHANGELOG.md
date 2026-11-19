@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.7] - 2026-11-19
+
+### Fixed
+
+- permessage-deflate: valid messages rejected because output space was over-reserved; messages larger than `compress_buffer_size` could not be sent compressed, and poorly compressible received messages failed well below the message buffer limit
+
 ## [0.7.6] - 2026-11-19
 
 ### Fixed

@@ -2,7 +2,9 @@
 
 #include <array>
 #include <string>
+#include <expected>
 #include <iostream>
+#include <random>
 #include <string_view>
 #include <utility>
 
@@ -295,5 +297,80 @@ TEST(PermessageDeflateContext, compress_empty_message_with_context_takeover)
         Buffer output = Buffer::create(0, 1024).value();
         ASSERT_TRUE(ctx.decompress(output).has_value());
         EXPECT_EQ(string(reinterpret_cast<char*>(output.data().data()), output.size()), msg);
+    }
+}
+
+namespace
+{
+using DeflateContext = PermessageDeflateContext<ConsoleLogger>;
+
+/**
+ * Compresses `input` with `ctx` and decompresses it again (loopback) into a new buffer
+ * with maximum size `output_max_size`.
+ */
+std::expected<string, WSError> compress_decompress(
+    DeflateContext& ctx, string input, size_t output_max_size
+)
+{
+    ctx.compress_buffer().clear();
+    span<byte> payload{reinterpret_cast<byte*>(input.data()), input.size()};
+    WS_TRY(compressed, ctx.compress(payload));
+
+    ctx.decompress_buffer().clear();
+    WS_TRYV(ctx.decompress_buffer().append(compressed->data(), compressed->size()));
+
+    WS_TRY(output, Buffer::create(0, output_max_size));
+    WS_TRYV(ctx.decompress(*output));
+    return string(reinterpret_cast<char*>(output->data().data()), output->size());
+}
+
+string incompressible_data(size_t size)
+{
+    std::mt19937 rng(42);
+    string data(size, '\0');
+    for (auto& c : data)
+        c = static_cast<char>(rng());
+    return data;
+}
+} // namespace
+
+TEST(PermessageDeflateContext, compress_message_larger_than_compress_buffer_size)
+{
+    ConsoleLogger logger{LogLevel::N};
+    PermessageDeflate<decltype(logger)> pd{.logger = &logger}; // 100 KiB buffer limits
+    DeflateContext ctx{&logger, pd};
+    ASSERT_TRUE(ctx.init().has_value());
+
+    // compresses well below the compress buffer limit
+    const string input(200 * 1024, 'a');
+    auto res = compress_decompress(ctx, input, 1024 * 1024);
+    ASSERT_TRUE(res.has_value()) << res.error().message;
+    EXPECT_EQ(*res, input);
+}
+
+TEST(PermessageDeflateContext, decompress_incompressible_message_up_to_max_size)
+{
+    ConsoleLogger logger{LogLevel::N};
+    PermessageDeflate<decltype(logger)> pd{
+        .logger = &logger,
+        .decompress_buffer_size = 1024 * 1024,
+        .compress_buffer_size = 1024 * 1024,
+    };
+    const string input = incompressible_data(100 * 1024);
+
+    {
+        DeflateContext ctx{&logger, pd};
+        ASSERT_TRUE(ctx.init().has_value());
+        auto res = compress_decompress(ctx, input, input.size() + 1);
+        ASSERT_TRUE(res.has_value()) << res.error().message;
+        EXPECT_EQ(*res, input);
+    }
+
+    {
+        DeflateContext ctx{&logger, pd};
+        ASSERT_TRUE(ctx.init().has_value());
+        auto res = compress_decompress(ctx, input, input.size() - 1);
+        ASSERT_FALSE(res.has_value());
+        EXPECT_EQ(res.error().code, WSErrorCode::buffer_error);
     }
 }
