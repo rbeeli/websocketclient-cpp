@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cassert>
+#include <limits>
 
 #include "ws_client/errors.hpp"
 #include "ws_client/log.hpp"
@@ -110,7 +111,12 @@ public:
         while (true)
         {
             // read some data into circular buffer
-            WS_TRYV(this->fill_read_buffer(read_buffer_.capacity(), timeout));
+            // read at most `capacity - (delimiter.size() - 1)` bytes, so the delimiter
+            // (which may start in the previous read) and everything after it
+            // always fit when pushed back into the empty circular buffer below
+            WS_TRYV(this->fill_read_buffer(
+                read_buffer_.capacity(), timeout, read_buffer_.capacity() - (delimiter.size() - 1)
+            ));
 
             // append circular buffer data to buffer
             WS_TRY(cb_read_span_res, buffer.append(read_buffer_.size()));
@@ -180,7 +186,9 @@ public:
 
 private:
     [[nodiscard]] std::expected<size_t, WSError> fill_read_buffer(
-        const size_t desired_bytes, Timeout<>& timeout
+        const size_t desired_bytes,
+        Timeout<>& timeout,
+        const size_t max_read = std::numeric_limits<size_t>::max()
     ) noexcept
     {
         assert(desired_bytes > 0 && "Desired bytes must be greater than 0");
@@ -194,6 +202,7 @@ private:
         // than the available space in the buffer, because it can only return
         // a single continguous span (from head to end of buffer or from start to tail).
         std::span<byte> buf_span = read_buffer_.available_as_contiguous_span();
+        buf_span = buf_span.first(std::min(buf_span.size(), max_read));
         WS_TRY(read_bytes_res, socket_.read_some(buf_span, timeout));
 
         // move head by the number of bytes read into buffer

@@ -19,6 +19,9 @@
 #define inflateInit2(_strm, _windowBits) zng_inflateInit2(_strm, _windowBits)
 #define inflate(_strm, __flush) zng_inflate(_strm, __flush)
 #define inflateEnd(_strm) zng_inflateEnd(_strm)
+#define inflateReset(_strm) zng_inflateReset(_strm)
+#define inflateGetDictionary(_strm, _dict, _len) zng_inflateGetDictionary(_strm, _dict, _len)
+#define inflateSetDictionary(_strm, _dict, _len) zng_inflateSetDictionary(_strm, _dict, _len)
 #define deflateInit2(_strm, _level, _method, _windowBits, _memLevel, _strategy)                    \
     zng_deflateInit2(_strm, _level, _method, _windowBits, _memLevel, _strategy)
 #define deflateEnd(_strm) zng_deflateEnd(_strm)
@@ -713,13 +716,14 @@ public:
         std::span<byte> input = decompress_buffer().data();
 
         size_t size = 0;
+        bool stream_ended = false;
         auto inflate_input = [&](std::span<byte> compressed,
                                  unsigned int min_output_size) -> std::expected<void, WSError>
         {
             istate_->next_in = reinterpret_cast<Bytef*>(compressed.data());
             istate_->avail_in = static_cast<unsigned int>(compressed.size());
 
-            do
+            while (true)
             {
                 // extend output buffer if required.
                 // assumes average compression ratio of 5:1.
@@ -738,7 +742,23 @@ public:
 
                 size += avail.size() - istate_->avail_out;
                 output.discard_end(istate_->avail_out);
-            } while (istate_->avail_out == 0);
+
+                if (ret == Z_STREAM_END) [[unlikely]]
+                {
+                    // sender ended the DEFLATE stream with a BFINAL block (RFC 7692 section
+                    // 7.2.3.4), any following data starts a new stream
+                    WS_TRYV(restart_inflate());
+                    if (istate_->avail_in == 0)
+                    {
+                        stream_ended = true;
+                        break;
+                    }
+                    continue;
+                }
+
+                if (istate_->avail_out != 0)
+                    break;
+            }
 
             return {};
         };
@@ -747,8 +767,13 @@ public:
 
         // RFC 7692 section 7.2.2 requires restoring the sync-flush trailer
         // stripped from the WebSocket message payload before decompression.
-        byte trailer[] = {byte{0x00}, byte{0x00}, byte{0xff}, byte{0xff}};
-        WS_TRYV(inflate_input(trailer, 1U));
+        // Skipped if the payload ended exactly with a BFINAL block, because
+        // the trailer would start a new, incomplete block in the restarted stream.
+        if (!stream_ended) [[likely]]
+        {
+            byte trailer[] = {byte{0x00}, byte{0x00}, byte{0xff}, byte{0xff}};
+            WS_TRYV(inflate_input(trailer, 1U));
+        }
 
 #if WS_CLIENT_LOG_COMPRESSION > 0
         if (logger_->template is_enabled<LogLevel::D, LogTopic::Compression>())
@@ -775,6 +800,15 @@ public:
     [[nodiscard]] std::expected<std::span<byte>, WSError> compress(std::span<byte> input) noexcept
     {
         auto& output = compress_buffer();
+
+        if (input.empty()) [[unlikely]]
+        {
+            // deflate produces no output for empty input after a previous flush,
+            // send a single 0x00 octet instead (RFC 7692 section 7.2.3.6)
+            WS_TRY(empty_res, output.append(1));
+            (*empty_res)[0] = byte{0x00};
+            return *empty_res;
+        }
 
         // set zlib input buffer to frame payload
         ostate_->next_in = reinterpret_cast<Bytef*>(input.data());
@@ -827,6 +861,30 @@ public:
         return output.data().subspan(0, size);
     }
 
+private:
+    /**
+     * Restarts the inflate stream after the server ended it with a BFINAL block.
+     * The LZ77 sliding window is preserved, because data following in the same or later
+     * messages may still reference it (without context takeover, the window is
+     * discarded at the end of the message anyway).
+     */
+    [[nodiscard]] std::expected<void, WSError> restart_inflate() noexcept
+    {
+        unsigned char window[1U << 15]; // max. window size (15 bits)
+        unsigned int window_size = 0;
+        if (Z_OK != inflateGetDictionary(istate_, window, &window_size))
+            return make_error("inflateGetDictionary", istate_->msg);
+
+        if (Z_OK != inflateReset(istate_))
+            return make_error("inflateReset", istate_->msg);
+
+        if (window_size > 0 && Z_OK != inflateSetDictionary(istate_, window, window_size))
+            return make_error("inflateSetDictionary", istate_->msg);
+
+        return {};
+    }
+
+public:
     [[nodiscard]] static auto make_error(std::string_view desc, const char* msg) noexcept
     {
         return WS_ERROR(

@@ -47,6 +47,21 @@ struct MessageReadState
 };
 
 /**
+ * Resets the referenced `MessageReadState` on scope exit, unless dismissed.
+ */
+struct MessageReadStateGuard
+{
+    MessageReadState& state;
+    bool dismissed = false;
+
+    ~MessageReadStateGuard() noexcept
+    {
+        if (!dismissed)
+            state.reset();
+    }
+};
+
+/**
  * Data container for Web Socket messages.
  * Buffer `data` may be modified in-place, but MUST NOT be deleted.
  * The buffer is owned by the caller of the constructor.

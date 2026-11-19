@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.5] - 2026-11-19
+
+### Fixed
+
+- Heap buffer overflow in `read_until` when the HTTP response terminator spans two socket reads
+- permessage-deflate: messages after a server message ending with a BFINAL block were decoded as empty
+- permessage-deflate: sending an empty message corrupted the server's decompression stream
+- Completed messages reported as timeout when the deadline expired during the last read; read state is now reset on errors
+- `Sec-WebSocket-Key` used only 8 random bytes out of 16
+
 ## [0.7.4] - 2026-11-19
 
 ### Fixed

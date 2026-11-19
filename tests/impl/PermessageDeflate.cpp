@@ -225,3 +225,75 @@ TEST(PermessageDeflateContext, preserves_context_takeover_between_messages)
         EXPECT_EQ(decompressed, "Hello");
     }
 }
+
+TEST(PermessageDeflateContext, decompress_after_bfinal_message_with_context_takeover)
+{
+    ConsoleLogger logger{LogLevel::N};
+    PermessageDeflate<decltype(logger)> pd{
+        .logger = &logger,
+        .server_max_window_bits = 15,
+        .client_max_window_bits = 15,
+        .server_no_context_takeover = false,
+        .client_no_context_takeover = false,
+        .decompress_buffer_size = 1024 * 1024,
+        .compress_buffer_size = 1024 * 1024,
+    };
+
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
+    ASSERT_TRUE(ctx.init().has_value());
+
+    // RFC 7692 section 7.2.3.4: "Hello" in a BFINAL block, followed by a message
+    // referencing the first message's history in the LZ77 sliding window.
+    constexpr std::array<uint8_t, 8> first{0xf3, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x00};
+    constexpr std::array<uint8_t, 5> second{0xf2, 0x00, 0x11, 0x00, 0x00};
+    const std::array<span<const byte>, 2> messages{as_bytes(span{first}), as_bytes(span{second})};
+
+    for (const auto compressed : messages)
+    {
+        ctx.decompress_buffer().clear();
+        ASSERT_TRUE(ctx.decompress_buffer().append(compressed.data(), compressed.size()));
+
+        Buffer output = Buffer::create(0, 1024).value();
+        auto decompressed_res = ctx.decompress(output);
+        ASSERT_TRUE(decompressed_res.has_value());
+
+        string decompressed{reinterpret_cast<char*>(output.data().data()), output.size()};
+        EXPECT_EQ(decompressed, "Hello");
+    }
+}
+
+TEST(PermessageDeflateContext, compress_empty_message_with_context_takeover)
+{
+    ConsoleLogger logger{LogLevel::N};
+    PermessageDeflate<decltype(logger)> pd{
+        .logger = &logger,
+        .server_max_window_bits = 15,
+        .client_max_window_bits = 15,
+        .server_no_context_takeover = false,
+        .client_no_context_takeover = false,
+        .decompress_buffer_size = 1024 * 1024,
+        .compress_buffer_size = 1024 * 1024,
+    };
+
+    PermessageDeflateContext<decltype(logger)> ctx{&logger, pd};
+    ASSERT_TRUE(ctx.init().has_value());
+
+    // loopback (same window bits for both directions): an empty message between
+    // two messages must not break the decompressing peer
+    for (const std::string_view msg : {"Hello", "", "", "Hello"})
+    {
+        ctx.compress_buffer().clear();
+        string input{msg};
+        span<byte> payload{reinterpret_cast<byte*>(input.data()), input.size()};
+        auto compressed_res = ctx.compress(payload);
+        ASSERT_TRUE(compressed_res.has_value());
+        EXPECT_FALSE(compressed_res->empty());
+
+        ctx.decompress_buffer().clear();
+        ASSERT_TRUE(ctx.decompress_buffer().append(compressed_res->data(), compressed_res->size()));
+
+        Buffer output = Buffer::create(0, 1024).value();
+        ASSERT_TRUE(ctx.decompress(output).has_value());
+        EXPECT_EQ(string(reinterpret_cast<char*>(output.data().data()), output.size()), msg);
+    }
+}

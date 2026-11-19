@@ -356,11 +356,13 @@ protected:
 
     inline std::string generate_SecWebSocketKey()
     {
+        // 16 random bytes, filled from four 32-bit random numbers
         unsigned char key[16];
-        uint64_t part = rnd_.next();
-        std::memcpy(key, &part, 8);
-        part = rnd_.next();
-        std::memcpy(key + 8, &part, 8);
+        for (size_t i = 0; i < sizeof(key); i += sizeof(uint32_t))
+        {
+            const uint32_t part = rnd_.next();
+            std::memcpy(key + i, &part, sizeof(uint32_t));
+        }
         return base64_encode(key, sizeof(key));
     }
 };

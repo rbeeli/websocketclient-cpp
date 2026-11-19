@@ -258,8 +258,19 @@ public:
 
         Timeout timeout(timeout_ms);
 
-        while (!timeout.is_expired())
+        // reset message read state on return (message complete or error),
+        // except when returning a control frame received within a fragmented message
+        MessageReadStateGuard read_state_guard{read_state_};
+
+        while (true)
         {
+            if (timeout.is_expired())
+            {
+                co_return WSError(
+                    WSErrorCode::timeout_error, "Timeout while reading WebSocket message."
+                );
+            }
+
             // read next frame w/o payload
             WS_CO_TRY_RAW(frame_res, co_await this->read_frame(timeout));
             Frame& frame = *frame_res;
@@ -278,6 +289,7 @@ public:
             if (frame.header.is_control())
             {
                 auto res = co_await this->handle_control_frame(frame, timeout);
+                read_state_guard.dismissed = !std::holds_alternative<WSError>(res);
 
                 // convert to outer variant
                 co_return std::visit(
@@ -409,14 +421,6 @@ public:
                 break;
         }
 
-        // check if timeout occurred
-        if (timeout.is_expired())
-        {
-            co_return WSError(
-                WSErrorCode::timeout_error, "Timeout while reading WebSocket message."
-            );
-        }
-
         std::span<byte> payload_buffer;
 
         // handle permessage-deflate compression
@@ -467,9 +471,6 @@ public:
 
                 auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
 
-                // reset reading state - message complete
-                read_state_.reset();
-
                 co_return msg;
             }
 
@@ -498,9 +499,6 @@ public:
 #endif
 
                 auto msg = Message(static_cast<MessageType>(read_state_.op_code), payload_buffer);
-
-                // reset reading state - message complete
-                read_state_.reset();
 
                 co_return msg;
             }

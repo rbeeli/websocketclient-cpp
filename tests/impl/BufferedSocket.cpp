@@ -9,6 +9,7 @@
 #include <exception>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -145,6 +146,31 @@ TEST(BufferedSocket, buffered_data_is_immediately_readable)
     EXPECT_EQ(frame, expected_frame);
     EXPECT_EQ(socket.wait_readable(timeout), false);
     EXPECT_EQ(state->readiness_checks, 1);
+}
+
+TEST(BufferedSocket, read_until_delimiter_spanning_full_reads)
+{
+    // delimiter starts at the end of a full 4096-byte read buffer and ends in the next read
+    std::string data(4093, 'A');
+    data += "\r\n\r\n";
+    data += std::string(4095, 'B');
+    auto state = std::make_shared<SocketState>(data);
+    ws_client::BufferedSocket socket{FakeSocket{state}};
+    ws_client::Timeout<> timeout{std::chrono::seconds{1}};
+    auto headers = ws_client::Buffer::create(0, 1024 * 1024);
+    ASSERT_TRUE(headers.has_value());
+
+    std::array delimiter{byte{'\r'}, byte{'\n'}, byte{'\r'}, byte{'\n'}};
+    ASSERT_TRUE(socket.read_until(*headers, std::span{delimiter}, timeout).has_value());
+    EXPECT_EQ(headers->size(), 4093);
+
+    std::array<byte, delimiter.size()> terminator;
+    ASSERT_TRUE(socket.read_exact(terminator, timeout).has_value());
+    EXPECT_EQ(terminator, delimiter);
+
+    std::vector<byte> rest(4095);
+    ASSERT_TRUE(socket.read_exact(rest, timeout).has_value());
+    EXPECT_TRUE(std::all_of(rest.begin(), rest.end(), [](byte b) { return b == byte{'B'}; }));
 }
 
 TEST(BufferedSocketAsync, buffered_data_is_immediately_readable)
